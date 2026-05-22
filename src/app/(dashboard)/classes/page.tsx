@@ -100,7 +100,7 @@ export default function ClassesPage() {
       header: "",
       render: (row) => (
         <Menu>
-          <MenuTrigger>
+          <MenuTrigger asChild>
             <button className="rounded-full p-1 hover:bg-surface-container-high">
               <Icon name="more_vert" size={20} />
             </button>
