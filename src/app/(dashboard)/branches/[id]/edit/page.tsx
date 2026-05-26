@@ -44,12 +44,12 @@ export default function EditBranchPage() {
         if (data.success) {
           setBranch(data.data);
         } else {
-          snackbar.show(data.error?.message ?? "Branch not found");
+          snackbar.show(data.error?.message ?? "Branch not found", "error");
           router.push("/branches");
         }
       })
       .catch(() => {
-        snackbar.show("Failed to load branch");
+        snackbar.show("Failed to load branch", "error");
         router.push("/branches");
       })
       .finally(() => setLoading(false));
@@ -63,14 +63,14 @@ export default function EditBranchPage() {
       });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Branch deactivated");
+        snackbar.show("Branch deactivated", "success");
         router.push("/branches");
         router.refresh();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to deactivate branch");
+        snackbar.show(data.error?.message ?? "Failed to deactivate branch", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setDeleting(false);
     }

@@ -74,12 +74,12 @@ export default function EditStudentPage() {
         if (data.success) {
           setStudent(data.data);
         } else {
-          snackbar.show(data.error?.message ?? "Student not found");
+          snackbar.show(data.error?.message ?? "Student not found", "error");
           router.push("/students");
         }
       })
       .catch(() => {
-        snackbar.show("Failed to load student");
+        snackbar.show("Failed to load student", "error");
         router.push("/students");
       })
       .finally(() => setLoading(false));
@@ -94,14 +94,14 @@ export default function EditStudentPage() {
       const data = await res.json();
 
       if (data.success) {
-        snackbar.show("Student dropped");
+        snackbar.show("Student dropped", "success");
         router.push("/students");
         router.refresh();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to drop student");
+        snackbar.show(data.error?.message ?? "Failed to drop student", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setDeleting(false);
     }

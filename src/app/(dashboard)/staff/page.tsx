@@ -132,13 +132,13 @@ export default function StaffPage() {
       const res = await fetch(`/api/v1/staff/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Staff member terminated");
+        snackbar.show("Staff member terminated", "success");
         fetchStaff();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to terminate staff member");
+        snackbar.show(data.error?.message ?? "Failed to terminate staff member", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setTerminating(false);
     }

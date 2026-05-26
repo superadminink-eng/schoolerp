@@ -87,11 +87,11 @@ export default function FeeCollectionPage() {
       if (json.success) {
         setData(json.data);
       } else {
-        snackbar.show(json.error?.message ?? "Student not found");
+        snackbar.show(json.error?.message ?? "Student not found", "error");
         router.push("/fees");
       }
     } catch {
-      snackbar.show("Failed to load fee details");
+      snackbar.show("Failed to load fee details", "error");
       router.push("/fees");
     } finally {
       setLoading(false);
@@ -114,16 +114,17 @@ export default function FeeCollectionPage() {
 
       if (json.success) {
         snackbar.show(
-          `Payment of ${formatCurrency(formData.amount)} recorded successfully`
+          `Payment of ${formatCurrency(formData.amount)} recorded successfully`,
+          "success"
         );
         // Re-fetch to update all data
         setLoading(true);
         await fetchData();
       } else {
-        snackbar.show(json.error?.message ?? "Failed to record payment");
+        snackbar.show(json.error?.message ?? "Failed to record payment", "error");
       }
     } catch {
-      snackbar.show("An error occurred while recording payment");
+      snackbar.show("An error occurred while recording payment", "error");
     } finally {
       setSubmitting(false);
     }

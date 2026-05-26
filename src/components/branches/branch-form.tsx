@@ -74,15 +74,15 @@ export function BranchForm({ mode, initialData }: BranchFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create branch");
+          snackbar.show(data.error?.message ?? "Failed to create branch", "error");
           return;
         }
 
-        snackbar.show("Branch created successfully");
+        snackbar.show("Branch created successfully", "success");
         router.push("/branches");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
@@ -116,15 +116,15 @@ export function BranchForm({ mode, initialData }: BranchFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update branch");
+          snackbar.show(data.error?.message ?? "Failed to update branch", "error");
           return;
         }
 
-        snackbar.show("Branch updated successfully");
+        snackbar.show("Branch updated successfully", "success");
         router.push("/branches");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }

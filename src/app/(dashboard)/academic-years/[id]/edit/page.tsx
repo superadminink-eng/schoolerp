@@ -30,12 +30,12 @@ export default function EditAcademicYearPage() {
         if (data.success) {
           setYear(data.data);
         } else {
-          snackbar.show(data.error?.message ?? "Academic year not found");
+          snackbar.show(data.error?.message ?? "Academic year not found", "error");
           router.push("/academic-years");
         }
       })
       .catch(() => {
-        snackbar.show("Failed to load academic year");
+        snackbar.show("Failed to load academic year", "error");
         router.push("/academic-years");
       })
       .finally(() => setLoading(false));

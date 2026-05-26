@@ -75,13 +75,13 @@ export default function AcademicYearsPage() {
       const res = await fetch(`/api/v1/academic-years/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Academic year deleted");
+        snackbar.show("Academic year deleted", "success");
         fetchYears();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to delete academic year");
+        snackbar.show(data.error?.message ?? "Failed to delete academic year", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setDeleting(false);
     }

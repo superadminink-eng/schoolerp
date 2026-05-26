@@ -76,15 +76,15 @@ export function AcademicYearForm({ mode, initialData }: AcademicYearFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create academic year");
+          snackbar.show(data.error?.message ?? "Failed to create academic year", "error");
           return;
         }
 
-        snackbar.show("Academic year created successfully");
+        snackbar.show("Academic year created successfully", "success");
         router.push("/academic-years");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
@@ -111,15 +111,15 @@ export function AcademicYearForm({ mode, initialData }: AcademicYearFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update academic year");
+          snackbar.show(data.error?.message ?? "Failed to update academic year", "error");
           return;
         }
 
-        snackbar.show("Academic year updated successfully");
+        snackbar.show("Academic year updated successfully", "success");
         router.push("/academic-years");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }

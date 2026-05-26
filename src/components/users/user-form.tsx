@@ -94,15 +94,15 @@ export function UserForm({ mode, initialData }: UserFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create user");
+          snackbar.show(data.error?.message ?? "Failed to create user", "error");
           return;
         }
 
-        snackbar.show("User created successfully");
+        snackbar.show("User created successfully", "success");
         router.push("/users");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
@@ -135,15 +135,15 @@ export function UserForm({ mode, initialData }: UserFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update user");
+          snackbar.show(data.error?.message ?? "Failed to update user", "error");
           return;
         }
 
-        snackbar.show("User updated successfully");
+        snackbar.show("User updated successfully", "success");
         router.push("/users");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }

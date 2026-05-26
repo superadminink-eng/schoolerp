@@ -52,7 +52,7 @@ export function StaffDocuments({ staffId }: StaffDocumentsProps) {
         setDocuments(data.data);
       }
     } catch {
-      snackbar.show("Failed to load documents");
+      snackbar.show("Failed to load documents", "error");
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ export function StaffDocuments({ staffId }: StaffDocumentsProps) {
 
   async function handleUpload() {
     if (!selectedFile || !label) {
-      snackbar.show("Please select a file and label");
+      snackbar.show("Please select a file and label", "error");
       return;
     }
 
@@ -81,17 +81,17 @@ export function StaffDocuments({ staffId }: StaffDocumentsProps) {
       const data = await res.json();
 
       if (!data.success) {
-        snackbar.show(data.error?.message ?? "Failed to upload document");
+        snackbar.show(data.error?.message ?? "Failed to upload document", "error");
         return;
       }
 
-      snackbar.show("Document uploaded");
+      snackbar.show("Document uploaded", "success");
       setLabel("");
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       fetchDocuments();
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setUploading(false);
     }
@@ -108,14 +108,14 @@ export function StaffDocuments({ staffId }: StaffDocumentsProps) {
       const data = await res.json();
 
       if (!data.success) {
-        snackbar.show(data.error?.message ?? "Failed to delete document");
+        snackbar.show(data.error?.message ?? "Failed to delete document", "error");
         return;
       }
 
-      snackbar.show("Document deleted");
+      snackbar.show("Document deleted", "success");
       fetchDocuments();
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     }
   }
 

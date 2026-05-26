@@ -100,15 +100,15 @@ export function SubjectMasterDialog({
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create subject");
+          snackbar.show(data.error?.message ?? "Failed to create subject", "error");
           return;
         }
 
-        snackbar.show("Subject created successfully");
+        snackbar.show("Subject created successfully", "success");
         onOpenChange(false);
         onSuccess();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
@@ -134,15 +134,15 @@ export function SubjectMasterDialog({
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update subject");
+          snackbar.show(data.error?.message ?? "Failed to update subject", "error");
           return;
         }
 
-        snackbar.show("Subject updated successfully");
+        snackbar.show("Subject updated successfully", "success");
         onOpenChange(false);
         onSuccess();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
