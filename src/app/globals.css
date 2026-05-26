@@ -6,47 +6,84 @@
    ============================================================ */
 
 @theme {
+  /* ---- Platform Colors ----
+     Primary:         #7D52FB
+     Secondary:       #1F1671
+     Light Shade:     #6E68B1
+     Border:          #C6C3DC
+     Page Background: #FFFFFF
+     Differentiator:  #F9FAFB
+     ---- */
+
   /* ---- M3 Color Roles (Light) ---- */
-  --color-primary: #1B6EF3;
+  --color-primary: #7D52FB;
   --color-on-primary: #FFFFFF;
-  --color-primary-container: #D6E3FF;
-  --color-on-primary-container: #001B3E;
+  --color-primary-container: #EDDCFF;
+  --color-on-primary-container: #25005A;
 
-  --color-secondary: #565E71;
+  --color-secondary: #1F1671;
   --color-on-secondary: #FFFFFF;
-  --color-secondary-container: #DAE2F9;
-  --color-on-secondary-container: #131C2B;
+  --color-secondary-container: #E3DFFF;
+  --color-on-secondary-container: #0A0048;
 
-  --color-tertiary: #705575;
+  --color-tertiary: #6E68B1;
   --color-on-tertiary: #FFFFFF;
-  --color-tertiary-container: #FAD8FD;
-  --color-on-tertiary-container: #28132F;
+  --color-tertiary-container: #E8DEF8;
+  --color-on-tertiary-container: #1D192B;
 
-  --color-error: #BA1A1A;
+  --color-error: #FA5A7D;
   --color-on-error: #FFFFFF;
-  --color-error-container: #FFDAD6;
-  --color-on-error-container: #410002;
+  --color-error-container: #FFE2E5;
+  --color-on-error-container: #0A0348;
 
-  --color-surface: #F9F9FF;
-  --color-on-surface: #191C20;
-  --color-surface-variant: #E0E2EC;
-  --color-on-surface-variant: #44474E;
+  --color-surface: #FFFFFF;
+  --color-on-surface: #1C1B1F;
+  --color-surface-variant: #E7E0EC;
+  --color-on-surface-variant: #49454F;
 
-  --color-surface-dim: #D9D9E0;
-  --color-surface-bright: #F9F9FF;
+  --color-surface-dim: #DED8E1;
+  --color-surface-bright: #FFFFFF;
   --color-surface-container-lowest: #FFFFFF;
-  --color-surface-container-low: #F3F3FA;
-  --color-surface-container: #EDEDF4;
-  --color-surface-container-high: #E7E8EE;
-  --color-surface-container-highest: #E2E2E9;
+  --color-surface-container-low: #F9FAFB;
+  --color-surface-container: #F9FAFB;
+  --color-surface-container-high: #F3EDF7;
+  --color-surface-container-highest: #E6E0E9;
 
-  --color-outline: #74777F;
-  --color-outline-variant: #C4C6D0;
-  --color-inverse-surface: #2E3036;
-  --color-inverse-on-surface: #F0F0F7;
-  --color-inverse-primary: #AAC7FF;
+  --color-outline: #6E68B1;
+  --color-outline-variant: #C6C3DC;
+  --color-inverse-surface: #313033;
+  --color-inverse-on-surface: #F4EFF4;
+  --color-inverse-primary: #CFBCFF;
   --color-scrim: #000000;
   --color-shadow: #000000;
+
+  /* ---- Text Colors ---- */
+  --color-text-1: #0A0348;
+  --color-text-2: #373175;
+  --color-text-3: #554E94;
+  --color-text-4: #6E68B1;
+
+  /* ---- Status Colors ---- */
+  --color-success-icon: #3CD856;
+  --color-success-bg: #DCFCE7;
+  --color-success-text: #0A0348;
+
+  --color-error-icon: #FA5A7D;
+  --color-error-bg: #FFE2E5;
+  --color-error-text: #0A0348;
+
+  --color-warning-icon: #FF947A;
+  --color-warning-bg: #FFF4DE;
+  --color-warning-text: #0A0348;
+
+  --color-info-icon: #2A71FF;
+  --color-info-bg: #E0F2FE;
+  --color-info-text: #0A0348;
+
+  /* ---- Brand & Marketing ---- */
+  --color-brand-1: #7D52FB;
+  --color-brand-2: #1671FE;
+  --color-brand-3: #1F1671;
 
   /* ---- M3 Typography Scale ---- */
   --font-sans: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
@@ -110,44 +147,67 @@
    ============================================================ */
 
 .dark {
-  --color-primary: #AAC7FF;
-  --color-on-primary: #002F65;
-  --color-primary-container: #00458E;
-  --color-on-primary-container: #D6E3FF;
+  --color-primary: #CFBCFF;
+  --color-on-primary: #3F0099;
+  --color-primary-container: #5A2FD8;
+  --color-on-primary-container: #EDDCFF;
 
-  --color-secondary: #BEC6DC;
-  --color-on-secondary: #283141;
-  --color-secondary-container: #3E4759;
-  --color-on-secondary-container: #DAE2F9;
+  --color-secondary: #C5C0FF;
+  --color-on-secondary: #141058;
+  --color-secondary-container: #1F1671;
+  --color-on-secondary-container: #E3DFFF;
 
-  --color-tertiary: #DDBCE0;
-  --color-on-tertiary: #3F2845;
-  --color-tertiary-container: #573E5C;
-  --color-on-tertiary-container: #FAD8FD;
+  --color-tertiary: #CBC0DF;
+  --color-on-tertiary: #332D41;
+  --color-tertiary-container: #4A4458;
+  --color-on-tertiary-container: #E8DEF8;
 
-  --color-error: #FFB4AB;
-  --color-on-error: #690005;
-  --color-error-container: #93000A;
-  --color-on-error-container: #FFDAD6;
+  --color-error: #FF7A97;
+  --color-on-error: #3D1520;
+  --color-error-container: #3D1520;
+  --color-on-error-container: #FFE2E5;
 
-  --color-surface: #111318;
-  --color-on-surface: #E2E2E9;
-  --color-surface-variant: #44474E;
-  --color-on-surface-variant: #C4C6D0;
+  --color-surface: #1C1B1F;
+  --color-on-surface: #E6E1E5;
+  --color-surface-variant: #49454F;
+  --color-on-surface-variant: #CAC4D0;
 
-  --color-surface-dim: #111318;
-  --color-surface-bright: #37393E;
-  --color-surface-container-lowest: #0C0E13;
-  --color-surface-container-low: #191C20;
-  --color-surface-container: #1D2024;
-  --color-surface-container-high: #282A2F;
-  --color-surface-container-highest: #33353A;
+  --color-surface-dim: #1C1B1F;
+  --color-surface-bright: #3B383E;
+  --color-surface-container-lowest: #110F13;
+  --color-surface-container-low: #1C1B1F;
+  --color-surface-container: #211F26;
+  --color-surface-container-high: #2B2930;
+  --color-surface-container-highest: #36343B;
 
-  --color-outline: #8E9099;
-  --color-outline-variant: #44474E;
-  --color-inverse-surface: #E2E2E9;
-  --color-inverse-on-surface: #2E3036;
-  --color-inverse-primary: #1B6EF3;
+  --color-outline: #948F99;
+  --color-outline-variant: #49454F;
+  --color-inverse-surface: #E6E1E5;
+  --color-inverse-on-surface: #313033;
+  --color-inverse-primary: #7D52FB;
+
+  /* ---- Text Colors (Dark) ---- */
+  --color-text-1: #E6E1E5;
+  --color-text-2: #CAC4D0;
+  --color-text-3: #AEA8B6;
+  --color-text-4: #948F99;
+
+  /* ---- Status Colors (Dark) ---- */
+  --color-success-icon: #4AE864;
+  --color-success-bg: #1A3A24;
+  --color-success-text: #E6E1E5;
+
+  --color-error-icon: #FF7A97;
+  --color-error-bg: #3D1520;
+  --color-error-text: #E6E1E5;
+
+  --color-warning-icon: #FFAB94;
+  --color-warning-bg: #3D2A1A;
+  --color-warning-text: #E6E1E5;
+
+  --color-info-icon: #6B9EFF;
+  --color-info-bg: #152640;
+  --color-info-text: #E6E1E5;
 }
 
 /* ============================================================
