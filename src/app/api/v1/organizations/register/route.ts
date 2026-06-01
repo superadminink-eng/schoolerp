@@ -80,13 +80,21 @@ export async function POST(req: NextRequest) {
       const branch = await tx.branch.create({
         data: {
           organizationId: organization.id,
-          name: "Main Branch",
-          code: "MAIN",
+          name: `${schoolName} - Main Branch`,
+          code: baseSlug.substring(0, 6).toUpperCase() + "-MAIN",
           isMain: true,
           email,
           phone: phone ?? null,
         },
       });
+
+      const schoolAdminRole = await tx.role.findFirst({
+        where: { name: "SCHOOL_ADMIN", organizationId: null }
+      });
+
+      if (!schoolAdminRole) {
+        throw new Error("SCHOOL_ADMIN role not found in database. Please run seed script.");
+      }
 
       const user = await tx.user.create({
         data: {
@@ -96,7 +104,7 @@ export async function POST(req: NextRequest) {
           email,
           name: adminName,
           phone: phone ?? null,
-          role: "SCHOOL_ADMIN",
+          roleId: schoolAdminRole.id,
         },
       });
 

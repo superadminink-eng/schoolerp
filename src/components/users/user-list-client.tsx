@@ -15,36 +15,25 @@ import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { useBranches } from "@/hooks/use-branches";
+import { useRoles } from "@/hooks/use-roles";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
 
-const ROLE_OPTIONS = [
-  { value: "ALL", label: "All Roles" },
-  { value: "SCHOOL_ADMIN", label: "School Admin" },
-  { value: "BRANCH_ADMIN", label: "Branch Admin" },
-  { value: "TEACHER", label: "Teacher" },
-  { value: "STUDENT", label: "Student" },
-  { value: "PARENT", label: "Parent" },
-  { value: "ACCOUNTANT", label: "Accountant" },
-  { value: "LIBRARIAN", label: "Librarian" },
-  { value: "RECEPTIONIST", label: "Receptionist" },
-  { value: "TRANSPORT_MANAGER", label: "Transport Manager" },
-];
 
 interface UserRow {
   id: string;
   name: string;
   email: string;
   phone: string | null;
-  role: string;
+  role: { id: string; name: string };
   isActive: boolean;
   createdAt: string;
   branch: { id: string; name: string } | null;
 }
 
-const roleLabel = (role: string) =>
-  role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const roleLabel = (name: string) =>
+  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 function UserAvatar({ name }: { name: string }) {
   const initials = name
@@ -64,6 +53,7 @@ function UserAvatar({ name }: { name: string }) {
 export function UserListClient() {
   const router = useRouter();
   const { branches } = useBranches();
+  const { roles } = useRoles();
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +65,7 @@ export function UserListClient() {
     setLoading(true);
     const params = new URLSearchParams();
     params.set("limit", "9999");
-    if (roleFilter !== "ALL") params.set("role", roleFilter);
+    if (roleFilter !== "ALL") params.set("roleId", roleFilter);
     if (branchFilter !== "ALL") params.set("branchId", branchFilter);
 
     try {
@@ -115,7 +105,7 @@ export function UserListClient() {
       key: "role",
       header: "Role",
       render: (row) => (
-        <Chip label={roleLabel(row.role)} variant="filled" color="primary" />
+        <Chip label={roleLabel(row.role?.name || "Unknown")} variant="filled" color="primary" />
       ),
     },
     {
@@ -185,9 +175,10 @@ export function UserListClient() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ROLE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
+              <SelectItem value="ALL">All Roles</SelectItem>
+              {roles.map((opt) => (
+                <SelectItem key={opt.id} value={opt.id}>
+                  {roleLabel(opt.name)}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -29,6 +29,7 @@ model Organization {
   feeCategories  FeeCategory[]
   notices        Notice[]
   subjectMasters SubjectMaster[]
+  roles          Role[]
 
   @@map("organizations")
 }
@@ -85,7 +86,7 @@ model User {
   name           String
   phone          String?
   avatar         String?
-  role           UserRole
+  roleId         String
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -93,6 +94,7 @@ model User {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   branch       Branch?      @relation(fields: [branchId], references: [id])
+  role         Role         @relation(fields: [roleId], references: [id])
   permissions  UserPermission[]
 
   student Student?
@@ -102,20 +104,26 @@ model User {
   @@unique([organizationId, email])
   @@index([organizationId])
   @@index([branchId])
+  @@index([roleId])
   @@map("users")
 }
 
-enum UserRole {
-  SUPER_ADMIN
-  SCHOOL_ADMIN
-  BRANCH_ADMIN
-  TEACHER
-  STUDENT
-  PARENT
-  ACCOUNTANT
-  LIBRARIAN
-  RECEPTIONIST
-  TRANSPORT_MANAGER
+model Role {
+  id             String  @id @default(cuid())
+  organizationId String? // null means it's a global system role
+  name           String
+  description    String?
+  isSystem       Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("roles")
 }
 
 model Permission {
@@ -133,13 +141,14 @@ model Permission {
 
 model RolePermission {
   id           String   @id @default(cuid())
-  role         UserRole
+  roleId       String
   permissionId String
 
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
-  @@unique([role, permissionId])
-  @@index([role])
+  @@unique([roleId, permissionId])
+  @@index([roleId])
   @@map("role_permissions")
 }
 
@@ -154,6 +163,24 @@ model UserPermission {
 
   @@unique([userId, permissionId])
   @@map("user_permissions")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  branchId       String?
+  userId         String?
+  action         String
+  module         String
+  entityId       String
+  details        Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([branchId])
+  @@index([userId])
+  @@index([module, entityId])
+  @@map("audit_logs")
 }
 
 // ======================== ACADEMIC ========================

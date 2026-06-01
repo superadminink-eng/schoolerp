@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+// Config for default system roles
 
 /**
  * All modules and their available actions.
@@ -29,8 +29,9 @@ export const MODULES = {
  * SUPER_ADMIN gets everything automatically (handled in rbac.ts).
  */
 export const DEFAULT_ROLE_PERMISSIONS: Partial<
-  Record<UserRole, string[]>
+  Record<string, string[]>
 > = {
+  SUPER_ADMIN: [], // Has bypass in rbac.ts
   SCHOOL_ADMIN: [
     "students:create", "students:read", "students:update", "students:delete",
     "staff:create", "staff:read", "staff:update", "staff:delete",

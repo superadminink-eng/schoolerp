@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { MODULES, DEFAULT_ROLE_PERMISSIONS } from "../src/config/permissions";
 
 const prisma = new PrismaClient();
@@ -41,10 +41,33 @@ async function main() {
       permKeys.map((key) => permMap.get(key)).filter(Boolean) as string[]
     );
 
+    // Upsert the system Role manually because of nullable unique constraint
+    let roleRecord = await prisma.role.findFirst({
+      where: { organizationId: null, name: role },
+    });
+
+    if (!roleRecord) {
+      roleRecord = await prisma.role.create({
+        data: {
+          name: role,
+          description: `System default ${role} role`,
+          isSystem: true,
+        },
+      });
+    } else {
+      roleRecord = await prisma.role.update({
+        where: { id: roleRecord.id },
+        data: {
+          description: `System default ${role} role`,
+          isSystem: true,
+        },
+      });
+    }
+
     // Remove role permissions that are no longer in the config
     await prisma.rolePermission.deleteMany({
       where: {
-        role: role as UserRole,
+        roleId: roleRecord.id,
         permissionId: { notIn: Array.from(desiredPermIds) },
       },
     });
@@ -58,14 +81,14 @@ async function main() {
 
       await prisma.rolePermission.upsert({
         where: {
-          role_permissionId: {
-            role: role as UserRole,
+          roleId_permissionId: {
+            roleId: roleRecord.id,
             permissionId: permId,
           },
         },
         update: {},
         create: {
-          role: role as UserRole,
+          roleId: roleRecord.id,
           permissionId: permId,
         },
       });

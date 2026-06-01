@@ -9,7 +9,7 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { createUserSchema } from "@/lib/validations/user";
-import type { UserRole } from "@prisma/client";
+import { logAction } from "@/lib/audit";
 
 /**
  * GET /api/v1/users — list users with pagination, search, and filters
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
   const url = new URL(req.url);
   const { page, limit, search } = parsePagination(url);
-  const role = url.searchParams.get("role") as UserRole | null;
+  const roleId = url.searchParams.get("roleId");
   const branchId = url.searchParams.get("branchId");
 
   const where: Record<string, unknown> = {
@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
     where.branchId = branchId;
   }
 
-  if (role) {
-    where.role = role;
+  if (roleId) {
+    where.roleId = roleId;
   }
 
   if (search) {
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
           name: true,
           email: true,
           phone: true,
-          role: true,
+          role: { select: { id: true, name: true } },
           isActive: true,
           createdAt: true,
           branch: { select: { id: true, name: true } },
@@ -95,10 +95,22 @@ export async function POST(req: NextRequest) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, email, phone, role, branchId, password } = parsed.data;
+  const { name, email, phone, roleId, branchId, password } = parsed.data;
+
+  // Validate the role exists in this organization (or is a system role)
+  const targetRole = await prisma.role.findFirst({
+    where: { 
+      id: roleId,
+      OR: [{ organizationId: ctx.organizationId }, { organizationId: null }]
+    },
+  });
+
+  if (!targetRole) {
+    return apiError("NOT_FOUND", "Role not found", 404);
+  }
 
   // Cannot create SUPER_ADMIN (defensive check)
-  if ((role as string) === "SUPER_ADMIN") {
+  if (targetRole.name === "SUPER_ADMIN") {
     return apiError("FORBIDDEN", "Cannot create a SUPER_ADMIN user", 403);
   }
 
@@ -152,18 +164,28 @@ export async function POST(req: NextRequest) {
           email,
           name,
           phone: phone || null,
-          role: role as UserRole,
+          roleId: roleId,
         },
         select: {
           id: true,
           name: true,
           email: true,
           phone: true,
-          role: true,
+          role: { select: { id: true, name: true } },
           isActive: true,
           branchId: true,
           createdAt: true,
         },
+      });
+
+      await logAction({
+        organizationId: ctx.organizationId,
+        branchId,
+        userId: ctx.userId,
+        action: "CREATE",
+        module: "USERS",
+        entityId: user.id,
+        details: { email, roleName: targetRole.name },
       });
 
       return apiSuccess(user, undefined, 201);

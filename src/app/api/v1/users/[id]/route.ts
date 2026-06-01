@@ -4,7 +4,7 @@ import { getAdminAuth } from "@/lib/firebase-admin";
 import { apiSuccess, apiError, apiValidationError, apiNotFound } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateUserSchema } from "@/lib/validations/user";
-import type { UserRole } from "@prisma/client";
+import { logAction } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         name: true,
         email: true,
         phone: true,
-        role: true,
+        role: { select: { id: true, name: true } },
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -78,12 +78,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     // Find the user in this organization
     const existing = await prisma.user.findFirst({
       where: { id, organizationId: ctx.organizationId },
+      include: { role: true },
     });
 
     if (!existing) return apiNotFound("User");
 
     // Cannot edit SUPER_ADMIN users
-    if (existing.role === "SUPER_ADMIN") {
+    if (existing.role.name === "SUPER_ADMIN") {
       return apiError("FORBIDDEN", "Cannot modify a SUPER_ADMIN user", 403);
     }
 
@@ -92,10 +93,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return apiError("FORBIDDEN", "Cannot modify users in another branch", 403);
     }
 
-    const { name, phone, role, branchId, isActive } = parsed.data;
+    const { name, phone, roleId, branchId, isActive } = parsed.data;
+
+    let targetRole = existing.role;
+    if (roleId) {
+      const foundRole = await prisma.role.findFirst({
+        where: { 
+          id: roleId,
+          OR: [{ organizationId: ctx.organizationId }, { organizationId: null }]
+        },
+      });
+      if (!foundRole) return apiError("NOT_FOUND", "Role not found", 404);
+      targetRole = foundRole;
+    }
 
     // Cannot promote to SUPER_ADMIN (defensive check)
-    if ((role as string) === "SUPER_ADMIN") {
+    if (targetRole.name === "SUPER_ADMIN") {
       return apiError("FORBIDDEN", "Cannot assign SUPER_ADMIN role", 403);
     }
 
@@ -113,7 +126,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const data: Record<string, unknown> = {};
     if (name !== undefined) data.name = name;
     if (phone !== undefined) data.phone = phone || null;
-    if (role !== undefined) data.role = role;
+    if (roleId !== undefined) data.roleId = roleId;
     if (branchId !== undefined) data.branchId = branchId;
     if (isActive !== undefined) data.isActive = isActive;
 
@@ -143,12 +156,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         name: true,
         email: true,
         phone: true,
-        role: true,
+        role: { select: { id: true, name: true } },
         isActive: true,
         createdAt: true,
         updatedAt: true,
         branch: { select: { id: true, name: true } },
       },
+    });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: user.branchId,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "USERS",
+      entityId: user.id,
+      details: Object.keys(data),
     });
 
     return apiSuccess(user);
@@ -171,12 +194,13 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   try {
     const existing = await prisma.user.findFirst({
       where: { id, organizationId: ctx.organizationId },
+      include: { role: true }
     });
 
     if (!existing) return apiNotFound("User");
 
     // Cannot delete SUPER_ADMIN
-    if (existing.role === "SUPER_ADMIN") {
+    if (existing.role.name === "SUPER_ADMIN") {
       return apiError("FORBIDDEN", "Cannot deactivate a SUPER_ADMIN user", 403);
     }
 
@@ -202,6 +226,16 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     } catch (err) {
       console.error("Firebase disable user error:", err);
     }
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: existing.branchId,
+      userId: ctx.userId,
+      action: "DELETE",
+      module: "USERS",
+      entityId: existing.id,
+      details: { reason: "Deactivated via API" },
+    });
 
     return apiSuccess({ id, deactivated: true });
   } catch (error) {

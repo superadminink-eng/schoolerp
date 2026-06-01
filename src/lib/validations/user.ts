@@ -1,16 +1,6 @@
 import { z } from "zod";
 
-const USER_ROLES = [
-  "SCHOOL_ADMIN",
-  "BRANCH_ADMIN",
-  "TEACHER",
-  "STUDENT",
-  "PARENT",
-  "ACCOUNTANT",
-  "LIBRARIAN",
-  "RECEPTIONIST",
-  "TRANSPORT_MANAGER",
-] as const;
+
 
 export const createUserSchema = z.object({
   name: z
@@ -19,7 +9,7 @@ export const createUserSchema = z.object({
     .max(100, "Name must be at most 100 characters"),
   email: z.string().email("Invalid email address"),
   phone: z.string().max(20).optional().or(z.literal("")),
-  role: z.enum(USER_ROLES, { required_error: "Role is required" }),
+  roleId: z.string().min(1, "Role is required"),
   branchId: z.string().min(1, "Branch is required"),
   password: z
     .string()
@@ -34,7 +24,7 @@ export const updateUserSchema = z.object({
     .max(100, "Name must be at most 100 characters")
     .optional(),
   phone: z.string().max(20).optional().or(z.literal("")),
-  role: z.enum(USER_ROLES).optional(),
+  roleId: z.string().optional(),
   branchId: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
 });

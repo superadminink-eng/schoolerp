@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { getUserPermissions } from "@/lib/rbac";
 import { apiSuccess, apiError } from "@/lib/api-helpers";
-import type { UserRole } from "@prisma/client";
+
 
 export async function GET() {
   const session = await auth();
@@ -12,11 +12,13 @@ export async function GET() {
 
   const permissions = await getUserPermissions(
     session.user.id,
-    session.user.role as UserRole
+    session.user.roleId,
+    session.user.roleName
   );
 
   return apiSuccess({
-    role: session.user.role,
+    roleId: session.user.roleId,
+    roleName: session.user.roleName,
     permissions: Array.from(permissions),
   });
 }

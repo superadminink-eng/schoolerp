@@ -8,7 +8,7 @@ export async function GET() {
 
   const orgId = session.user.organizationId;
   const branchId = session.user.branchId;
-  const isBranchScoped = session.user.role === "BRANCH_ADMIN";
+  const isBranchScoped = session.user.roleName === "BRANCH_ADMIN";
 
   const branchWhere = {
     branch: {

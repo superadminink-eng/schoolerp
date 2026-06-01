@@ -1,5 +1,4 @@
 import { prisma } from "./prisma";
-import type { UserRole } from "@prisma/client";
 
 /**
  * Check if a user has a specific permission.
@@ -7,11 +6,12 @@ import type { UserRole } from "@prisma/client";
  */
 export async function hasPermission(
   userId: string,
-  role: UserRole,
+  roleId: string,
+  roleName: string,
   module: string,
   action: string
 ): Promise<boolean> {
-  if (role === "SUPER_ADMIN") return true;
+  if (roleName === "SUPER_ADMIN") return true;
 
   // Check user-level override
   const userPerm = await prisma.userPermission.findFirst({
@@ -25,7 +25,7 @@ export async function hasPermission(
   // Check role default
   const rolePerm = await prisma.rolePermission.findFirst({
     where: {
-      role,
+      roleId,
       permission: { module, action },
     },
   });
@@ -38,16 +38,17 @@ export async function hasPermission(
  */
 export async function getUserPermissions(
   userId: string,
-  role: UserRole
+  roleId: string,
+  roleName: string
 ): Promise<Set<string>> {
-  if (role === "SUPER_ADMIN") {
+  if (roleName === "SUPER_ADMIN") {
     const allPerms = await prisma.permission.findMany();
     return new Set(allPerms.map((p) => `${p.module}:${p.action}`));
   }
 
   // Get role defaults
   const rolePerms = await prisma.rolePermission.findMany({
-    where: { role },
+    where: { roleId },
     include: { permission: true },
   });
 
@@ -82,16 +83,17 @@ export async function checkApiPermission(
   action: string
 ): Promise<Response | null> {
   const userId = req.headers.get("x-user-id");
-  const role = req.headers.get("x-user-role") as UserRole | null;
+  const roleId = req.headers.get("x-user-role-id");
+  const roleName = req.headers.get("x-user-role-name");
 
-  if (!userId || !role) {
+  if (!userId || !roleId || !roleName) {
     return Response.json(
       { success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
       { status: 401 }
     );
   }
 
-  const allowed = await hasPermission(userId, role, module, action);
+  const allowed = await hasPermission(userId, roleId, roleName, module, action);
   if (!allowed) {
     return Response.json(
       { success: false, error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
@@ -108,7 +110,8 @@ export async function checkApiPermission(
 export function getTenantContext(req: Request) {
   return {
     userId: req.headers.get("x-user-id")!,
-    role: req.headers.get("x-user-role") as UserRole,
+    roleId: req.headers.get("x-user-role-id")!,
+    roleName: req.headers.get("x-user-role-name")!,
     organizationId: req.headers.get("x-organization-id")!,
     branchId: req.headers.get("x-branch-id") || null,
   };

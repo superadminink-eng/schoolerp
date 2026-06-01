@@ -15,29 +15,23 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { useBranches } from "@/hooks/use-branches";
+import { useRoles } from "@/hooks/use-roles";
 import { createUserSchema, updateUserSchema } from "@/lib/validations/user";
 
-const ROLES = [
-  { value: "SCHOOL_ADMIN", label: "School Admin" },
-  { value: "BRANCH_ADMIN", label: "Branch Admin" },
-  { value: "TEACHER", label: "Teacher" },
-  { value: "STUDENT", label: "Student" },
-  { value: "PARENT", label: "Parent" },
-  { value: "ACCOUNTANT", label: "Accountant" },
-  { value: "LIBRARIAN", label: "Librarian" },
-  { value: "RECEPTIONIST", label: "Receptionist" },
-  { value: "TRANSPORT_MANAGER", label: "Transport Manager" },
-] as const;
+
 
 interface UserData {
   id: string;
   name: string;
   email: string;
   phone: string | null;
-  role: string;
+  role: { id: string; name: string };
   isActive: boolean;
   branch: { id: string; name: string } | null;
 }
+
+const roleLabel = (name: string) =>
+  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 interface UserFormProps {
   mode: "create" | "edit";
@@ -48,11 +42,12 @@ export function UserForm({ mode, initialData }: UserFormProps) {
   const router = useRouter();
   const snackbar = useSnackbar();
   const { branches, isLoading: branchesLoading } = useBranches();
+  const { roles, loading: rolesLoading } = useRoles();
 
   const [name, setName] = useState(initialData?.name ?? "");
   const [email, setEmail] = useState(initialData?.email ?? "");
   const [phone, setPhone] = useState(initialData?.phone ?? "");
-  const [role, setRole] = useState(initialData?.role ?? "");
+  const [roleId, setRoleId] = useState(initialData?.role?.id ?? "");
   const [branchId, setBranchId] = useState(initialData?.branch?.id ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -69,7 +64,7 @@ export function UserForm({ mode, initialData }: UserFormProps) {
         name,
         email,
         phone: phone || undefined,
-        role,
+        roleId,
         branchId,
         password,
       });
@@ -110,7 +105,7 @@ export function UserForm({ mode, initialData }: UserFormProps) {
       const result = updateUserSchema.safeParse({
         name,
         phone: phone || undefined,
-        role: role || undefined,
+        roleId: roleId || undefined,
         branchId: branchId || undefined,
         isActive,
       });
@@ -195,20 +190,20 @@ export function UserForm({ mode, initialData }: UserFormProps) {
               <label className="text-label-md text-on-surface-variant px-1">
                 Role *
               </label>
-              <Select value={role} onValueChange={setRole}>
+              <Select value={roleId} onValueChange={setRoleId}>
                 <SelectTrigger fullWidth>
-                  <SelectValue placeholder="Select a role" />
+                  <SelectValue placeholder={rolesLoading ? "Loading…" : "Select a role"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>
-                      {r.label}
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {roleLabel(r.name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {errors.role && (
-                <p className="px-4 text-[12px] leading-4 text-error">{errors.role}</p>
+              {errors.roleId && (
+                <p className="px-4 text-[12px] leading-4 text-error">{errors.roleId}</p>
               )}
             </div>
 

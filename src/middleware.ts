@@ -33,7 +33,8 @@ export default auth((req) => {
   if (session?.user) {
     const headers = new Headers(req.headers);
     headers.set("x-user-id", session.user.id);
-    headers.set("x-user-role", session.user.role);
+    headers.set("x-user-role-id", session.user.roleId);
+    headers.set("x-user-role-name", session.user.roleName);
     headers.set("x-organization-id", session.user.organizationId);
     headers.set("x-branch-id", session.user.branchId ?? "");
 

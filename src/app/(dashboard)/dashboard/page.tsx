@@ -12,7 +12,7 @@ export default async function DashboardPage() {
       <p className="text-body-lg text-on-surface-variant">
         Welcome back, {session?.user.name}. You are logged in as{" "}
         <span className="font-medium text-primary">
-          {session?.user.role.replace("_", " ")}
+          {session?.user.roleName?.replace("_", " ")}
         </span>{" "}
         at {session?.user.organizationName}.
       </p>
