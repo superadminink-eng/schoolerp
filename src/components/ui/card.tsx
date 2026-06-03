@@ -21,7 +21,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "rounded-md",
+          "rounded-[16px]",
           variantStyles[variant],
           className
         )}
@@ -39,7 +39,7 @@ export const CardHeader = forwardRef<
   HTMLDivElement,
   HTMLAttributes<HTMLDivElement>
 >(({ className, children, ...props }, ref) => (
-  <div ref={ref} className={cn("px-4 pt-4 pb-2", className)} {...props}>
+  <div ref={ref} className={cn("px-6 pt-6 pb-2", className)} {...props}>
     {children}
   </div>
 ));
@@ -50,7 +50,7 @@ export const CardContent = forwardRef<
   HTMLDivElement,
   HTMLAttributes<HTMLDivElement>
 >(({ className, children, ...props }, ref) => (
-  <div ref={ref} className={cn("px-4 py-2", className)} {...props}>
+  <div ref={ref} className={cn("px-6 py-4", className)} {...props}>
     {children}
   </div>
 ));
@@ -63,7 +63,7 @@ export const CardActions = forwardRef<
 >(({ className, children, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex items-center justify-end gap-2 px-4 py-2", className)}
+    className={cn("flex items-center justify-end gap-2 px-6 py-4", className)}
     {...props}
   >
     {children}

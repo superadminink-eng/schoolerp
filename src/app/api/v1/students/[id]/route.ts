@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     branch: { organizationId: ctx.organizationId },
   };
 
-  if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
 
@@ -148,7 +148,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       branch: { organizationId: ctx.organizationId },
     };
 
-    if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
       existingWhere.branchId = ctx.branchId;
     }
 
@@ -262,7 +262,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       branch: { organizationId: ctx.organizationId },
     };
 
-    if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
       existingWhere.branchId = ctx.branchId;
     }
 

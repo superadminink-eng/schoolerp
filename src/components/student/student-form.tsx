@@ -117,7 +117,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const { data: session } = useSession();
   const { branches, isLoading: branchesLoading } = useBranches();
 
-  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
 
   // Personal Information
   const [firstName, setFirstName] = useState(initialData?.firstName ?? "");

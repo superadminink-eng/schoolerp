@@ -93,7 +93,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   const router = useRouter();
   const snackbar = useSnackbar();
   const { data: session } = useSession();
-  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches, isLoading: branchesLoading } = useBranches();
   const { subjectMasters, isLoading: subjectMastersLoading } = useSubjectMasters();
 

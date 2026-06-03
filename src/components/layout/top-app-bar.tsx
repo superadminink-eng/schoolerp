@@ -19,7 +19,7 @@ export function TopAppBar({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex h-16 items-center gap-1 border-b border-outline-variant bg-surface px-2",
+        "sticky top-0 z-30 flex h-20 items-center gap-1 bg-surface/95 px-6 lg:px-10 backdrop-blur-sm",
         className
       )}
     >

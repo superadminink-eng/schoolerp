@@ -22,7 +22,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       id,
       branch: { organizationId: ctx.organizationId },
     };
-    if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
       staffWhere.branchId = ctx.branchId;
     }
 

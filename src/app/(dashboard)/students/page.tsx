@@ -78,7 +78,7 @@ function StudentAvatar({ firstName, lastName }: { firstName: string; lastName: s
 export default function StudentsPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches } = useBranches();
 
   const [students, setStudents] = useState<StudentRow[]>([]);

@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     branch: { organizationId: ctx.organizationId },
   };
 
-  if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
   const data = parsed.data;
 
   // BRANCH_ADMIN can only create students in their own branch
-  if (ctx.role === "BRANCH_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
+  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create student in another branch", 403);
   }
 

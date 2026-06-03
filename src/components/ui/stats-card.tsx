@@ -37,22 +37,22 @@ export function StatsCard({
   const colors = colorMap[color];
 
   return (
-    <Card variant="filled" className={cn("p-4", className)}>
-      <div className="flex items-center gap-4">
+    <Card variant="outlined" className={cn("p-6 flex flex-col gap-4 hover:border-primary/50 transition-colors", className)}>
+      <div className="flex items-center justify-between">
+        <p className="text-title-sm font-medium text-on-surface-variant uppercase tracking-wider">{title}</p>
         <div
           className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-md",
+            "flex h-10 w-10 items-center justify-center rounded-full",
             colors.bg
           )}
         >
-          <Icon name={icon} size={24} className={colors.text} />
+          <Icon name={icon} size={20} className={colors.text} />
         </div>
-        <div>
-          <p className="text-label-lg text-on-surface-variant">{title}</p>
-          <p className="text-headline-md font-semibold text-on-surface">
-            {value}
-          </p>
-        </div>
+      </div>
+      <div>
+        <p className="text-display-sm font-bold text-on-surface tracking-tight">
+          {value}
+        </p>
       </div>
     </Card>
   );

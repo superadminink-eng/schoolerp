@@ -91,9 +91,8 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         />
 
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl p-6">{children}</div>
-        </main>
-      </div>
+          <div className="mx-auto max-w-7xl p-6 lg:p-10">{children}</div>
+        </main>      </div>
     </div>
   );
 }

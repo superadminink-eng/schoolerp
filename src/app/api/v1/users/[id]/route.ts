@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     organizationId: ctx.organizationId,
   };
 
-  if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
 
@@ -89,7 +89,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     // BRANCH_ADMIN can only edit users in their branch
-    if (ctx.role === "BRANCH_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
+    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
       return apiError("FORBIDDEN", "Cannot modify users in another branch", 403);
     }
 
@@ -166,7 +166,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     await logAction({
       organizationId: ctx.organizationId,
-      branchId: user.branchId,
+      branchId: user.branch?.id || null,
       userId: ctx.userId,
       action: "UPDATE",
       module: "USERS",
@@ -210,7 +210,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     }
 
     // BRANCH_ADMIN can only delete users in their branch
-    if (ctx.role === "BRANCH_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
+    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
       return apiError("FORBIDDEN", "Cannot deactivate users in another branch", 403);
     }
 

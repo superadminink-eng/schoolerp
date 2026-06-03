@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { SearchBar } from "@/components/ui/search-bar";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Chip } from "@/components/ui/chip";
@@ -15,7 +16,10 @@ import { useRoles, type Role } from "@/hooks/use-roles";
 export function RoleListClient() {
   const router = useRouter();
   const { roles, loading } = useRoles();
+  const { data: session } = useSession();
   const [searchInput, setSearchInput] = useState("");
+
+  const isUserAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
 
   const roleLabel = (name: string) =>
     name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -46,37 +50,40 @@ export function RoleListClient() {
         <Chip 
           label={row.isSystem ? "System" : "Custom"} 
           variant={row.isSystem ? "filled" : "outlined"} 
-          color={row.isSystem ? "primary" : "secondary"} 
+          color={row.isSystem ? "primary" : "default"} 
         />
       ),
     },
     {
       key: "actions",
       header: "",
-      render: (row) => (
-        <Menu>
-          <MenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-full p-1 hover:bg-on-surface/8 cursor-pointer"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Icon name="more_vert" size={20} className="text-on-surface-variant" />
-            </button>
-          </MenuTrigger>
-          <MenuContent>
-            <MenuItem
-              icon="visibility"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/settings/roles/${row.id}/edit`);
-              }}
-            >
-              {row.isSystem ? "View" : "Edit"}
-            </MenuItem>
-          </MenuContent>
-        </Menu>
-      ),
+      render: (row) => {
+        const canEdit = !row.isSystem || isUserAdmin;
+        return (
+          <Menu>
+            <MenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded-full p-1 hover:bg-on-surface/8 cursor-pointer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Icon name="more_vert" size={20} className="text-on-surface-variant" />
+              </button>
+            </MenuTrigger>
+            <MenuContent>
+              <MenuItem
+                icon={canEdit ? "edit" : "visibility"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/settings/roles/${row.id}/edit`);
+                }}
+              >
+                {canEdit ? "Edit" : "View"}
+              </MenuItem>
+            </MenuContent>
+          </Menu>
+        );
+      },
       className: "w-12",
     },
   ];

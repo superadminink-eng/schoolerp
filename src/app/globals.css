@@ -48,32 +48,39 @@
   --color-scrim: #000000;
   --color-shadow: #000000;
 
-  /* ---- M3 Typography Scale ---- */
-  --font-sans: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
+  /* ---- M3 Typography Scale (Refined for 2026) ---- */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 
-  --text-display-lg: 57px;
-  --text-display-md: 45px;
-  --text-display-sm: 36px;
-  --text-headline-lg: 32px;
-  --text-headline-md: 28px;
-  --text-headline-sm: 24px;
-  --text-title-lg: 22px;
-  --text-title-md: 16px;
-  --text-title-sm: 14px;
-  --text-body-lg: 16px;
-  --text-body-md: 14px;
-  --text-body-sm: 12px;
-  --text-label-lg: 14px;
-  --text-label-md: 12px;
-  --text-label-sm: 11px;
+  /* Headings: Tighter letter spacing, bold weights */
+  --text-display-lg: 3.5625rem;
+  --text-display-md: 2.8125rem;
+  --text-display-sm: 2.25rem;
+  --text-headline-lg: 2rem;
+  --text-headline-md: 1.75rem;
+  --text-headline-sm: 1.5rem;
+  
+  /* Titles: Slightly tighter */
+  --text-title-lg: 1.375rem;
+  --text-title-md: 1rem;
+  --text-title-sm: 0.875rem;
+  
+  /* Body: Highly legible, generous line height */
+  --text-body-lg: 1rem;
+  --text-body-md: 0.875rem;
+  --text-body-sm: 0.75rem;
+  
+  /* Labels: Clean, uppercase capable */
+  --text-label-lg: 0.875rem;
+  --text-label-md: 0.75rem;
+  --text-label-sm: 0.6875rem;
 
   /* ---- M3 Shape Scale ---- */
   --radius-none: 0px;
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 28px;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.75rem;
   --radius-full: 9999px;
 
   /* ---- M3 Elevation ---- */
@@ -91,18 +98,18 @@
 
   /* ---- Spacing (4px grid) ---- */
   --spacing-0: 0px;
-  --spacing-1: 4px;
-  --spacing-2: 8px;
-  --spacing-3: 12px;
-  --spacing-4: 16px;
-  --spacing-5: 20px;
-  --spacing-6: 24px;
-  --spacing-8: 32px;
-  --spacing-10: 40px;
-  --spacing-12: 48px;
-  --spacing-16: 64px;
-  --spacing-20: 80px;
-  --spacing-24: 96px;
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
 }
 
 /* ============================================================
@@ -162,6 +169,21 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  font-size: 14px; /* Fluid sizing: default for smaller laptop screens (e.g. 14 inch) */
+  height: 100%;
+  overflow: hidden;
+}
+
+@media (min-width: 1440px) {
+  html {
+    font-size: 15px; /* Scale up slightly for medium-large screens */
+  }
+}
+
+@media (min-width: 1920px) {
+  html {
+    font-size: 16px; /* 100% scale for desktop monitors */
+  }
 }
 
 body {
@@ -170,6 +192,10 @@ body {
   line-height: 1.5;
   color: var(--color-on-surface);
   background-color: var(--color-surface);
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 /* ============================================================

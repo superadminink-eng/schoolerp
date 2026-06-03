@@ -71,11 +71,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
 
     if (!existing) {
-      // System roles cannot be modified by users
+      // System roles can be modified ONLY by platform SUPER_ADMIN or SCHOOL_ADMIN, and ONLY for permissions
       const systemRole = await prisma.role.findFirst({ where: { id, organizationId: null } });
-      if (systemRole) return apiError("FORBIDDEN", "Cannot modify system roles", 403);
-      
-      return apiNotFound("Role");
+      if (systemRole) {
+        if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN") {
+          return apiError("FORBIDDEN", "Cannot modify system roles", 403);
+        }
+        if (name !== undefined || description !== undefined) {
+          return apiError("BAD_REQUEST", "Cannot modify system role metadata (name or description)", 400);
+        }
+      } else {
+        return apiNotFound("Role");
+      }
     }
 
     if (name) {

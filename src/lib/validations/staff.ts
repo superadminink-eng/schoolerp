@@ -1,13 +1,5 @@
 import { z } from "zod";
 
-const STAFF_ROLES = [
-  "TEACHER",
-  "ACCOUNTANT",
-  "LIBRARIAN",
-  "RECEPTIONIST",
-  "TRANSPORT_MANAGER",
-] as const;
-
 const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
 
 const STAFF_STATUSES = ["ACTIVE", "ON_LEAVE", "RESIGNED", "TERMINATED"] as const;
@@ -19,7 +11,7 @@ export const createStaffSchema = z.object({
     .max(100, "Name must be at most 100 characters"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: z.string().max(20, "Phone must be at most 20 characters").optional().or(z.literal("")),
-  role: z.enum(STAFF_ROLES, { required_error: "Role is required" }),
+  roleId: z.string().min(1, "Role is required"),
   dateOfBirth: z.string().optional().or(z.literal("")),
   gender: z.enum(GENDERS).optional().or(z.literal("")),
   qualification: z
@@ -29,6 +21,28 @@ export const createStaffSchema = z.object({
     .or(z.literal("")),
   joinDate: z.string().optional().or(z.literal("")),
   branchId: z.string().min(1, "Branch is required"),
+  createAccount: z.boolean().optional(),
+  password: z.string().optional().or(z.literal("")),
+  customPermissions: z.array(z.object({
+    permissionId: z.string(),
+    granted: z.boolean(),
+  })).optional(),
+}).refine((data) => {
+  if (data.createAccount && (!data.password || data.password.length < 6)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Password must be at least 6 characters when creating an account",
+  path: ["password"],
+}).refine((data) => {
+  if (data.createAccount && !data.email) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Email is required when creating an account",
+  path: ["email"],
 });
 
 export const updateStaffSchema = z.object({
@@ -39,7 +53,7 @@ export const updateStaffSchema = z.object({
     .optional(),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: z.string().max(20, "Phone must be at most 20 characters").optional().or(z.literal("")),
-  role: z.enum(STAFF_ROLES).optional(),
+  roleId: z.string().optional(),
   dateOfBirth: z.string().optional().or(z.literal("")),
   gender: z.enum(GENDERS).optional().or(z.literal("")),
   qualification: z
@@ -50,6 +64,28 @@ export const updateStaffSchema = z.object({
   joinDate: z.string().optional().or(z.literal("")),
   branchId: z.string().min(1).optional(),
   status: z.enum(STAFF_STATUSES).optional(),
+  createAccount: z.boolean().optional(),
+  password: z.string().optional().or(z.literal("")),
+  customPermissions: z.array(z.object({
+    permissionId: z.string(),
+    granted: z.boolean(),
+  })).optional(),
+}).refine((data) => {
+  if (data.createAccount && data.password && data.password.length > 0 && data.password.length < 6) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Password must be at least 6 characters",
+  path: ["password"],
+}).refine((data) => {
+  if (data.createAccount && !data.email) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Email is required when creating an account",
+  path: ["email"],
 });
 
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;

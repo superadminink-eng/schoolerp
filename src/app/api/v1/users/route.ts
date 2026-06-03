@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   };
 
   // BRANCH_ADMIN can only see users in their branch
-  if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
   }
 
   // BRANCH_ADMIN can only create users in their own branch
-  if (ctx.role === "BRANCH_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
+  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create users in another branch", 403);
   }
 

@@ -22,7 +22,7 @@ interface UserData {
   name: string;
   email: string;
   phone: string | null;
-  role: string;
+  role: { id: string; name: string };
   isActive: boolean;
   branch: { id: string; name: string } | null;
 }

@@ -16,13 +16,13 @@ interface Stats {
 
 function StatsCardSkeleton() {
   return (
-    <div className="rounded-md bg-surface-container-highest p-4">
-      <div className="flex items-center gap-4">
-        <Skeleton className="h-12 w-12 rounded-md" />
-        <div className="space-y-2">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-7 w-12" />
-        </div>
+    <div className="rounded-[16px] border border-outline-variant bg-surface p-6 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-4 w-24 rounded" />
+        <Skeleton className="h-10 w-10 rounded-full" />
+      </div>
+      <div>
+        <Skeleton className="h-10 w-16 rounded" />
       </div>
     </div>
   );

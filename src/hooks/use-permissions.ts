@@ -36,7 +36,7 @@ export function usePermissions(): UsePermissionsReturn {
   }, [session, status]);
 
   const can = (module: string, action: string): boolean => {
-    if (session?.user?.role === "SUPER_ADMIN") return true;
+    if (session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN") return true;
     return permissions.has(`${module}:${action}`);
   };
 

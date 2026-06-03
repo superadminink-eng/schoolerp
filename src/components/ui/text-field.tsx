@@ -37,10 +37,24 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
     ref
   ) => {
     const [isFocused, setIsFocused] = useState(false);
-    const [hasValue, setHasValue] = useState(
-      !!(value || defaultValue)
-    );
-    const isFloating = isFocused || hasValue;
+    const [internalHasValue, setInternalHasValue] = useState(false);
+    
+    // Check if the component is controlled and has a value, or has a default value
+    const hasValue = 
+      (value !== undefined && value !== null && value !== "") || 
+      (defaultValue !== undefined && defaultValue !== null && defaultValue !== "") || 
+      internalHasValue;
+
+    const isFloating = 
+      isFocused || 
+      hasValue || 
+      !!props.placeholder || 
+      props.type === "date" || 
+      props.type === "time" || 
+      props.type === "datetime-local" || 
+      props.type === "month" || 
+      props.type === "week";
+      
     const hasError = !!error;
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -50,7 +64,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(false);
-      setHasValue(!!e.target.value);
+      setInternalHasValue(!!e.target.value);
       onBlur?.(e);
     };
 
@@ -135,35 +149,38 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
     }
 
     // Outlined variant (default)
-    // Use fieldset/legend pattern for proper border-gap on floating label
     return (
       <div className={cn("relative", fullWidth && "w-full", className)}>
-        <fieldset
-          className={cn(
-            "relative flex items-center h-[56px] m-0 px-0",
-            "rounded-[8px]",
-            borderColor,
-            isFocused ? "border-2" : "border",
-            disabled && "opacity-38"
-          )}
-        >
-          {/* Legend creates the notch in the border for the floating label */}
-          <legend
+        <div className={cn("relative flex items-center h-[56px] rounded-[8px]", disabled && "opacity-38")}>
+          {/* Fieldset for the border notch */}
+          <fieldset
             className={cn(
-              "ml-2 h-0 overflow-hidden px-1 text-[12px] leading-[0] transition-all duration-200",
-              isFloating ? "max-w-full" : "max-w-0"
+              "absolute inset-0 m-0 px-2 pointer-events-none",
+              "rounded-[8px]",
+              borderColor,
+              isFocused ? "border-2" : "border"
             )}
+            style={{
+              paddingLeft: leadingIcon ? "32px" : "8px"
+            }}
           >
-            <span className="opacity-0">
-              {label}
-              {required && " *"}
-            </span>
-          </legend>
+            <legend
+              className={cn(
+                "h-0 overflow-hidden text-[12px] leading-[0] transition-all duration-200",
+                isFloating ? "max-w-full px-1" : "max-w-0 px-0"
+              )}
+            >
+              <span className="opacity-0">
+                {label}
+                {required && " *"}
+              </span>
+            </legend>
+          </fieldset>
 
           {leadingIcon && (
             <span
               className={cn(
-                "material-symbols-outlined text-[20px] text-on-surface-variant shrink-0",
+                "material-symbols-outlined text-[20px] text-on-surface-variant shrink-0 z-10",
                 isFocused ? "ml-[11px]" : "ml-3"
               )}
             >
@@ -172,15 +189,14 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           )}
 
           <div className="relative flex-1 h-full flex items-center">
-            {/* Visible label */}
             <label
               className={cn(
-                "absolute transition-all duration-200 pointer-events-none",
+                "absolute transition-all duration-200 pointer-events-none z-10",
                 labelColor,
                 isFloating
                   ? cn(
                       "top-[-9px] text-[12px] leading-4",
-                      leadingIcon ? "-left-4" : "left-3"
+                      leadingIcon ? "-left-6" : "left-1"
                     )
                   : cn(
                       "top-1/2 -translate-y-1/2 text-[16px] leading-6",
@@ -200,7 +216,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
               onFocus={handleFocus}
               onBlur={handleBlur}
               className={cn(
-                "w-full h-full bg-transparent",
+                "w-full h-full bg-transparent z-10 relative",
                 leadingIcon ? "pl-2 pr-4" : "px-4",
                 "text-[16px] leading-6 text-on-surface",
                 "outline-none",
@@ -216,14 +232,14 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
               onClick={onTrailingIconClick}
               tabIndex={-1}
               className={cn(
-                "material-symbols-outlined text-[20px] text-on-surface-variant shrink-0 cursor-pointer",
+                "material-symbols-outlined text-[20px] text-on-surface-variant shrink-0 cursor-pointer z-10",
                 isFocused ? "mr-[11px]" : "mr-3"
               )}
             >
               {trailingIcon}
             </button>
           )}
-        </fieldset>
+        </div>
 
         {(error || helperText) && (
           <p

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     };
 
     // Branch scoping
-    if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
       (invoiceWhere.student as Record<string, unknown>).branchId = ctx.branchId;
     } else if (branchId) {
       (invoiceWhere.student as Record<string, unknown>).branchId = branchId;

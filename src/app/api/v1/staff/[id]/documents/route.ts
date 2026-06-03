@@ -23,7 +23,7 @@ async function verifyStaffAccess(
     id: staffId,
     branch: { organizationId: ctx.organizationId },
   };
-  if (ctx.role === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
   return prisma.staff.findFirst({ where, select: { id: true } });

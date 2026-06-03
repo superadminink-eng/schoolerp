@@ -123,6 +123,7 @@ export const NAVIGATION_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: "dashboard", roles: "all" as const },
   { label: "Branches", href: "/branches", icon: "location_city", permission: "branches:manage" },
   { label: "Users", href: "/users", icon: "group", permission: "users:read" },
+  { label: "Roles", href: "/settings/roles", icon: "security", permission: "settings:manage" },
   { label: "Staff", href: "/staff", icon: "badge", permission: "staff:read" },
   { label: "Academic Years", href: "/academic-years", icon: "date_range", permission: "academic_years:read" },
   { label: "Subjects", href: "/subject-masters", icon: "menu_book", permission: "subjects:read" },

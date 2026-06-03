@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       where: {
         id: studentId,
         branch: { organizationId: ctx.organizationId },
-        ...(ctx.role === "BRANCH_ADMIN" && ctx.branchId
+        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId
           ? { branchId: ctx.branchId }
           : {}),
       },
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       where: {
         id: studentId,
         branch: { organizationId: ctx.organizationId },
-        ...(ctx.role === "BRANCH_ADMIN" && ctx.branchId
+        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId
           ? { branchId: ctx.branchId }
           : {}),
       },

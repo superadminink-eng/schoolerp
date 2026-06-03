@@ -12,7 +12,7 @@ export function BranchSwitcher() {
   const { data: session, update } = useSession();
   const { branches, isLoading } = useBranches();
 
-  const role = session?.user?.role;
+  const role = session?.user?.roleName;
   const currentBranchId = session?.user?.branchId ?? "";
 
   // Only SCHOOL_ADMIN (and SUPER_ADMIN) can switch branches
