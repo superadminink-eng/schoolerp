@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchBar } from "@/components/ui/search-bar";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -35,13 +34,6 @@ interface AcademicYearRow {
   isCurrent: boolean;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export default function AcademicYearsPage() {
   const router = useRouter();
@@ -91,29 +83,31 @@ export default function AcademicYearsPage() {
     {
       key: "name",
       header: "Name",
-      render: (row) => (
-        <span className="font-medium">{row.name}</span>
-      ),
     },
     {
       key: "startDate",
       header: "Start Date",
-      render: (row) => formatDate(row.startDate),
+      type: "date",
+      dateConfig: {
+        value: (row) => row.startDate,
+      },
     },
     {
       key: "endDate",
       header: "End Date",
-      render: (row) => formatDate(row.endDate),
+      type: "date",
+      dateConfig: {
+        value: (row) => row.endDate,
+      },
     },
     {
       key: "status",
       header: "Status",
-      render: (row) =>
-        row.isCurrent ? (
-          <Chip label="Current" variant="filled" color="success" />
-        ) : (
-          <Chip label="Inactive" variant="outlined" color="default" />
-        ),
+      type: "badge",
+      badgeConfig: {
+        label: (row) => row.isCurrent ? "Current" : "Inactive",
+        color: (row) => row.isCurrent ? "success" : "default",
+      },
     },
     {
       key: "actions",

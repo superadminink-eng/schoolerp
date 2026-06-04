@@ -31,7 +31,10 @@ interface UserData {
 }
 
 const roleLabel = (name: string) =>
-  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  name
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
 interface UserFormProps {
   mode: "create" | "edit";

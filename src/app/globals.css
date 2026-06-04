@@ -1,52 +1,54 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ============================================================
    Material Design 3 — Design Tokens
    Based on https://m3.material.io/styles
    ============================================================ */
 
 @theme {
-  /* ---- M3 Color Roles (Light) ---- */
-  --color-primary: #1B6EF3;
+  /* ---- Corporate Premium Theme (Light) ---- */
+  --color-primary: #0F766E; /* Deep Teal 700 */
   --color-on-primary: #FFFFFF;
-  --color-primary-container: #D6E3FF;
-  --color-on-primary-container: #001B3E;
+  --color-primary-container: #E6F4F1; /* Custom Teal 50 */
+  --color-on-primary-container: #0A3C39; /* Deep Teal 900 */
 
-  --color-secondary: #565E71;
+  --color-secondary: #64748B; /* Slate 500 */
   --color-on-secondary: #FFFFFF;
-  --color-secondary-container: #DAE2F9;
-  --color-on-secondary-container: #131C2B;
+  --color-secondary-container: #F1F5F9; /* Slate 100 */
+  --color-on-secondary-container: #0F172A; /* Slate 900 */
 
-  --color-tertiary: #705575;
+  --color-tertiary: #0284C7; /* Sky 600 */
   --color-on-tertiary: #FFFFFF;
-  --color-tertiary-container: #FAD8FD;
-  --color-on-tertiary-container: #28132F;
+  --color-tertiary-container: #E0F2FE; /* Sky 100 */
+  --color-on-tertiary-container: #0C4A6E; /* Sky 900 */
 
-  --color-error: #BA1A1A;
+  --color-error: #EF4444; /* Red 500 */
   --color-on-error: #FFFFFF;
-  --color-error-container: #FFDAD6;
-  --color-on-error-container: #410002;
+  --color-error-container: #FEE2E2; /* Red 100 */
+  --color-on-error-container: #7F1D1D; /* Red 900 */
 
-  --color-surface: #F9F9FF;
-  --color-on-surface: #191C20;
-  --color-surface-variant: #E0E2EC;
-  --color-on-surface-variant: #44474E;
+  --color-surface: #F8FAFC; /* Slate 50 - Off white */
+  --color-on-surface: #0F172A; /* Slate 900 */
+  --color-surface-variant: #E2E8F0; /* Slate 200 */
+  --color-on-surface-variant: #475569; /* Slate 600 */
 
-  --color-surface-dim: #D9D9E0;
-  --color-surface-bright: #F9F9FF;
-  --color-surface-container-lowest: #FFFFFF;
-  --color-surface-container-low: #F3F3FA;
-  --color-surface-container: #EDEDF4;
-  --color-surface-container-high: #E7E8EE;
-  --color-surface-container-highest: #E2E2E9;
+  --color-surface-dim: #F1F5F9; /* Slate 100 */
+  --color-surface-bright: #F8FAFC; /* Slate 50 */
+  --color-surface-container-lowest: #FFFFFF; /* Pure White */
+  --color-surface-container-low: #F1F5F9; /* Slate 100 */
+  --color-surface-container: #E2E8F0; /* Slate 200 */
+  --color-surface-container-high: #CBD5E1; /* Slate 300 */
+  --color-surface-container-highest: #94A3B8; /* Slate 400 */
 
-  --color-outline: #74777F;
-  --color-outline-variant: #C4C6D0;
-  --color-inverse-surface: #2E3036;
-  --color-inverse-on-surface: #F0F0F7;
-  --color-inverse-primary: #AAC7FF;
+  --color-outline: #CBD5E1; /* Slate 300 */
+  --color-outline-variant: #E2E8F0; /* Slate 200 */
+  --color-inverse-surface: #0F172A; /* Slate 900 */
+  --color-inverse-on-surface: #F8FAFC; /* Slate 50 */
+  --color-inverse-primary: #A5B4FC; /* Indigo 300 */
   --color-scrim: #000000;
-  --color-shadow: #000000;
+  --color-shadow: #0F172A;
 
   /* ---- M3 Typography Scale (Refined for 2026) ---- */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -83,12 +85,12 @@
   --radius-xl: 1.75rem;
   --radius-full: 9999px;
 
-  /* ---- M3 Elevation ---- */
-  --shadow-elevation-1: 0px 1px 3px 1px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.30);
-  --shadow-elevation-2: 0px 2px 6px 2px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.30);
-  --shadow-elevation-3: 0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.30);
-  --shadow-elevation-4: 0px 6px 10px 4px rgba(0,0,0,0.15), 0px 2px 3px 0px rgba(0,0,0,0.30);
-  --shadow-elevation-5: 0px 8px 12px 6px rgba(0,0,0,0.15), 0px 4px 4px 0px rgba(0,0,0,0.30);
+  /* ---- M3 Elevation (Soft Corporate Shadows) ---- */
+  --shadow-elevation-1: 0px 2px 4px -1px rgba(15, 23, 42, 0.06), 0px 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-elevation-2: 0px 4px 6px -1px rgba(15, 23, 42, 0.08), 0px 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-elevation-3: 0px 10px 15px -3px rgba(15, 23, 42, 0.08), 0px 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-elevation-4: 0px 20px 25px -5px rgba(15, 23, 42, 0.08), 0px 8px 10px -6px rgba(15, 23, 42, 0.04);
+  --shadow-elevation-5: 0px 25px 50px -12px rgba(15, 23, 42, 0.12);
 
   /* ---- M3 State Layer Opacities ---- */
   --opacity-hover: 0.08;
@@ -117,10 +119,10 @@
    ============================================================ */
 
 .dark {
-  --color-primary: #AAC7FF;
-  --color-on-primary: #002F65;
-  --color-primary-container: #00458E;
-  --color-on-primary-container: #D6E3FF;
+  --color-primary: #5EEAD4;
+  --color-on-primary: #003733;
+  --color-primary-container: #0D9488;
+  --color-on-primary-container: #CCFBF1;
 
   --color-secondary: #BEC6DC;
   --color-on-secondary: #283141;
@@ -299,3 +301,24 @@ body {
 .animate-drawer-hide {
   animation: slide-out-to-left 150ms ease-in;
 }
+
+.ag-theme-quartz .ag-cell,
+.ag-theme-quartz .ag-cell-wrapper,
+.ag-theme-quartz .ag-cell-value {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+
+.ag-theme-quartz .ag-cell-value > *,
+.ag-theme-quartz .ag-cell-wrapper > * {
+  height: auto !important;
+}
+
+/* Global Reset: Prevent elements inside AG-Grid cells from inheriting row line-height */
+.ag-theme-quartz .ag-cell * {
+  line-height: normal !important;
+}
+
+
+

@@ -12,7 +12,6 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { useBranches } from "@/hooks/use-branches";
@@ -20,6 +19,7 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+
 
 interface StudentRow {
   id: string;
@@ -65,15 +65,6 @@ const statusColor = (status: string) => {
 const statusLabel = (status: string) =>
   status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-function StudentAvatar({ firstName, lastName }: { firstName: string; lastName: string }) {
-  const initials = `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
-
-  return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-lg font-medium shrink-0">
-      {initials}
-    </span>
-  );
-}
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -117,17 +108,12 @@ export default function StudentsPage() {
       key: "name",
       header: "Name",
       sortValue: (row) => `${row.firstName} ${row.lastName}`,
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <StudentAvatar firstName={row.firstName} lastName={row.lastName} />
-          <div>
-            <span className="font-medium">
-              {row.firstName} {row.lastName}
-            </span>
-            <p className="text-body-sm text-on-surface-variant">{row.admissionNo}</p>
-          </div>
-        </div>
-      ),
+      type: "avatar",
+      avatarConfig: {
+        firstName: (row) => row.firstName,
+        lastName: (row) => row.lastName,
+        subtitle: (row) => row.admissionNo,
+      },
     },
     {
       key: "division",
@@ -159,12 +145,10 @@ export default function StudentsPage() {
     {
       key: "dateOfBirth",
       header: "Date of Birth",
-      render: (row) =>
-        new Date(row.dateOfBirth).toLocaleDateString("en-IN", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        }),
+      type: "date",
+      dateConfig: {
+        value: (row) => row.dateOfBirth,
+      },
     },
     {
       key: "motherPhone",
@@ -184,37 +168,42 @@ export default function StudentsPage() {
     {
       key: "totalFees",
       header: "Total Fees",
-      render: (row) => formatCurrency(row.totalFees),
+      type: "currency",
+      currencyConfig: {
+        value: (row) => row.totalFees,
+      },
     },
     {
       key: "totalFeesPaid",
       header: "Collected",
-      render: (row) => (
-        <span className={row.totalFeesPaid > 0 ? "text-success font-medium" : ""}>
-          {formatCurrency(row.totalFeesPaid)}
-        </span>
-      ),
+      type: "currency",
+      currencyConfig: {
+        value: (row) => row.totalFeesPaid,
+        colorVariant: (v) => (v > 0 ? "success" : "default"),
+      },
     },
     {
       key: "pendingFees",
       header: "Remaining",
-      render: (row) => (
-        <span className={row.pendingFees > 0 ? "text-error font-medium" : ""}>
-          {formatCurrency(row.pendingFees)}
-        </span>
-      ),
+      type: "currency",
+      currencyConfig: {
+        value: (row) => row.pendingFees,
+        colorVariant: (v) => (v > 0 ? "error" : "default"),
+      },
     },
     {
       key: "status",
       header: "Status",
-      render: (row) => (
-        <Chip
-          label={statusLabel(row.status)}
-          variant="filled"
-          color={statusColor(row.status)}
-          icon={row.status === "ACTIVE" ? "check_circle" : "cancel"}
-        />
-      ),
+      type: "status-dot",
+      statusDotConfig: {
+        label: (row) => statusLabel(row.status),
+        color: (row) => {
+          if (row.status === "ACTIVE") return "success";
+          if (row.status === "GRADUATED") return "warning";
+          if (["TRANSFERRED", "DROPPED", "SUSPENDED"].includes(row.status)) return "error";
+          return "default";
+        },
+      },
     },
     {
       key: "actions",

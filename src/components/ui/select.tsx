@@ -19,12 +19,13 @@ export const SelectTrigger = forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "state-layer focus-ring inline-flex items-center justify-between gap-2",
-      "h-[56px] rounded-sm px-4",
-      "border border-outline bg-transparent text-on-surface text-body-lg",
-      "after:bg-on-surface-variant",
-      "data-[placeholder]:text-on-surface-variant",
-      "disabled:opacity-38 disabled:cursor-not-allowed",
+      "inline-flex items-center justify-between gap-2",
+      "h-11 rounded-xl px-4",
+      "border-2 border-slate-200 bg-white text-slate-700 text-sm font-medium transition-all duration-300",
+      "hover:border-primary/50 hover:bg-slate-50",
+      "focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary",
+      "data-[placeholder]:text-slate-400",
+      "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50",
       fullWidth && "w-full",
       className
     )}
@@ -32,7 +33,7 @@ export const SelectTrigger = forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <Icon name="expand_more" size={20} className="text-on-surface-variant shrink-0" />
+      <Icon name="expand_more" size={18} className="text-slate-400 shrink-0 transition-transform duration-300 group-data-[state=open]:rotate-180" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -48,15 +49,16 @@ export const SelectContent = forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "z-50 overflow-hidden rounded-sm bg-surface-container shadow-elevation-2",
+        "z-50 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-xl shadow-slate-200/50",
+        "animate-in fade-in-80 zoom-in-95 duration-200",
         "min-w-[var(--radix-select-trigger-width)]",
         className
       )}
       position="popper"
-      sideOffset={4}
+      sideOffset={8}
       {...props}
     >
-      <SelectPrimitive.Viewport className="p-1">
+      <SelectPrimitive.Viewport className="p-1.5">
         {children}
       </SelectPrimitive.Viewport>
     </SelectPrimitive.Content>
@@ -73,18 +75,18 @@ export const SelectItem = forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "state-layer relative flex cursor-pointer items-center gap-2",
-      "rounded-xs px-3 py-2 text-body-md text-on-surface outline-none",
-      "after:bg-on-surface",
-      "data-[highlighted]:bg-on-surface/8",
-      "data-[disabled]:opacity-38 data-[disabled]:cursor-not-allowed",
+      "relative flex cursor-pointer items-center gap-2 transition-colors",
+      "rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 outline-none",
+      "focus:bg-primary-container focus:text-on-primary-container",
+      "data-[highlighted]:bg-primary-container data-[highlighted]:text-on-primary-container",
+      "data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed",
       className
     )}
     {...props}
   >
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
     <SelectPrimitive.ItemIndicator className="ml-auto">
-      <Icon name="check" size={18} className="text-primary" />
+      <Icon name="check" size={16} className="text-primary font-bold" />
     </SelectPrimitive.ItemIndicator>
   </SelectPrimitive.Item>
 ));

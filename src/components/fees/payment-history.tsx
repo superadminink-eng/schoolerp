@@ -17,9 +17,6 @@ interface PaymentHistoryProps {
   payments: Payment[];
 }
 
-const formatCurrency = (amount: number) =>
-  `₹${amount.toLocaleString("en-IN")}`;
-
 export function PaymentHistory({ payments }: PaymentHistoryProps) {
   const columns: Column<Payment>[] = [
     {
@@ -31,20 +28,16 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
       key: "paidAt",
       header: "Date",
       sortValue: (row) => row.paidAt,
-      render: (row) =>
-        new Date(row.paidAt).toLocaleDateString("en-IN", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        }),
+      type: "date",
+      dateConfig: {
+        value: (row) => row.paidAt,
+      },
     },
     {
       key: "amount",
       header: "Amount",
       sortValue: (row) => row.amount,
-      render: (row) => (
-        <span className="font-medium">{formatCurrency(row.amount)}</span>
-      ),
+      type: "currency",
     },
     {
       key: "method",

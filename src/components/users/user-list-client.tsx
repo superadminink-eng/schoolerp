@@ -11,7 +11,6 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { useBranches } from "@/hooks/use-branches";
@@ -19,6 +18,8 @@ import { useRoles } from "@/hooks/use-roles";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
+
 
 
 interface UserRow {
@@ -33,22 +34,11 @@ interface UserRow {
 }
 
 const roleLabel = (name: string) =>
-  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  name
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
-function UserAvatar({ name }: { name: string }) {
-  const initials = name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-lg font-medium shrink-0">
-      {initials}
-    </span>
-  );
-}
 
 export function UserListClient() {
   const router = useRouter();
@@ -89,24 +79,33 @@ export function UserListClient() {
     {
       key: "name",
       header: "Name",
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <UserAvatar name={row.name} />
-          <span className="font-medium">{row.name}</span>
-        </div>
-      ),
+      type: "avatar",
+      avatarConfig: {
+        firstName: (row) => row.name,
+      },
     },
     {
       key: "email",
       header: "Email",
-      render: (row) => row.email,
     },
     {
       key: "role",
       header: "Role",
-      render: (row) => (
-        <Chip label={roleLabel(row.role?.name || "Unknown")} variant="filled" color="primary" />
-      ),
+      render: (row) => {
+        const roleName = row.role?.name || "Unknown";
+        const label = roleLabel(roleName);
+        let iconName = "person";
+        if (roleName.includes("ADMIN")) iconName = "security";
+        else if (roleName.includes("TEACHER")) iconName = "school";
+        else if (roleName.includes("LIBRARIAN")) iconName = "menu_book";
+        
+        return (
+          <div className="flex items-center gap-2 text-slate-700 font-medium h-full">
+            <Icon name={iconName} size={15} className="text-slate-400 shrink-0" />
+            <span className="text-sm font-medium text-slate-700">{label}</span>
+          </div>
+        );
+      },
     },
     {
       key: "branch",
@@ -116,14 +115,11 @@ export function UserListClient() {
     {
       key: "status",
       header: "Status",
-      render: (row) => (
-        <Chip
-          label={row.isActive ? "Active" : "Inactive"}
-          variant="filled"
-          color={row.isActive ? "success" : "error"}
-          icon={row.isActive ? "check_circle" : "cancel"}
-        />
-      ),
+      type: "status-dot",
+      statusDotConfig: {
+        label: (row) => row.isActive ? "Active" : "Inactive",
+        color: (row) => row.isActive ? "success" : "default",
+      },
     },
     {
       key: "actions",
@@ -132,9 +128,9 @@ export function UserListClient() {
         <Menu>
           <MenuTrigger asChild>
             <button
-              type="button"
-              className="rounded-full p-1 hover:bg-on-surface/8 cursor-pointer"
-              onClick={(e) => e.stopPropagation()}
+               type="button"
+               className="rounded-full p-1 hover:bg-on-surface/8 cursor-pointer"
+               onClick={(e) => e.stopPropagation()}
             >
               <Icon name="more_vert" size={20} className="text-on-surface-variant" />
             </button>

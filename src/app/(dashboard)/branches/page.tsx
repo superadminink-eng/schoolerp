@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchBar } from "@/components/ui/search-bar";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+
 
 interface BranchRow {
   id: string;
@@ -53,12 +53,10 @@ export default function BranchesPage() {
     {
       key: "name",
       header: "Name",
-      render: (row) => <span className="font-medium">{row.name}</span>,
     },
     {
       key: "code",
       header: "Code",
-      render: (row) => row.code,
     },
     {
       key: "phone",
@@ -73,22 +71,20 @@ export default function BranchesPage() {
     {
       key: "isMain",
       header: "Main",
-      render: (row) =>
-        row.isMain ? (
-          <Chip label="Main" variant="filled" color="primary" icon="star" />
-        ) : null,
+      type: "star-badge",
+      starConfig: {
+        active: (row) => row.isMain,
+        label: "Main",
+      },
     },
     {
       key: "status",
       header: "Status",
-      render: (row) => (
-        <Chip
-          label={row.isActive ? "Active" : "Inactive"}
-          variant="filled"
-          color={row.isActive ? "success" : "error"}
-          icon={row.isActive ? "check_circle" : "cancel"}
-        />
-      ),
+      type: "status-dot",
+      statusDotConfig: {
+        label: (row) => row.isActive ? "Active" : "Inactive",
+        color: (row) => row.isActive ? "success" : "default",
+      },
     },
     {
       key: "actions",

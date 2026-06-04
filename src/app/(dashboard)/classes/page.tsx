@@ -113,7 +113,6 @@ export default function ClassesPage() {
     {
       key: "name",
       header: "Name",
-      render: (row) => <span className="font-medium">{row.name}</span>,
     },
     {
       key: "numericGrade",
@@ -159,12 +158,13 @@ export default function ClassesPage() {
     {
       key: "fees",
       header: "Fees",
-      render: (row) => {
-        const total = row.feeStructures.reduce(
-          (sum, f) => sum + Number(f.amount),
-          0
-        );
-        return total > 0 ? `₹${total.toLocaleString("en-IN")}` : "—";
+      type: "currency",
+      currencyConfig: {
+        value: (row) =>
+          row.feeStructures.reduce(
+            (sum, f) => sum + Number(f.amount),
+            0
+          ),
       },
     },
     {

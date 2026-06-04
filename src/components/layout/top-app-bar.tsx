@@ -19,7 +19,7 @@ export function TopAppBar({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex h-20 items-center gap-1 bg-surface/95 px-6 lg:px-10 backdrop-blur-sm",
+        "sticky top-0 z-30 flex h-20 items-center gap-2 bg-white/70 px-6 lg:px-8 backdrop-blur-xl border-b border-slate-200/60 transition-all",
         className
       )}
     >
@@ -27,18 +27,20 @@ export function TopAppBar({
       <button
         type="button"
         onClick={onMenuClick}
-        className="state-layer focus-ring flex h-12 w-12 items-center justify-center rounded-full text-on-surface-variant after:bg-on-surface-variant xl:hidden"
+        className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 xl:hidden transition-colors"
         aria-label="Open navigation menu"
       >
         <Icon name="menu" size={24} />
       </button>
 
-      <h1 className="ml-1 flex-1 truncate text-title-lg font-semibold text-on-surface">
-        {title}
-      </h1>
+      <div className="ml-1 flex-1 flex items-center gap-3 overflow-hidden">
+        <h1 className="truncate text-xl font-black text-slate-900 tracking-tight">
+          {title}
+        </h1>
+      </div>
 
       {trailing && (
-        <div className="flex items-center gap-2">{trailing}</div>
+        <div className="flex items-center gap-3">{trailing}</div>
       )}
     </header>
   );

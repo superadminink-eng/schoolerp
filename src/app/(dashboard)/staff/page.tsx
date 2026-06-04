@@ -12,7 +12,6 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -30,6 +29,8 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
+
 
 const ROLE_OPTIONS = [
   { value: "ALL", label: "All Roles" },
@@ -53,7 +54,10 @@ interface StaffRow {
 }
 
 const roleLabel = (role: string) =>
-  role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  role
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
 const statusColor = (status: string) => {
   switch (status) {
@@ -72,20 +76,7 @@ const statusColor = (status: string) => {
 const statusLabel = (status: string) =>
   status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-function StaffAvatar({ name }: { name: string }) {
-  const initials = name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 
-  return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-lg font-medium shrink-0">
-      {initials}
-    </span>
-  );
-}
 
 export default function StaffPage() {
   const router = useRouter();
@@ -148,12 +139,10 @@ export default function StaffPage() {
     {
       key: "name",
       header: "Name",
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <StaffAvatar name={row.name} />
-          <span className="font-medium">{row.name}</span>
-        </div>
-      ),
+      type: "avatar",
+      avatarConfig: {
+        firstName: (row) => row.name,
+      },
     },
     {
       key: "email",
@@ -168,12 +157,21 @@ export default function StaffPage() {
     {
       key: "role",
       header: "Role",
-      render: (row) =>
-        row.role ? (
-          <Chip label={roleLabel(row.role)} variant="filled" color="primary" />
-        ) : (
-          "—"
-        ),
+      render: (row) => {
+        if (!row.role) return "—";
+        const label = roleLabel(row.role);
+        let iconName = "person";
+        if (row.role.includes("TEACHER")) iconName = "school";
+        else if (row.role.includes("ACCOUNTANT")) iconName = "payments";
+        else if (row.role.includes("LIBRARIAN")) iconName = "menu_book";
+        
+        return (
+          <div className="flex items-center gap-2 text-slate-700 font-medium h-full">
+            <Icon name={iconName} size={15} className="text-slate-400 shrink-0" />
+            <span className="text-sm font-medium text-slate-700">{label}</span>
+          </div>
+        );
+      },
     },
     {
       key: "gender",
@@ -186,24 +184,24 @@ export default function StaffPage() {
     {
       key: "joinDate",
       header: "Join Date",
-      render: (row) =>
-        new Date(row.joinDate).toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        }),
+      type: "date",
+      dateConfig: {
+        value: (row) => row.joinDate,
+      },
     },
     {
       key: "status",
       header: "Status",
-      render: (row) => (
-        <Chip
-          label={statusLabel(row.status)}
-          variant="filled"
-          color={statusColor(row.status)}
-          icon={row.status === "ACTIVE" ? "check_circle" : "cancel"}
-        />
-      ),
+      type: "status-dot",
+      statusDotConfig: {
+        label: (row) => statusLabel(row.status),
+        color: (row) => {
+          if (row.status === "ACTIVE") return "success";
+          if (row.status === "ON_LEAVE") return "warning";
+          if (row.status === "RESIGNED" || row.status === "TERMINATED") return "error";
+          return "default";
+        },
+      },
     },
     {
       key: "actions",

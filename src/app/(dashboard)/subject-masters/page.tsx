@@ -126,7 +126,6 @@ export default function SubjectMastersPage() {
     {
       key: "code",
       header: "Code",
-      render: (row) => row.code,
     },
     {
       key: "type",

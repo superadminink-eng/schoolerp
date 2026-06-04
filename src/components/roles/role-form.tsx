@@ -180,9 +180,26 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-5xl space-y-6">
-      <Card variant="outlined" className="bg-surface shadow-sm rounded-2xl border-outline-variant/30">
-        <CardContent className="p-6 space-y-5">
+    <form onSubmit={handleSubmit} className="mx-auto max-w-5xl space-y-8 animate-in slide-in-from-bottom-4 duration-500 fade-in">
+      {/* Title & Description Area */}
+      <div className="space-y-1">
+        <h2 className="text-2xl font-black text-on-surface tracking-tight">
+          {mode === "create" ? "Create New Role" : "Edit Role Settings"}
+        </h2>
+        <p className="text-sm text-on-surface-variant">
+          Configure role properties and define module access levels.
+        </p>
+      </div>
+
+      {/* Basic Details Bento Card */}
+      <Card variant="outlined" className="bg-surface-container-lowest shadow-sm shadow-slate-200/50 rounded-2xl border-outline-variant/40 group hover:border-primary/20 transition-all duration-300">
+        <div className="bg-surface-dim/30 px-6 py-4 border-b border-outline-variant/20">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-secondary flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+            Role Profile
+          </h3>
+        </div>
+        <CardContent className="p-6 space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <TextField
               label="Role Name"
@@ -204,27 +221,33 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
         </CardContent>
       </Card>
 
-      <Card variant="outlined" className="overflow-hidden border-outline-variant/30 shadow-sm rounded-2xl bg-surface">
-        <div className="bg-surface-container-low px-6 py-4 border-b border-outline-variant/20 flex items-center justify-between">
+      {/* Permissions Bento Card */}
+      <Card variant="outlined" className="overflow-hidden border-outline-variant/40 shadow-sm shadow-slate-200/50 rounded-2xl bg-surface-container-lowest group hover:border-primary/20 transition-all duration-300">
+        <div className="bg-gradient-to-r from-slate-50 to-primary-container/10 px-6 py-5 border-b border-outline-variant/20 flex items-center justify-between">
           <div>
-            <h2 className="text-title-md font-semibold text-on-surface flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
-              Module Permissions
+            <h2 className="text-title-md font-extrabold text-on-surface flex items-center gap-2.5">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary">
+                <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
+              </span>
+              Module Permissions Matrix
             </h2>
-            <p className="text-body-sm text-on-surface-variant mt-1">Select specific access rights for this role.</p>
+            <p className="text-xs text-on-surface-variant font-medium mt-1.5">
+              Precisely control what users with this role can view or manage.
+            </p>
           </div>
           {isSystem && (
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container">
-              {disableEdits ? "System Role (Read-only)" : "System Role (Editable)"}
+            <span className="inline-flex items-center gap-1.5 text-[10px] uppercase font-black tracking-widest px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+              {disableEdits ? "System Role (Locked)" : "System Role (Editable)"}
             </span>
           )}
         </div>
         
         <CardContent className="p-0">
           {fetching ? (
-            <div className="flex items-center justify-center p-12 text-on-surface-variant gap-3">
-              <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
-              Loading structure...
+            <div className="flex items-center justify-center p-16 text-slate-400 gap-3">
+                <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                <span className="text-sm font-bold tracking-wider uppercase">Loading Structure...</span>
             </div>
           ) : (
             <div className="grid grid-cols-1 divide-y divide-outline-variant/10">
@@ -235,56 +258,61 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
                 const indeterminate = someModuleSelected && !allModuleSelected;
 
                 return (
-                  <div key={moduleName} className="flex flex-col">
+                  <div key={moduleName} className="flex flex-col group/accordion">
                     {/* Accordion Header */}
                     <div 
                       className={cn(
-                        "flex items-center justify-between px-6 py-3.5 cursor-pointer transition-colors hover:bg-surface-container-lowest",
-                        isExpanded ? "bg-surface-container-lowest" : ""
+                        "flex items-center justify-between px-6 py-4 cursor-pointer transition-all duration-300 hover:bg-slate-50",
+                        isExpanded ? "bg-slate-50" : ""
                       )}
                       onClick={() => toggleAccordion(moduleName)}
                     >
                       <div className="flex items-center gap-4">
-                        <span className={cn(
-                          "material-symbols-outlined text-[22px] transition-colors",
-                          someModuleSelected ? "text-primary" : "text-on-surface-variant/50"
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500",
+                          someModuleSelected ? "bg-primary text-on-primary shadow-md shadow-primary/10" : "bg-slate-100 text-slate-400 group-hover/accordion:bg-slate-200"
                         )}>
-                          {MODULE_ICONS[moduleName] || "extension"}
-                        </span>
+                          <span className="material-symbols-outlined text-[20px]">
+                            {MODULE_ICONS[moduleName] || "extension"}
+                          </span>
+                        </div>
                         <div>
-                          <h3 className="text-label-lg font-semibold capitalize text-on-surface">
+                          <h3 className="text-sm font-bold capitalize text-on-surface">
                             {moduleName.replace(/_/g, " ")}
                           </h3>
-                          <p className="text-body-sm text-on-surface-variant/70">
-                            {perms.filter(p => selectedPerms.has(p.id)).length} of {perms.length} selected
+                          <p className="text-[11px] font-medium text-on-surface-variant/70 mt-0.5 uppercase tracking-wider">
+                            <span className={cn(someModuleSelected ? "text-primary font-bold" : "")}>
+                              {perms.filter(p => selectedPerms.has(p.id)).length}
+                            </span> 
+                            {" "}of {perms.length} active
                           </p>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-6" onClick={(e) => e.stopPropagation()}>
                         {!disableEdits && (
-                          <label className="flex items-center gap-2 cursor-pointer hover:bg-surface-container-low px-2 py-1 rounded-md transition-colors">
-                            <span className="text-label-sm font-medium text-on-surface-variant">Select All</span>
+                          <label className="flex items-center gap-2.5 cursor-pointer hover:bg-slate-200/50 px-3 py-1.5 rounded-lg transition-colors">
+                            <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Select All</span>
                             <Checkbox
                               checked={allModuleSelected}
-                              // @ts-ignore - custom indeterminate logic if needed, but we'll use CSS for now or just true/false
+                              // @ts-ignore
                               onChange={(e) => handleSelectModule(perms, e.target.checked)}
                               disabled={disableEdits}
                               className={cn(
-                                "rounded-[4px] border-outline-variant/50",
-                                indeterminate && !allModuleSelected ? "bg-primary/50 border-primary/50" : ""
+                                "rounded-md border-slate-300 w-5 h-5",
+                                indeterminate && !allModuleSelected ? "bg-primary/80 border-primary/80" : ""
                               )}
                             />
                           </label>
                         )}
                         <button 
                           type="button"
-                          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors text-on-surface-variant"
+                          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400"
                           onClick={() => toggleAccordion(moduleName)}
                         >
                           <span className={cn(
-                            "material-symbols-outlined transition-transform duration-200",
-                            isExpanded ? "rotate-180" : ""
+                            "material-symbols-outlined transition-transform duration-300",
+                            isExpanded ? "rotate-180 text-primary" : ""
                           )}>
                             expand_more
                           </span>
@@ -294,33 +322,43 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
 
                     {/* Accordion Content */}
                     <div className={cn(
-                      "grid gap-4 px-6 overflow-hidden transition-all duration-300 ease-in-out",
-                      isExpanded ? "py-4 opacity-100 max-h-[500px]" : "max-h-0 opacity-0 py-0"
+                      "grid gap-4 overflow-hidden transition-all duration-300 ease-in-out bg-slate-50/50 border-t border-slate-100",
+                      isExpanded ? "py-6 opacity-100 max-h-[800px]" : "max-h-0 opacity-0 py-0 border-transparent"
                     )}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pl-10">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-6 pl-14">
                         {perms.map(p => (
                           <label 
                             key={p.id} 
                             className={cn(
-                              "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer",
+                              "relative flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden group/perm",
                               selectedPerms.has(p.id) 
-                                ? "bg-primary-container/20 border-primary/30" 
-                                : "bg-surface border-outline-variant/20 hover:border-outline-variant/50"
+                                ? "bg-white border-primary/20 shadow-sm shadow-primary/5 bg-primary-container/5" 
+                                : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
                             )}
                           >
-                            <div className="mt-0.5">
+                            {selectedPerms.has(p.id) && (
+                              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
+                            )}
+                            <div className="mt-0.5 shrink-0">
                               <Checkbox
                                 checked={selectedPerms.has(p.id)}
                                 onChange={() => togglePermission(p.id)}
                                 disabled={disableEdits}
+                                className={cn(
+                                  "w-5 h-5 rounded-md",
+                                  selectedPerms.has(p.id) ? "border-primary" : "border-slate-300"
+                                )}
                               />
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-label-md font-semibold text-on-surface uppercase tracking-wider">
+                              <span className={cn(
+                                "text-[11px] font-black uppercase tracking-wider transition-colors",
+                                selectedPerms.has(p.id) ? "text-primary font-bold" : "text-slate-600 group-hover/perm:text-slate-900"
+                              )}>
                                 {p.action.replace(/_/g, " ")}
                               </span>
                               {p.description && (
-                                <span className="text-[11px] text-on-surface-variant leading-tight mt-0.5">
+                                <span className="text-[11px] text-slate-500 leading-snug mt-1 font-medium">
                                   {p.description}
                                 </span>
                               )}
@@ -337,17 +375,24 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-3 pt-4">
+      {/* Action Footer */}
+      <div className="flex items-center justify-end gap-3 pt-6 pb-12">
         <Button
           type="button"
           variant="outlined"
           onClick={() => router.push("/settings/roles")}
+          className="rounded-xl border-slate-300 text-slate-600 hover:bg-slate-100 font-bold px-6"
         >
-          {disableEdits ? "Back" : "Cancel"}
+          {disableEdits ? "Go Back" : "Cancel"}
         </Button>
         {!disableEdits && (
-          <Button type="submit" variant="filled" loading={loading} icon="save" className="rounded-full px-8 shadow-sm">
-            {mode === "create" ? "Create Role" : "Save Changes"}
+          <Button 
+            type="submit" 
+            variant="filled" 
+            loading={loading} 
+            className="rounded-xl font-bold px-8 transition-all hover:scale-[1.02]"
+          >
+            {mode === "create" ? "Create Role Profile" : "Save Settings"}
           </Button>
         )}
       </div>

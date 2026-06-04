@@ -23,21 +23,31 @@ function DrawerContent({
   return (
     <div
       className={cn(
-        "flex h-full w-[280px] flex-col bg-surface-container-low",
+        "flex h-full w-[280px] flex-col bg-slate-50",
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-5">
-        <Icon name="school" size={28} className="text-primary" />
-        <span className="truncate text-title-md font-semibold text-on-surface">
-          {orgName}
-        </span>
+      <div className="flex flex-col gap-1 px-6 py-8 border-b border-slate-200/60 bg-white">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-on-primary shadow-md shadow-primary/20">
+            <Icon name="school" size={22} />
+          </div>
+          <div className="flex flex-col">
+            <span className="truncate text-[15px] font-black text-slate-900 leading-tight tracking-tight">
+              {orgName}
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-primary mt-0.5">
+              ERP Portal
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 overflow-y-auto px-3 pb-4">
-        <ul className="flex flex-col gap-0.5">
+      <nav className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
+        <div className="text-xs font-bold text-on-surface-variant/50 uppercase tracking-widest px-2 mb-3">Main Menu</div>
+        <ul className="flex flex-col gap-1.5">
           {items.map((item) => (
             <li key={item.href}>
               <NavItem item={item} onClick={onItemClick} />

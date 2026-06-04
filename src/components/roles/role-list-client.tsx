@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { SearchBar } from "@/components/ui/search-bar";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { FAB } from "@/components/ui/fab";
@@ -22,37 +21,30 @@ export function RoleListClient() {
   const isUserAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
 
   const roleLabel = (name: string) =>
-    name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    name
+      .toLowerCase()
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const columns: Column<Role>[] = [
     {
       key: "name",
       header: "Role Name",
-      render: (row) => (
-        <span className="font-medium text-on-surface">
-          {roleLabel(row.name)}
-        </span>
-      ),
+      render: (row) => roleLabel(row.name),
     },
     {
       key: "description",
       header: "Description",
-      render: (row) => (
-        <span className="text-on-surface-variant text-body-md line-clamp-1">
-          {row.description || "—"}
-        </span>
-      ),
+      render: (row) => row.description || "—",
     },
     {
       key: "type",
       header: "Type",
-      render: (row) => (
-        <Chip 
-          label={row.isSystem ? "System" : "Custom"} 
-          variant={row.isSystem ? "filled" : "outlined"} 
-          color={row.isSystem ? "primary" : "default"} 
-        />
-      ),
+      type: "badge",
+      badgeConfig: {
+        label: (row) => row.isSystem ? "System" : "Custom",
+        color: (row) => row.isSystem ? "primary" : "default",
+      },
     },
     {
       key: "actions",

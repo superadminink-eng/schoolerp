@@ -12,7 +12,6 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Chip } from "@/components/ui/chip";
 import { useBranches } from "@/hooks/use-branches";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 
@@ -46,24 +45,6 @@ const statusColor = (status: string) => {
   }
 };
 
-function StudentAvatar({
-  firstName,
-  lastName,
-}: {
-  firstName: string;
-  lastName: string;
-}) {
-  const initials = `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
-
-  return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-lg font-medium shrink-0">
-      {initials}
-    </span>
-  );
-}
-
-const formatCurrency = (amount: number) =>
-  `₹${amount.toLocaleString("en-IN")}`;
 
 export default function FeesPage() {
   const router = useRouter();
@@ -104,73 +85,64 @@ export default function FeesPage() {
       key: "name",
       header: "Student",
       sortValue: (row) => row.studentName,
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <StudentAvatar firstName={row.firstName} lastName={row.lastName} />
-          <div>
-            <span className="font-medium">{row.studentName}</span>
-            <p className="text-body-sm text-on-surface-variant">
-              {row.admissionNo}
-            </p>
-          </div>
-        </div>
-      ),
+      type: "avatar",
+      avatarConfig: {
+        firstName: (row) => row.firstName,
+        lastName: (row) => row.lastName,
+        subtitle: (row) => row.admissionNo,
+      },
     },
     {
       key: "className",
       header: "Class",
       sortValue: (row) => row.className,
-      render: (row) => row.className,
     },
     {
       key: "totalAmount",
       header: "Total",
       sortValue: (row) => row.totalAmount,
-      render: (row) => formatCurrency(row.totalAmount),
+      type: "currency",
+      currencyConfig: {
+        value: (row) => row.totalAmount,
+      },
     },
     {
       key: "paidAmount",
       header: "Paid",
       sortValue: (row) => row.paidAmount,
-      render: (row) => (
-        <span
-          className={row.paidAmount > 0 ? "text-success font-medium" : ""}
-        >
-          {formatCurrency(row.paidAmount)}
-        </span>
-      ),
+      type: "currency",
+      currencyConfig: {
+        value: (row) => row.paidAmount,
+        colorVariant: (v) => (v > 0 ? "success" : "default"),
+      },
     },
     {
       key: "pendingAmount",
       header: "Pending",
       sortValue: (row) => row.pendingAmount,
-      render: (row) => (
-        <span className="text-error font-medium">
-          {formatCurrency(row.pendingAmount)}
-        </span>
-      ),
+      type: "currency",
+      currencyConfig: {
+        value: (row) => row.pendingAmount,
+        colorVariant: "error",
+      },
     },
     {
       key: "dueDate",
       header: "Due Date",
       sortValue: (row) => row.dueDate,
-      render: (row) =>
-        new Date(row.dueDate).toLocaleDateString("en-IN", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        }),
+      type: "date",
+      dateConfig: {
+        value: (row) => row.dueDate,
+      },
     },
     {
       key: "status",
       header: "Status",
-      render: (row) => (
-        <Chip
-          label={row.status}
-          variant="filled"
-          color={statusColor(row.status)}
-        />
-      ),
+      type: "badge",
+      badgeConfig: {
+        label: (row) => row.status,
+        color: (row) => statusColor(row.status),
+      },
     },
   ];
 
