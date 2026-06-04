@@ -350,7 +350,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           }
         }
       }
-    });
+    }, { timeout: 30000 });
 
     // Refetch updated class
     const updated = await prisma.class.findUnique({

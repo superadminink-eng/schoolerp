@@ -107,6 +107,7 @@ export default function StudentsPage() {
     {
       key: "name",
       header: "Name",
+      minWidth: 200,
       sortValue: (row) => `${row.firstName} ${row.lastName}`,
       type: "avatar",
       avatarConfig: {

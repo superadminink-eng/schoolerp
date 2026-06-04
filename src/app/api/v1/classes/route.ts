@@ -226,16 +226,18 @@ export async function POST(req: NextRequest) {
         });
 
         // Create section-subject-teacher records
-        for (const st of sec.subjectTeachers) {
-          if (st.subjectIndex >= 0 && st.subjectIndex < createdSubjectIds.length) {
-            await tx.sectionSubjectTeacher.create({
-              data: {
-                sectionId: section.id,
-                subjectId: createdSubjectIds[st.subjectIndex],
-                staffId: st.staffId,
-              },
-            });
-          }
+        const sectionSubjectTeacherData = sec.subjectTeachers
+          .filter((st) => st.subjectIndex >= 0 && st.subjectIndex < createdSubjectIds.length)
+          .map((st) => ({
+            sectionId: section.id,
+            subjectId: createdSubjectIds[st.subjectIndex],
+            staffId: st.staffId,
+          }));
+
+        if (sectionSubjectTeacherData.length > 0) {
+          await tx.sectionSubjectTeacher.createMany({
+            data: sectionSubjectTeacherData,
+          });
         }
       }
 
@@ -267,7 +269,7 @@ export async function POST(req: NextRequest) {
       }
 
       return cls;
-    });
+    }, { timeout: 30000 });
 
     // Refetch full record
     const full = await prisma.class.findUnique({

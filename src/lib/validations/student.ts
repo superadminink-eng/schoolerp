@@ -119,8 +119,8 @@ export const updateStudentSchema = z.object({
   motherEmail: z.string().email().optional().or(z.literal("")),
   motherOccupation: z.string().max(100).optional().or(z.literal("")),
   admissionDate: z.string().optional().or(z.literal("")),
-  branchId: z.string().min(1).optional(),
-  sectionId: z.string().min(1).optional(),
+  branchId: z.string().min(1).optional().or(z.literal("")),
+  sectionId: z.string().min(1).optional().or(z.literal("")),
   status: z.enum(STUDENT_STATUSES).optional(),
 });
 

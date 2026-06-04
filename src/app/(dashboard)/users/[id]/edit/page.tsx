@@ -43,12 +43,12 @@ export default function EditUserPage() {
         if (data.success) {
           setUser(data.data);
         } else {
-          snackbar.show(data.error?.message ?? "User not found");
+          snackbar.show(data.error?.message ?? "User not found", "error");
           router.push("/users");
         }
       })
       .catch(() => {
-        snackbar.show("Failed to load user");
+        snackbar.show("Failed to load user", "error");
         router.push("/users");
       })
       .finally(() => setLoading(false));
@@ -60,14 +60,14 @@ export default function EditUserPage() {
       const res = await fetch(`/api/v1/users/${params.id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("User deactivated");
+        snackbar.show("User deactivated", "success");
         router.push("/users");
         router.refresh();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to deactivate user");
+        snackbar.show(data.error?.message ?? "Failed to deactivate user", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setDeleting(false);
     }

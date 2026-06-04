@@ -97,13 +97,13 @@ export default function ClassesPage() {
       const res = await fetch(`/api/v1/classes/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Class deleted");
+        snackbar.show("Class deleted", "success");
         fetchClasses();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to delete class");
+        snackbar.show(data.error?.message ?? "Failed to delete class", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setDeleting(false);
     }

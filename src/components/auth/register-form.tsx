@@ -38,7 +38,6 @@ export function RegisterForm() {
       setError("Passwords do not match.");
       return;
     }
-
     if (form.password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;

@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Icon } from "./icon";
+import { getUploadUrl } from "@/lib/upload-url";
 
 interface FileUploadProps {
   accept?: string;
@@ -25,7 +26,7 @@ export function FileUpload({
 
   const previewUrl = value
     ? URL.createObjectURL(value)
-    : preview ?? null;
+    : preview ? getUploadUrl(preview) : null;
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>

@@ -198,12 +198,13 @@ export async function POST(req: NextRequest) {
     const photoFile = formData.get("photo");
     if (photoFile instanceof File && photoFile.size > 0) {
       try {
-        const result = await saveUploadedImage(photoFile, "uploads/student-photos", admissionNo);
+        const result = await saveUploadedImage(photoFile, "uploads/student-photos", admissionNo, "photo");
         photoPath = result.filePath;
       } catch (error) {
         if (error instanceof UploadError) {
           return apiError("VALIDATION_ERROR", `Photo: ${error.message}`, 422);
         }
+        throw error;
       }
     }
 
@@ -218,6 +219,7 @@ export async function POST(req: NextRequest) {
         if (error instanceof UploadError) {
           return apiError("VALIDATION_ERROR", `ID Document: ${error.message}`, 422);
         }
+        throw error;
       }
     }
 
@@ -366,7 +368,7 @@ export async function POST(req: NextRequest) {
       }
 
       return created;
-    });
+    }, { timeout: 30000 });
 
     return apiSuccess(student, undefined, 201);
   } catch (error) {

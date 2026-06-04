@@ -55,12 +55,12 @@ export default function EditClassPage() {
         if (data.success) {
           setClassData(data.data);
         } else {
-          snackbar.show(data.error?.message ?? "Class not found");
+          snackbar.show(data.error?.message ?? "Class not found", "error");
           router.push("/classes");
         }
       })
       .catch(() => {
-        snackbar.show("Failed to load class");
+        snackbar.show("Failed to load class", "error");
         router.push("/classes");
       })
       .finally(() => setLoading(false));

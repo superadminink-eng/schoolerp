@@ -92,7 +92,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           where: { id },
           data: { ...data, isCurrent: true },
         });
-      });
+      }, { timeout: 15000 });
       return apiSuccess(academicYear);
     }
 

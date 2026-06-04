@@ -38,12 +38,12 @@ export default function EditStaffPage() {
         if (data.success) {
           setStaff(data.data);
         } else {
-          snackbar.show(data.error?.message ?? "Staff member not found");
+          snackbar.show(data.error?.message ?? "Staff member not found", "error");
           router.push("/staff");
         }
       })
       .catch(() => {
-        snackbar.show("Failed to load staff member");
+        snackbar.show("Failed to load staff member", "error");
         router.push("/staff");
       })
       .finally(() => setLoading(false));

@@ -89,14 +89,15 @@ export default function SubjectMastersPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show(
-          data.data.deactivated ? "Subject deactivated" : "Subject deleted"
+          data.data.deactivated ? "Subject deactivated" : "Subject deleted",
+          "success"
         );
         fetchSubjects();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to delete subject");
+        snackbar.show(data.error?.message ?? "Failed to delete subject", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setDeleting(false);
     }

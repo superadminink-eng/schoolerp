@@ -184,15 +184,15 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create staff member");
+          snackbar.show(data.error?.message ?? "Failed to create staff member", "error");
           return;
         }
 
-        snackbar.show("Staff member created successfully");
+        snackbar.show("Staff member created successfully", "success");
         router.push("/staff");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
@@ -236,15 +236,15 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update staff member");
+          snackbar.show(data.error?.message ?? "Failed to update staff member", "error");
           return;
         }
 
-        snackbar.show("Staff member updated successfully");
+        snackbar.show("Staff member updated successfully", "success");
         router.push("/staff");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }

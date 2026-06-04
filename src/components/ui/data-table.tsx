@@ -34,6 +34,7 @@ export interface Column<T> {
   render?: (row: T) => React.ReactNode;
   sortValue?: (row: T) => string | number | null;
   className?: string;
+  minWidth?: number;
 
   badgeConfig?: {
     color: (row: T) => "default" | "primary" | "success" | "error" | "warning";
@@ -90,6 +91,7 @@ const AG_GRID_THEME_OVERRIDES: React.CSSProperties = {
   "--ag-header-column-resize-handle-display": "none",
   "--ag-wrapper-border-radius": "16px",
   "--ag-cell-horizontal-padding": "20px",
+  "--ag-line-height": "normal",
 } as React.CSSProperties;
 
 export function DataTable<T>({
@@ -241,6 +243,7 @@ export function DataTable<T>({
         filter: col.key !== "actions",
         suppressHeaderMenuButton: col.key === "actions",
         maxWidth: col.className?.includes("w-12") ? 64 : undefined,
+        minWidth: col.className?.includes("w-12") ? 56 : (col.minWidth ?? 120),
         flex: col.className?.includes("w-12") ? 0 : 1,
       })),
     [columns, renderCell]
@@ -289,7 +292,7 @@ export function DataTable<T>({
 
   return (
     <div
-      className="ag-theme-quartz"
+      className="ag-theme-quartz overflow-auto"
       style={AG_GRID_THEME_OVERRIDES}
     >
       <AgGridReact<T>
@@ -301,6 +304,8 @@ export function DataTable<T>({
         onRowClicked={handleRowClicked}
         onGridReady={onGridReady}
         domLayout="autoHeight"
+        rowHeight={45}
+        headerHeight={44}
         pagination={true}
         paginationPageSize={paginationPageSize}
         paginationPageSizeSelector={false}

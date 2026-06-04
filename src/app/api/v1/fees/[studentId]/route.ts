@@ -259,7 +259,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
           status: newStatus,
         },
       };
-    });
+    }, { timeout: 15000 });
 
     return apiSuccess(result, undefined, 201);
   } catch (error) {

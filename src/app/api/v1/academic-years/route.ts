@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             isCurrent: true,
           },
         });
-      });
+      }, { timeout: 15000 });
       return apiSuccess(academicYear, undefined, 201);
     }
 

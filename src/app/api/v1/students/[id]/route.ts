@@ -8,6 +8,7 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateStudentSchema } from "@/lib/validations/student";
+import { saveUploadedImage, deleteUploadedFile, UploadError } from "@/lib/upload";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -130,14 +131,27 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const ctx = getTenantContext(req);
   const { id } = await context.params;
 
-  let body: unknown;
+  // Accept both FormData (with files) and JSON
+  let fields: Record<string, string> = {};
+  let formData: FormData | null = null;
+  const contentType = req.headers.get("content-type") || "";
+
   try {
-    body = await req.json();
+    if (contentType.includes("multipart/form-data")) {
+      formData = await req.formData();
+      for (const [key, value] of formData.entries()) {
+        if (typeof value === "string") {
+          fields[key] = value;
+        }
+      }
+    } else {
+      fields = await req.json();
+    }
   } catch {
-    return apiError("BAD_REQUEST", "Invalid JSON body", 400);
+    return apiError("BAD_REQUEST", "Invalid request body", 400);
   }
 
-  const parsed = updateStudentSchema.safeParse(body);
+  const parsed = updateStudentSchema.safeParse(fields);
   if (!parsed.success) {
     return apiValidationError(parsed.error);
   }
@@ -164,12 +178,53 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     } = parsed.data;
 
     // If changing branch, verify it belongs to org
-    if (branchId && branchId !== existing.branchId) {
+    if (branchId && branchId !== "" && branchId !== existing.branchId) {
       const branch = await prisma.branch.findFirst({
         where: { id: branchId, organizationId: ctx.organizationId, isActive: true },
       });
       if (!branch) {
         return apiError("NOT_FOUND", "Branch not found", 404);
+      }
+    }
+
+    // Handle file uploads
+    let photoPath: string | undefined;
+    let idDocumentPath: string | undefined;
+    if (formData) {
+      const photoFile = formData.get("photo");
+      if (photoFile instanceof File && photoFile.size > 0) {
+        try {
+          const result = await saveUploadedImage(
+            photoFile, "uploads/student-photos", existing.admissionNo, "photo"
+          );
+          photoPath = result.filePath;
+          if (existing.photo) {
+            await deleteUploadedFile(existing.photo);
+          }
+        } catch (error) {
+          if (error instanceof UploadError) {
+            return apiError("VALIDATION_ERROR", `Photo: ${error.message}`, 422);
+          }
+          throw error;
+        }
+      }
+
+      const idDocFile = formData.get("idDocument");
+      if (idDocFile instanceof File && idDocFile.size > 0) {
+        try {
+          const result = await saveUploadedImage(
+            idDocFile, "uploads/student-documents", existing.admissionNo
+          );
+          idDocumentPath = result.filePath;
+          if (existing.idDocument) {
+            await deleteUploadedFile(existing.idDocument);
+          }
+        } catch (error) {
+          if (error instanceof UploadError) {
+            return apiError("VALIDATION_ERROR", `ID Document: ${error.message}`, 422);
+          }
+          throw error;
+        }
       }
     }
 
@@ -196,11 +251,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (motherEmail !== undefined) data.motherEmail = motherEmail || null;
     if (motherOccupation !== undefined) data.motherOccupation = motherOccupation || null;
     if (admissionDate !== undefined) data.admissionDate = admissionDate ? new Date(admissionDate) : undefined;
-    if (branchId !== undefined) data.branchId = branchId;
+    if (branchId !== undefined && branchId !== "") data.branchId = branchId;
     if (status !== undefined) data.status = status;
+    if (photoPath !== undefined) data.photo = photoPath;
+    if (idDocumentPath !== undefined) data.idDocument = idDocumentPath;
 
-    // Handle section change — update latest enrollment
-    if (sectionId) {
+    // Handle section change — update or create enrollment
+    if (sectionId && sectionId !== "") {
       const section = await prisma.section.findFirst({
         where: { id: sectionId },
         include: { class: true },
@@ -209,7 +266,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         return apiError("NOT_FOUND", "Section not found", 404);
       }
 
-      // Update the latest enrollment
       const latestEnrollment = await prisma.studentEnrollment.findFirst({
         where: { studentId: id },
         orderBy: { enrolledAt: "desc" },
@@ -218,6 +274,15 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         await prisma.studentEnrollment.update({
           where: { id: latestEnrollment.id },
           data: { sectionId },
+        });
+      } else {
+        // No enrollment exists — create one
+        await prisma.studentEnrollment.create({
+          data: {
+            studentId: id,
+            sectionId,
+            academicYearId: section.class.academicYearId,
+          },
         });
       }
     }

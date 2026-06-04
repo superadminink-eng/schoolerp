@@ -411,14 +411,14 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
         });
         const data = await res.json();
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create class");
+          snackbar.show(data.error?.message ?? "Failed to create class", "error");
           return;
         }
-        snackbar.show("Class created successfully");
+        snackbar.show("Class created successfully", "success");
         router.push("/classes");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
@@ -471,14 +471,14 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
         });
         const data = await res.json();
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update class");
+          snackbar.show(data.error?.message ?? "Failed to update class", "error");
           return;
         }
-        snackbar.show("Class updated successfully");
+        snackbar.show("Class updated successfully", "success");
         router.push("/classes");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }

@@ -346,15 +346,15 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create student");
+          snackbar.show(data.error?.message ?? "Failed to create student", "error");
           return;
         }
 
-        snackbar.show("Student admitted successfully");
+        snackbar.show("Student admitted successfully", "success");
         router.push("/students");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
@@ -373,23 +373,35 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
 
       setLoading(true);
       try {
+        const formData = new FormData();
+        for (const [key, value] of Object.entries(result.data)) {
+          if (value !== undefined && value !== null) {
+            formData.append(key, String(value));
+          }
+        }
+        if (photoFile) {
+          formData.append("photo", photoFile);
+        }
+        if (idDocFile) {
+          formData.append("idDocument", idDocFile);
+        }
+
         const res = await fetch(`/api/v1/students/${initialData!.id}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(result.data),
+          body: formData,
         });
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update student");
+          snackbar.show(data.error?.message ?? "Failed to update student", "error");
           return;
         }
 
-        snackbar.show("Student updated successfully");
+        snackbar.show("Student updated successfully", "success");
         router.push("/students");
         router.refresh();
       } catch {
-        snackbar.show("An error occurred");
+        snackbar.show("An error occurred", "error");
       } finally {
         setLoading(false);
       }
