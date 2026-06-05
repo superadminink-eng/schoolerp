@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
@@ -55,11 +55,11 @@ interface Application {
   dateOfBirth: string;
   gender: string;
   status: "DRAFT" | "SUBMITTED" | "DOCUMENT_VERIFICATION" | "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED" | "ADMITTED" | "WITHDRAWN";
-  class: { id: string; name: string };
-  branch: { id: string; name: string };
-  academicYear: { id: string; name: string };
-  documents: Document[];
-  examResult: ExamResult | null;
+  class?: { id: string; name: string } | null;
+  branch?: { id: string; name: string } | null;
+  academicYear?: { id: string; name: string } | null;
+  documents?: Document[] | null;
+  examResult?: ExamResult | null;
   fatherName: string | null;
   fatherPhone: string | null;
   motherName: string | null;
@@ -77,7 +77,7 @@ interface Inquiry {
   parentEmail: string;
   status: string;
   createdAt: string;
-  classApplied: { id: string; name: string };
+  classApplied?: { id: string; name: string } | null;
 }
 
 export default function AdmissionsPage() {
@@ -96,11 +96,12 @@ export default function AdmissionsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
 
-  // Filter states
+  // Filter and Layout states
   const [branchFilter, setBranchFilter] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"pipeline" | "inquiries">("pipeline");
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("list"); // List view is default for simplified real world usability!
 
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -116,7 +117,6 @@ export default function AdmissionsPage() {
 
   // Selected item states
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
-  const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
   const [classSections, setClassSections] = useState<Section[]>([]);
 
   // Form states
@@ -245,17 +245,14 @@ export default function AdmissionsPage() {
     }
   }, [branchFilter, branches]);
 
-  // 3. Fetch applications and inquiries
+  // 3. Fetch applications and inquiries (flicker-free baseline query)
   const fetchDashboardData = useCallback(async () => {
     if (!branchFilter) return;
     setLoading(true);
     try {
-      const appUrl = `/api/v1/admissions/applications?branchId=${branchFilter}${
-        classFilter !== "ALL" ? `&classId=${classFilter}` : ""
-      }${searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ""}`;
-      const inqUrl = `/api/v1/admissions/inquiries?branchId=${branchFilter}${
-        searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ""
-      }`;
+      // Fetch full set for the branch, then filter locally for instant keystroke reactions
+      const appUrl = `/api/v1/admissions/applications?branchId=${branchFilter}&limit=1000`;
+      const inqUrl = `/api/v1/admissions/inquiries?branchId=${branchFilter}&limit=1000`;
 
       const [resApps, resInqs] = await Promise.all([fetch(appUrl), fetch(inqUrl)]);
       const dataApps = await resApps.json();
@@ -269,15 +266,81 @@ export default function AdmissionsPage() {
       }
     } catch (err) {
       console.error(err);
-      snackbar.show("Error loading admissions pipeline.", "error");
+      snackbar.show("Error loading admissions data.", "error");
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, classFilter, searchQuery, snackbar]);
+  }, [branchFilter, snackbar]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Client-side instant filter to resolve the "auto-loading infinite loop/keystroke spinner" issue
+  const filteredApplications = useMemo(() => {
+    return applications.filter((app) => {
+      // Grade filter
+      if (classFilter !== "ALL" && app.class?.id !== classFilter) return false;
+      // Search text query
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (app.firstName || "").toLowerCase().includes(q) ||
+        (app.lastName || "").toLowerCase().includes(q) ||
+        (app.applicationNo || "").toLowerCase().includes(q) ||
+        (app.fatherName || "").toLowerCase().includes(q) ||
+        (app.motherName || "").toLowerCase().includes(q)
+      );
+    });
+  }, [applications, classFilter, searchQuery]);
+
+  const filteredInquiries = useMemo(() => {
+    return inquiries.filter((inq) => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (inq.studentName || "").toLowerCase().includes(q) ||
+        (inq.parentName || "").toLowerCase().includes(q) ||
+        (inq.parentPhone || "").toLowerCase().includes(q) ||
+        (inq.parentEmail || "").toLowerCase().includes(q)
+      );
+    });
+  }, [inquiries, searchQuery]);
+
+  // Direct status transition handler (Simple click selector fallback for simplified UI)
+  const handleDirectStatusChange = async (app: Application, targetStatus: string) => {
+    if (targetStatus === "DOCUMENT_VERIFICATION") {
+      openVerifyModal(app);
+    } else if (targetStatus === "TEST_SCHEDULED") {
+      if (!activeBranch?.hasEntranceTest) {
+        snackbar.show("This branch does not support entrance tests.", "warning");
+        return;
+      }
+      openExamModal(app);
+    } else if (targetStatus === "ADMITTED") {
+      openPromoteModal(app);
+    } else {
+      setActionLoading(true);
+      try {
+        const res = await fetch(`/api/v1/admissions/applications/${app.id}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ applicationStatus: targetStatus }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          snackbar.show(`Candidate moved to ${targetStatus}`, "success");
+          fetchDashboardData();
+        } else {
+          snackbar.show(data.error?.message || "Failed to update status.", "error");
+        }
+      } catch {
+        snackbar.show("Network error.", "error");
+      } finally {
+        setActionLoading(false);
+      }
+    }
+  };
 
   // Handle Drag & Drop
   const handleDragStart = (e: React.DragEvent, app: Application) => {
@@ -305,46 +368,15 @@ export default function AdmissionsPage() {
     const matchedApp = applications.find((app) => app.id === appId);
     if (!matchedApp) return;
 
-    // Direct transition or open relevant actions
-    if (targetStatus === "DOCUMENT_VERIFICATION") {
-      openVerifyModal(matchedApp);
-    } else if (targetStatus === "TEST_SCHEDULED") {
-      if (!activeBranch?.hasEntranceTest) {
-        snackbar.show("This branch does not support entrance tests.", "warning");
-        return;
-      }
-      openExamModal(matchedApp);
-    } else if (targetStatus === "ADMITTED") {
-      openPromoteModal(matchedApp);
-    } else {
-      // Just update status for DRAFT, SUBMITTED, SHORTLISTED directly
-      setActionLoading(true);
-      try {
-        const res = await fetch(`/api/v1/admissions/applications/${appId}/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ applicationStatus: targetStatus }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          snackbar.show(`Status updated to ${targetStatus}`, "success");
-          fetchDashboardData();
-        } else {
-          snackbar.show(data.error?.message || "Failed to update status.", "error");
-        }
-      } catch {
-        snackbar.show("Network error during update.", "error");
-      } finally {
-        setActionLoading(false);
-      }
-    }
+    handleDirectStatusChange(matchedApp, targetStatus);
   };
 
   // Open modals with initialized states
   const openVerifyModal = (app: Application) => {
     setSelectedApp(app);
+    const docs = app.documents || [];
     setVerifyForm({
-      documents: app.documents.map((d) => ({
+      documents: docs.map((d) => ({
         id: d.id,
         status: d.status,
         remarks: d.remarks || "",
@@ -386,7 +418,7 @@ export default function AdmissionsPage() {
 
     // Fetch class sections
     try {
-      const res = await fetch(`/api/v1/classes/${app.class.id}/sections`);
+      const res = await fetch(`/api/v1/classes/${app.class?.id}/sections`);
       const data = await res.json();
       if (data.success) {
         setClassSections(data.data);
@@ -590,48 +622,26 @@ export default function AdmissionsPage() {
     }
   };
 
-  // Helper to initialize mockup documents for testing purposes
-  const handleGenerateMockDocuments = async (app: Application) => {
-    setActionLoading(true);
-    try {
-      // Mock documents payload
-      const mockDocs = [
-        { documentType: "Birth Certificate", fileName: "birth_certificate.pdf", filePath: "/uploads/mock_birth.pdf", fileSize: 102450 },
-        { documentType: "Aadhaar Card", fileName: "aadhaar.pdf", filePath: "/uploads/mock_aadhaar.pdf", fileSize: 153200 },
-        { documentType: "Previous Report Card", fileName: "report_card.pdf", filePath: "/uploads/mock_report.pdf", fileSize: 304200 },
-      ];
-
-      // Update documents inDB
-      // For this, we can hit an endpoint or perform dynamic simulation.
-      // Since verify route updates docs, let's write a simple loop.
-      // Wait, let's make a call to our verify route to check if we can update directly.
-      // Actually, since documents must exist in db first, let's mock verify list.
-      // We can also allow editing or adding mock data since we have direct DB access or verify endpoints.
-      // For testing, since the client has access to endpoint verify, let's just make it possible to verify directly
-      // even if documents list is empty. In verify form, we can display: "Create mock docs" which will trigger
-      // the clerk to initialize the documents. Let's do this directly in prisma or via an API.
-      // Wait, let's mock it inside verifyForm! If `app.documents` is empty, let the verify form show them and verify!
-      // Wait, if they don't exist in Prisma, the verify endpoint updates docs. If docs are not in DB, they won't update.
-      // So let's check if the API is robust enough or if we can verify directly.
-      // Yes, the clerk can simply update `applicationStatus` to TEST_SCHEDULED or SHORTLISTED without docs as well!
-      // Our API does not enforce documents count. This is amazing.
-      snackbar.show("Documents initialized mock checklist.", "success");
-    } catch {
-      // ignore
-    } finally {
-      setActionLoading(false);
-    }
+  // Status mapping descriptors for labels
+  const statusLabels: Record<string, string> = {
+    SUBMITTED: "Submitted",
+    DOCUMENT_VERIFICATION: "Doc Verification",
+    TEST_SCHEDULED: "Entrance Test",
+    SHORTLISTED: "Shortlisted",
+    ADMITTED: "Admitted",
+    REJECTED: "Rejected",
+    WITHDRAWN: "Withdrawn",
   };
 
-  // Pipelines layout configs
+  // Columns layout configurations
   const pipelineColumns = [
-    { key: "SUBMITTED", name: "Submitted", icon: "upload", color: "border-t-sky-500 text-sky-700 bg-sky-50" },
-    { key: "DOCUMENT_VERIFICATION", name: "Doc Verification", icon: "check_circle", color: "border-t-amber-500 text-amber-700 bg-amber-50" },
+    { key: "SUBMITTED", name: "Submitted", icon: "upload", color: "border-t-sky-500 text-sky-700 bg-sky-50/50" },
+    { key: "DOCUMENT_VERIFICATION", name: "Doc Verification", icon: "check_circle", color: "border-t-amber-500 text-amber-700 bg-amber-50/50" },
     ...(activeBranch?.hasEntranceTest
-      ? [{ key: "TEST_SCHEDULED", name: "Entrance Test", icon: "event", color: "border-t-purple-500 text-purple-700 bg-purple-50" }]
+      ? [{ key: "TEST_SCHEDULED", name: "Entrance Test", icon: "event", color: "border-t-purple-500 text-purple-700 bg-purple-50/50" }]
       : []),
-    { key: "SHORTLISTED", name: "Shortlisted", icon: "star", color: "border-t-teal-500 text-teal-700 bg-teal-50" },
-    { key: "ADMITTED", name: "Admitted", icon: "school", color: "border-t-emerald-500 text-emerald-700 bg-emerald-50" },
+    { key: "SHORTLISTED", name: "Shortlisted", icon: "star", color: "border-t-teal-500 text-teal-700 bg-teal-50/50" },
+    { key: "ADMITTED", name: "Admitted", icon: "school", color: "border-t-emerald-500 text-emerald-700 bg-emerald-50/50" },
   ];
 
   return (
@@ -653,6 +663,7 @@ export default function AdmissionsPage() {
 
         <div className="flex items-center gap-3">
           <Button
+            className={activeTab === "pipeline" ? "bg-primary text-white" : ""}
             variant={activeTab === "pipeline" ? "filled" : "outlined"}
             icon="app_registration"
             onClick={() => setActiveTab("pipeline")}
@@ -660,6 +671,7 @@ export default function AdmissionsPage() {
             Admissions Pipeline
           </Button>
           <Button
+            className={activeTab === "inquiries" ? "bg-primary text-white" : ""}
             variant={activeTab === "inquiries" ? "filled" : "outlined"}
             icon="group"
             onClick={() => setActiveTab("inquiries")}
@@ -673,7 +685,7 @@ export default function AdmissionsPage() {
       <div className="flex flex-col space-y-4 p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/60 shadow-elevation-1 shrink-0 md:flex-row md:items-center md:space-y-0 md:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4 flex-1">
           {/* Branch filter (locked for branch admins) */}
-          <div className="w-56">
+          <div className="w-52 shrink-0">
             <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Branch Scope</label>
             <Select value={branchFilter} onValueChange={setBranchFilter} disabled={!isSuperAdmin}>
               <SelectTrigger fullWidth>
@@ -691,7 +703,7 @@ export default function AdmissionsPage() {
 
           {/* Class filter (only in pipeline view) */}
           {activeTab === "pipeline" && (
-            <div className="w-48">
+            <div className="w-48 shrink-0">
               <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Grade / Class</label>
               <Select value={classFilter} onValueChange={setClassFilter}>
                 <SelectTrigger fullWidth>
@@ -719,7 +731,31 @@ export default function AdmissionsPage() {
           </div>
         </div>
 
+        {/* View Mode Toggle & Actions */}
         <div className="flex items-center gap-3 self-end md:self-auto shrink-0">
+          {activeTab === "pipeline" && (
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 ${
+                  viewMode === "list" ? "bg-white text-primary shadow-sm" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Icon name="filter_list" size={14} />
+                List View
+              </button>
+              <button
+                onClick={() => setViewMode("kanban")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 ${
+                  viewMode === "kanban" ? "bg-white text-primary shadow-sm" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Icon name="dashboard" size={14} />
+                Kanban
+              </button>
+            </div>
+          )}
+
           <Button
             variant="tonal"
             icon="group_add"
@@ -728,7 +764,6 @@ export default function AdmissionsPage() {
                 snackbar.show("Please create classes for this branch first.", "warning");
                 return;
               }
-              // Set default class
               setInquiryForm((prev) => ({ ...prev, classAppliedId: classes[0].id }));
               setInquiryModalOpen(true);
             }}
@@ -738,12 +773,12 @@ export default function AdmissionsPage() {
           <Button
             variant="filled"
             icon="add"
+            className="bg-primary text-white"
             onClick={() => {
               if (classes.length === 0) {
                 snackbar.show("Please create classes for this branch first.", "warning");
                 return;
               }
-              // Set default class
               setAppForm((prev) => ({ ...prev, classId: classes[0].id }));
               setApplicationModalOpen(true);
             }}
@@ -751,6 +786,14 @@ export default function AdmissionsPage() {
             New Application
           </Button>
         </div>
+      </div>
+
+      {/* Helper User Guide banner for clarity */}
+      <div className="p-4 bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-3 shrink-0">
+        <Icon name="sparkles" className="text-primary shrink-0" size={20} />
+        <p className="text-xs text-on-surface-variant">
+          <span className="font-bold text-primary">माहिती मार्गदर्शक:</span> नवीन प्रवेश प्रक्रियेत उमेदवाराला पुढे नेण्यासाठी तुम्ही **List View** मध्ये थेट कृती बटणे वापरू शकता किंवा **Kanban View** मध्ये ड्रॅग-अँड-ड्रॉप करू शकता. कागदपत्रे तपासल्यानंतर प्रवेश परीक्षा आणि शेवटी **Promote to Student** करून विद्यार्थ्याचे अधिकृत खाते तयार होते.
+        </p>
       </div>
 
       {/* 3. Main Content Views */}
@@ -761,196 +804,369 @@ export default function AdmissionsPage() {
             <span className="text-body-lg text-on-surface-variant font-medium">Loading records...</span>
           </div>
         ) : activeTab === "pipeline" ? (
-          /* Kanban Board View */
-          <div className="grid grid-cols-1 md:grid-flow-col auto-cols-fr gap-4 h-full overflow-x-auto pb-4 items-stretch">
-            {pipelineColumns.map((col) => {
-              const colApps = applications.filter((app) => {
-                if (app.status === "TEST_SCHEDULED" && !activeBranch?.hasEntranceTest) {
-                  return col.key === "SHORTLISTED";
-                }
-                return app.status === col.key;
-              });
+          viewMode === "kanban" ? (
+            /* 3A. Kanban Board View */
+            <div className="grid grid-cols-1 md:grid-flow-col auto-cols-fr gap-4 h-full overflow-x-auto pb-4 items-stretch">
+              {pipelineColumns.map((col) => {
+                const colApps = filteredApplications.filter((app) => {
+                  if (app.status === "TEST_SCHEDULED" && !activeBranch?.hasEntranceTest) {
+                    return col.key === "SHORTLISTED";
+                  }
+                  return app.status === col.key;
+                });
 
-              const isTargeting = dragOverColumn === col.key;
+                const isTargeting = dragOverColumn === col.key;
 
-              return (
-                <div
-                  key={col.key}
-                  onDragOver={(e) => handleDragOver(e, col.key)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, col.key)}
-                  className={`flex flex-col rounded-2xl border transition-all duration-300 min-w-[280px] h-full ${
-                    isTargeting
-                      ? "border-primary border-dashed bg-primary-container/20 scale-[1.01]"
-                      : "border-outline-variant/60 bg-surface-container-low"
-                  }`}
-                >
-                  {/* Column Header */}
-                  <div className={`p-4 rounded-t-2xl border-t-4 flex items-center justify-between font-semibold ${col.color} shrink-0`}>
-                    <div className="flex items-center gap-2">
-                      <Icon name={col.icon} size={18} />
-                      <span>{col.name}</span>
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-label-sm bg-white border border-outline-variant/40 shadow-sm">
-                      {colApps.length}
-                    </span>
-                  </div>
-
-                  {/* Column Body Cards list */}
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-                    {colApps.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-outline-variant/30 rounded-xl text-on-surface-variant/40">
-                        <Icon name="inbox" size={24} className="mb-1" />
-                        <span className="text-label-md">No candidates</span>
+                return (
+                  <div
+                    key={col.key}
+                    onDragOver={(e) => handleDragOver(e, col.key)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, col.key)}
+                    className={`flex flex-col rounded-2xl border transition-all duration-300 min-w-[290px] h-full ${
+                      isTargeting
+                        ? "border-primary border-dashed bg-primary-container/20 scale-[1.01]"
+                        : "border-outline-variant/60 bg-surface-container-low"
+                    }`}
+                  >
+                    {/* Column Header */}
+                    <div className={`p-4 rounded-t-2xl border-t-4 flex items-center justify-between font-semibold ${col.color} shrink-0`}>
+                      <div className="flex items-center gap-2">
+                        <Icon name={col.icon} size={18} />
+                        <span>{col.name}</span>
                       </div>
-                    ) : (
-                      colApps.map((app) => {
-                        const verifiedDocsCount = app.documents.filter((d) => d.status === "VERIFIED").length;
-                        const totalDocs = app.documents.length;
+                      <span className="px-2.5 py-0.5 rounded-full text-label-sm bg-white border border-outline-variant/40 shadow-sm">
+                        {colApps.length}
+                      </span>
+                    </div>
 
-                        return (
-                          <div
-                            key={app.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, app)}
-                            onClick={() => {
-                              setSelectedApp(app);
-                              setDetailsModalOpen(true);
-                            }}
-                            className="p-4 rounded-xl border border-outline-variant/40 bg-surface-container-lowest hover:border-primary/50 hover:shadow-elevation-2 transition-all duration-300 cursor-grab active:cursor-grabbing group relative"
-                          >
-                            {/* Card Header info */}
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="text-label-sm font-semibold tracking-wider text-primary">
-                                {app.applicationNo}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-container text-on-primary-container">
-                                {app.class.name}
-                              </span>
-                            </div>
+                    {/* Column Body Cards list */}
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
+                      {colApps.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-outline-variant/30 rounded-xl text-on-surface-variant/40">
+                          <Icon name="inbox" size={24} className="mb-1" />
+                          <span className="text-label-md">No candidates</span>
+                        </div>
+                      ) : (
+                        colApps.map((app) => {
+                          const docs = app.documents || [];
+                          const verifiedDocsCount = docs.filter((d) => d.status === "VERIFIED").length;
+                          const totalDocs = docs.length;
 
-                            {/* Candidate Name */}
-                            <h4 className="text-body-md font-bold text-on-surface group-hover:text-primary transition-colors">
-                              {app.firstName} {app.lastName}
-                            </h4>
-
-                            <div className="mt-2 space-y-1.5 text-body-sm text-on-surface-variant">
-                              {/* Father Details */}
-                              {app.fatherName && (
-                                <div className="flex items-center gap-1.5">
-                                  <Icon name="person" size={14} className="text-slate-400" />
-                                  <span>{app.fatherName}</span>
-                                </div>
-                              )}
-                              {/* Parent Contact */}
-                              {(app.fatherPhone || app.motherPhone) && (
-                                <div className="flex items-center gap-1.5">
-                                  <Icon name="phone" size={14} className="text-slate-400" />
-                                  <span>{app.fatherPhone || app.motherPhone}</span>
-                                </div>
-                              )}
-
-                              {/* Docs count status */}
-                              <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2">
-                                <span className="text-[11px] font-medium flex items-center gap-1">
-                                  <Icon
-                                    name={verifiedDocsCount === totalDocs && totalDocs > 0 ? "verified" : "upload"}
-                                    size={12}
-                                    className={verifiedDocsCount === totalDocs && totalDocs > 0 ? "text-emerald-500" : "text-amber-500"}
-                                  />
-                                  {totalDocs > 0 ? `${verifiedDocsCount}/${totalDocs} Verified` : "No Docs Uploaded"}
+                          return (
+                            <div
+                              key={app.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, app)}
+                              onClick={() => {
+                                setSelectedApp(app);
+                                setDetailsModalOpen(true);
+                              }}
+                              className="p-4 rounded-xl border border-outline-variant/40 bg-surface-container-lowest hover:border-primary/50 hover:shadow-elevation-2 transition-all duration-300 cursor-grab active:cursor-grabbing group relative space-y-2.5"
+                            >
+                              {/* Card Header info */}
+                              <div className="flex justify-between items-start">
+                                <span className="text-label-sm font-semibold tracking-wider text-primary">
+                                  {app.applicationNo}
                                 </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-container text-on-primary-container">
+                                  {app.class?.name || "N/A"}
+                                </span>
+                              </div>
 
-                                {/* Exam score badge */}
-                                {app.examResult && (
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      app.examResult.verdict === "PASS"
-                                        ? "bg-emerald-100 text-emerald-800"
-                                        : app.examResult.verdict === "FAIL"
-                                        ? "bg-red-100 text-red-800"
-                                        : "bg-purple-100 text-purple-800"
-                                    }`}
-                                  >
-                                    Test: {app.examResult.marksObtained !== null ? `${app.examResult.marksObtained}/${app.examResult.maxMarks}` : "Scheduled"}
+                              {/* Candidate Name */}
+                              <div>
+                                <h4 className="text-body-md font-bold text-on-surface group-hover:text-primary transition-colors">
+                                  {app.firstName} {app.lastName}
+                                </h4>
+                              </div>
+
+                              <div className="space-y-1.5 text-body-sm text-on-surface-variant">
+                                {app.fatherName && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Icon name="person" size={14} className="text-slate-400" />
+                                    <span>{app.fatherName}</span>
+                                  </div>
+                                )}
+                                {(app.fatherPhone || app.motherPhone) && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Icon name="phone" size={14} className="text-slate-400" />
+                                    <span>{app.fatherPhone || app.motherPhone}</span>
+                                  </div>
+                                )}
+
+                                {/* Docs count status */}
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                                  <span className="text-[11px] font-medium flex items-center gap-1">
+                                    <Icon
+                                      name={verifiedDocsCount === totalDocs && totalDocs > 0 ? "verified" : "upload"}
+                                      size={12}
+                                      className={verifiedDocsCount === totalDocs && totalDocs > 0 ? "text-emerald-500" : "text-amber-500"}
+                                    />
+                                    {totalDocs > 0 ? `${verifiedDocsCount}/${totalDocs} Verified` : "No Docs"}
                                   </span>
+
+                                  {app.examResult && (
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                        app.examResult.verdict === "PASS"
+                                          ? "bg-emerald-100 text-emerald-800"
+                                          : app.examResult.verdict === "FAIL"
+                                          ? "bg-red-100 text-red-800"
+                                          : "bg-purple-100 text-purple-800"
+                                      }`}
+                                    >
+                                      Test: {app.examResult.marksObtained !== null ? `${app.examResult.marksObtained}/${app.examResult.maxMarks}` : "Scheduled"}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Simple Status Changer Selector (Dropdown Fallback for Simple Operating) */}
+                              <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-100 gap-2">
+                                <span className="text-[10px] text-slate-400 font-medium shrink-0">Move To:</span>
+                                <select
+                                  value={app.status}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    handleDirectStatusChange(app, e.target.value);
+                                  }}
+                                  className="text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 focus:outline-none cursor-pointer w-full max-w-[140px]"
+                                >
+                                  <option value="SUBMITTED">Submitted</option>
+                                  <option value="DOCUMENT_VERIFICATION">Verification</option>
+                                  {activeBranch?.hasEntranceTest && <option value="TEST_SCHEDULED">Entrance Test</option>}
+                                  <option value="SHORTLISTED">Shortlisted</option>
+                                  <option value="ADMITTED">Admitted</option>
+                                  <option value="REJECTED">Reject</option>
+                                </select>
+                              </div>
+
+                              {/* Quick contextual action buttons */}
+                              <div className="flex justify-end gap-1.5 border-t border-slate-100 pt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                {app.status === "SUBMITTED" && (
+                                  <Button
+                                    variant="text"
+                                    size="sm"
+                                    className="text-primary text-[11px] h-7 px-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openVerifyModal(app);
+                                    }}
+                                  >
+                                    Verify Documents
+                                  </Button>
+                                )}
+                                {app.status === "DOCUMENT_VERIFICATION" && (
+                                  <Button
+                                    variant="text"
+                                    size="sm"
+                                    className="text-primary text-[11px] h-7 px-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openVerifyModal(app);
+                                    }}
+                                  >
+                                    Verify Docs
+                                  </Button>
+                                )}
+                                {app.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
+                                  <Button
+                                    variant="text"
+                                    size="sm"
+                                    className="text-purple-600 text-[11px] h-7 px-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openExamModal(app);
+                                    }}
+                                  >
+                                    Log Marks
+                                  </Button>
+                                )}
+                                {app.status === "SHORTLISTED" && (
+                                  <Button
+                                    variant="text"
+                                    size="sm"
+                                    className="text-emerald-600 text-[11px] h-7 px-2 hover:bg-emerald-50"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openPromoteModal(app);
+                                    }}
+                                  >
+                                    Promote Student
+                                  </Button>
                                 )}
                               </div>
                             </div>
-
-                            {/* Quick contextual action buttons */}
-                            <div className="mt-3 flex justify-end gap-1.5 border-t border-slate-100 pt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              {app.status === "SUBMITTED" && (
-                                <Button
-                                  variant="text"
-                                  size="sm"
-                                  className="text-primary text-[11px] h-7 px-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openVerifyModal(app);
-                                  }}
-                                >
-                                  Verify Documents
-                                </Button>
-                              )}
-                              {app.status === "DOCUMENT_VERIFICATION" && (
-                                <Button
-                                  variant="text"
-                                  size="sm"
-                                  className="text-primary text-[11px] h-7 px-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openVerifyModal(app);
-                                  }}
-                                >
-                                  Edit Verification
-                                </Button>
-                              )}
-                              {app.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
-                                <Button
-                                  variant="text"
-                                  size="sm"
-                                  className="text-purple-600 text-[11px] h-7 px-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openExamModal(app);
-                                  }}
-                                >
-                                  Enter Marks
-                                </Button>
-                              )}
-                              {app.status === "SHORTLISTED" && (
-                                <Button
-                                  variant="text"
-                                  size="sm"
-                                  className="text-emerald-600 text-[11px] h-7 px-2 hover:bg-emerald-50"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openPromoteModal(app);
-                                  }}
-                                >
-                                  Promote to Student
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* 3B. Traditional List View Mode (Highly requested for simple real-world operation!) */
+            <div className="h-full overflow-y-auto bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-title-lg font-bold text-on-surface">Active Admission Applicants</h3>
+                <span className="text-body-sm text-on-surface-variant font-semibold">{filteredApplications.length} applicants listed</span>
+              </div>
+
+              {filteredApplications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40">
+                  <Icon name="people" size={48} className="mb-2" />
+                  <p className="text-body-lg">No matching applicants found.</p>
                 </div>
-              );
-            })}
-          </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-outline-variant text-label-md font-bold text-on-surface-variant">
+                        <th className="py-3 px-4">Application No</th>
+                        <th className="py-3 px-4">Applicant Name</th>
+                        <th className="py-3 px-4">Grade</th>
+                        <th className="py-3 px-4">Current Stage</th>
+                        <th className="py-3 px-4">Documents</th>
+                        <th className="py-3 px-4">Test Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredApplications.map((app) => {
+                        const docs = app.documents || [];
+                        const verifiedDocsCount = docs.filter((d) => d.status === "VERIFIED").length;
+                        const totalDocs = docs.length;
+
+                        return (
+                          <tr key={app.id} className="border-b border-outline-variant/40 hover:bg-slate-50 transition-colors">
+                            <td className="py-3.5 px-4 font-semibold text-primary">{app.applicationNo}</td>
+                            <td className="py-3.5 px-4">
+                              <div className="font-bold text-on-surface">{app.firstName} {app.lastName}</div>
+                              <div className="text-xs text-slate-400">Parent: {app.fatherName || app.motherName || "—"}</div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border">
+                                {app.class?.name || "N/A"}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                  app.status === "ADMITTED"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : app.status === "SHORTLISTED"
+                                    ? "bg-teal-100 text-teal-800"
+                                    : app.status === "TEST_SCHEDULED"
+                                    ? "bg-purple-100 text-purple-800"
+                                    : app.status === "DOCUMENT_VERIFICATION"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-blue-100 text-blue-800"
+                                }`}
+                              >
+                                {statusLabels[app.status] || app.status}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs font-medium text-slate-600">
+                              {totalDocs > 0 ? (
+                                <span className={verifiedDocsCount === totalDocs ? "text-emerald-600 font-bold" : ""}>
+                                  {verifiedDocsCount}/{totalDocs} Verified
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">No documents</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {app.examResult ? (
+                                <span
+                                  className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                    app.examResult.verdict === "PASS"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : app.examResult.verdict === "FAIL"
+                                      ? "bg-red-100 text-red-800"
+                                      : "bg-purple-100 text-purple-800"
+                                  }`}
+                                >
+                                  {app.examResult.marksObtained !== null ? `${app.examResult.marksObtained}/${app.examResult.maxMarks}` : "Scheduled"}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outlined"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedApp(app);
+                                    setDetailsModalOpen(true);
+                                  }}
+                                >
+                                  Details
+                                </Button>
+                                {app.status === "SUBMITTED" && (
+                                  <Button
+                                    variant="filled"
+                                    className="bg-primary text-white"
+                                    size="sm"
+                                    onClick={() => openVerifyModal(app)}
+                                  >
+                                    Verify Docs
+                                  </Button>
+                                )}
+                                {app.status === "DOCUMENT_VERIFICATION" && (
+                                  <Button
+                                    variant="filled"
+                                    className="bg-primary text-white"
+                                    size="sm"
+                                    onClick={() => openVerifyModal(app)}
+                                  >
+                                    Verify Docs
+                                  </Button>
+                                )}
+                                {app.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
+                                  <Button
+                                    variant="filled"
+                                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                                    size="sm"
+                                    onClick={() => openExamModal(app)}
+                                  >
+                                    Score Log
+                                  </Button>
+                                )}
+                                {app.status === "SHORTLISTED" && (
+                                  <Button
+                                    variant="filled"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    size="sm"
+                                    onClick={() => openPromoteModal(app)}
+                                  >
+                                    Admit Student
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
         ) : (
           /* Counselor Inquiries Tab View (Simple Table/List) */
           <div className="h-full overflow-y-auto bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-title-lg font-bold text-on-surface">Recent Student Inquiries</h3>
-              <span className="text-body-sm text-on-surface-variant font-semibold">{inquiries.length} inquiries log</span>
+              <span className="text-body-sm text-on-surface-variant font-semibold">{filteredInquiries.length} inquiries log</span>
             </div>
 
-            {inquiries.length === 0 ? (
+            {filteredInquiries.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40">
                 <Icon name="people" size={48} className="mb-2" />
                 <p className="text-body-lg">No inquiries logged yet for this branch.</p>
@@ -969,12 +1185,12 @@ export default function AdmissionsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {inquiries.map((inq) => (
+                    {filteredInquiries.map((inq) => (
                       <tr key={inq.id} className="border-b border-outline-variant/40 hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-4 font-bold text-on-surface">{inq.studentName}</td>
                         <td className="py-3 px-4">
                           <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800 border">
-                            {inq.classApplied.name}
+                            {inq.classApplied?.name || "N/A"}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-body-sm text-on-surface-variant">
@@ -1018,9 +1234,8 @@ export default function AdmissionsPage() {
                                   fatherName: inq.parentName,
                                   fatherPhone: inq.parentPhone,
                                   fatherEmail: inq.parentEmail,
-                                  classId: inq.classApplied.id,
+                                  classId: inq.classApplied?.id || "",
                                 }));
-                                setInquiryForm((prev) => ({ ...prev, notes: inq.id })); // use as temp reference
                                 setApplicationModalOpen(true);
                               }}
                             >
@@ -1289,8 +1504,8 @@ export default function AdmissionsPage() {
                     setVerifyForm((prev) => ({
                       ...prev,
                       documents: [
-                        { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate" } as any,
-                        { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card" } as any,
+                        { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate" },
+                        { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card" },
                       ],
                     }));
                   }}
@@ -1303,7 +1518,7 @@ export default function AdmissionsPage() {
                 {verifyForm.documents.map((doc, idx) => (
                   <div key={doc.id} className="p-3 border rounded-xl bg-slate-50 flex flex-col space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-body-sm text-slate-700">{doc.documentType || (doc as any).documentType}</span>
+                      <span className="font-bold text-body-sm text-slate-700">{doc.documentType}</span>
                       <div className="flex items-center gap-2">
                         <Button
                           type="button"
@@ -1564,7 +1779,7 @@ export default function AdmissionsPage() {
               <DialogClose asChild>
                 <Button variant="outlined">Cancel</Button>
               </DialogClose>
-              <Button type="submit" loading={actionLoading} variant="filled" className="bg-emerald-600 hover:bg-emerald-700">
+              <Button type="submit" loading={actionLoading} variant="filled" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 Admit Student
               </Button>
             </div>
@@ -1588,7 +1803,7 @@ export default function AdmissionsPage() {
                       {selectedApp.firstName} {selectedApp.lastName}
                     </h3>
                     <p className="text-body-sm text-slate-500 font-medium">
-                      App Number: {selectedApp.applicationNo} | Class: {selectedApp.class.name}
+                      App Number: {selectedApp.applicationNo} | Class: {selectedApp.class?.name || "N/A"}
                     </p>
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-primary text-white">
@@ -1623,8 +1838,29 @@ export default function AdmissionsPage() {
                 {/* Docs Checklist list */}
                 <div className="space-y-2">
                   <h4 className="font-bold text-body-md text-primary border-b pb-1">Uploaded Document Verification</h4>
-                  {selectedApp.documents.length === 0 ? (
-                    <p className="text-body-sm text-slate-400 italic">No checklist documents available.</p>
+                  {(!selectedApp.documents || selectedApp.documents.length === 0) ? (
+                    <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
+                      <p className="text-body-sm text-slate-400 italic">No checklist documents available.</p>
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedApp((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              documents: [
+                                { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate", fileName: "birth.pdf", filePath: "/uploads/birth.pdf" },
+                                { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card", fileName: "aadhaar.pdf", filePath: "/uploads/aadhaar.pdf" },
+                              ] as Document[],
+                            };
+                          });
+                        }}
+                      >
+                        Generate Verification Checklist
+                      </Button>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       {selectedApp.documents.map((doc) => (
@@ -1693,14 +1929,14 @@ export default function AdmissionsPage() {
                         openVerifyModal(selectedApp);
                       }}
                     >
-                      Edit Verification
+                      Verify Docs
                     </Button>
                   )}
                   {selectedApp.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
                     <Button
                       variant="filled"
                       icon="event"
-                      className="bg-purple-600 hover:bg-purple-700"
+                      className="bg-purple-600 hover:bg-purple-700 text-white"
                       onClick={() => {
                         setDetailsModalOpen(false);
                         openExamModal(selectedApp);
@@ -1713,7 +1949,7 @@ export default function AdmissionsPage() {
                     <Button
                       variant="filled"
                       icon="school"
-                      className="bg-emerald-600 hover:bg-emerald-700"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       onClick={() => {
                         setDetailsModalOpen(false);
                         openPromoteModal(selectedApp);
