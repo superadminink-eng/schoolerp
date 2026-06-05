@@ -26,6 +26,7 @@ interface BranchData {
   email: string | null;
   isMain: boolean;
   isActive: boolean;
+  hasEntranceTest?: boolean;
 }
 
 export default function EditBranchPage() {

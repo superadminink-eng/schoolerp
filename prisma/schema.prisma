@@ -30,6 +30,8 @@ model Organization {
   notices        Notice[]
   subjectMasters SubjectMaster[]
   roles          Role[]
+  admissionInquiries AdmissionInquiry[]
+  admissionApplications AdmissionApplication[]
 
   @@map("organizations")
 }
@@ -50,7 +52,8 @@ model Branch {
   phone          String?
   email          String?
   isMain         Boolean @default(false)
-  isActive       Boolean @default(true)
+  isActive       Boolean  @default(true)
+  hasEntranceTest Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -69,6 +72,8 @@ model Branch {
   events             Event[]
   studentAttendances StudentAttendance[]
   staffAttendances   StaffAttendance[]
+  admissionInquiries AdmissionInquiry[]
+  admissionApplications AdmissionApplication[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -200,6 +205,8 @@ model AcademicYear {
   studentEnrollments StudentEnrollment[]
   exams              Exam[]
   feeStructures      FeeStructure[]
+  admissionInquiries AdmissionInquiry[]
+  admissionApplications AdmissionApplication[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -220,6 +227,8 @@ model Class {
   sections      Section[]
   subjects      Subject[]
   feeStructures FeeStructure[]
+  admissionInquiries AdmissionInquiry[]
+  admissionApplications AdmissionApplication[]
 
   @@unique([branchId, academicYearId, name])
   @@index([branchId])
@@ -945,4 +954,176 @@ model Event {
 
   @@index([branchId])
   @@map("events")
+}
+
+// ======================== ADMISSIONS (CRM & PIPELINE) ========================
+
+model AdmissionInquiry {
+  id             String        @id @default(cuid())
+  organizationId String
+  branchId       String
+  academicYearId String
+  studentName    String
+  dateOfBirth    DateTime
+  gender         Gender
+  classAppliedId String
+  parentName     String
+  parentPhone    String
+  parentEmail    String
+  source         InquirySource @default(WEBSITE)
+  status         InquiryStatus @default(INQUIRY)
+  notes          String?       @db.Text
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classApplied   Class         @relation(fields: [classAppliedId], references: [id], onDelete: Cascade)
+  applications   AdmissionApplication[]
+  followUps      InquiryFollowUp[]
+
+  @@index([organizationId])
+  @@index([branchId])
+  @@map("admission_inquiries")
+}
+
+enum InquirySource {
+  WEBSITE
+  WALK_IN
+  SOCIAL_MEDIA
+  REFERRAL
+  NEWSPAPER
+  OTHER
+}
+
+enum InquiryStatus {
+  INQUIRY
+  CONTACTED
+  VISITED
+  APPLIED
+  CLOSED
+}
+
+model InquiryFollowUp {
+  id                 String   @id @default(cuid())
+  inquiryId          String
+  counselorId        String   // Staff ID
+  followUpDate       DateTime @default(now())
+  conversationNotes  String   @db.Text
+  nextFollowUpDate   DateTime?
+  statusReached      InquiryStatus
+
+  inquiry            AdmissionInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  @@index([inquiryId])
+  @@map("inquiry_follow_ups")
+}
+
+model AdmissionApplication {
+  id                String            @id @default(cuid())
+  inquiryId         String?           @unique
+  organizationId    String
+  branchId          String
+  academicYearId    String
+  classId           String
+  applicationNo     String            @unique // e.g. APP-2026-0001
+  
+  // Applicant details
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  gender            Gender
+  bloodGroup        String?
+  photo             String?
+  address           String            @db.Text
+  pincode           String
+  previousSchool    String?
+  emergencyContact  String
+  
+  // Parents details
+  fatherName        String?
+  fatherPhone       String?
+  fatherEmail       String?
+  fatherOccupation  String?
+  motherName        String?
+  motherPhone       String?
+  motherEmail       String?
+  motherOccupation  String?
+  
+  // Pipeline management
+  status            ApplicationStatus @default(SUBMITTED)
+  applicationFeePaid Boolean          @default(false)
+  verificationNotes String?           @db.Text
+  verifiedAt        DateTime?
+  verifiedById      String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch            Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  academicYear      AcademicYear      @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  class             Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  inquiry           AdmissionInquiry? @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
+  documents         ApplicationDocument[]
+  examResult        EntranceExamResult?
+
+  @@index([organizationId])
+  @@index([branchId])
+  @@map("admission_applications")
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  DOCUMENT_VERIFICATION
+  TEST_SCHEDULED
+  SHORTLISTED
+  REJECTED
+  ADMITTED
+  WITHDRAWN
+}
+
+model ApplicationDocument {
+  id            String           @id @default(cuid())
+  applicationId String
+  documentType  String           // e.g. Birth Certificate, Report Card, Aadhaar
+  fileName      String
+  filePath      String
+  fileSize      Int
+  status        DocumentStatus   @default(PENDING)
+  remarks       String?
+
+  application   AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_documents")
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model EntranceExamResult {
+  id            String     @id @default(cuid())
+  applicationId String     @unique
+  examDate      DateTime
+  marksObtained Decimal?   @db.Decimal(5, 2)
+  maxMarks      Decimal    @db.Decimal(5, 2)
+  verdict       TestVerdict @default(PENDING)
+  notes         String?    @db.Text
+  scheduledBy   String
+
+  application   AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("entrance_exam_results")
+}
+
+enum TestVerdict {
+  PENDING
+  PASS
+  FAIL
+  BORDERLINE
 }

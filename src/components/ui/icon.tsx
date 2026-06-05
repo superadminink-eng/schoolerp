@@ -58,7 +58,8 @@ import {
   History,
   Megaphone,
   PartyPopper,
-  BarChart3
+  BarChart3,
+  X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -138,6 +139,7 @@ const iconMap: Record<string, LucideIcon> = {
   campaign: Megaphone,
   celebration: PartyPopper,
   analytics: BarChart3,
+  close: X,
 };
 
 export function Icon({

@@ -36,6 +36,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         email: true,
         isMain: true,
         isActive: true,
+        hasEntranceTest: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -79,7 +80,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (!existing) return apiNotFound("Branch");
 
-    const { name, code, address, phone, email, isActive } = parsed.data;
+    const { name, code, address, phone, email, isActive, hasEntranceTest } = parsed.data;
 
     // Check code uniqueness if changing
     if (code && code !== existing.code) {
@@ -103,6 +104,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (phone !== undefined) data.phone = phone || null;
     if (email !== undefined) data.email = email || null;
     if (isActive !== undefined) data.isActive = isActive;
+    if (hasEntranceTest !== undefined) data.hasEntranceTest = hasEntranceTest;
 
     const branch = await prisma.branch.update({
       where: { id },
@@ -116,6 +118,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         email: true,
         isMain: true,
         isActive: true,
+        hasEntranceTest: true,
         createdAt: true,
         updatedAt: true,
       },

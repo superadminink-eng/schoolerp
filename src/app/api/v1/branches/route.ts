@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
         email: true,
         isMain: true,
         isActive: true,
+        hasEntranceTest: true,
       },
       orderBy: [{ isMain: "desc" }, { name: "asc" }],
     });
@@ -69,6 +70,7 @@ export async function GET(req: NextRequest) {
           email: true,
           isMain: true,
           isActive: true,
+          hasEntranceTest: true,
           createdAt: true,
         },
         orderBy: [{ isMain: "desc" }, { name: "asc" }],
@@ -106,7 +108,7 @@ export async function POST(req: NextRequest) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, code, address, phone, email } = parsed.data;
+  const { name, code, address, phone, email, hasEntranceTest } = parsed.data;
 
   try {
     // Check code uniqueness within organization
@@ -125,6 +127,7 @@ export async function POST(req: NextRequest) {
         address: address || null,
         phone: phone || null,
         email: email || null,
+        hasEntranceTest: hasEntranceTest !== undefined ? hasEntranceTest : true,
       },
       select: {
         id: true,
@@ -135,6 +138,7 @@ export async function POST(req: NextRequest) {
         email: true,
         isMain: true,
         isActive: true,
+        hasEntranceTest: true,
         createdAt: true,
       },
     });

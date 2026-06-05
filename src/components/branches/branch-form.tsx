@@ -21,6 +21,7 @@ interface BranchData {
   email: string | null;
   isMain: boolean;
   isActive: boolean;
+  hasEntranceTest?: boolean;
 }
 
 interface BranchFormProps {
@@ -38,6 +39,7 @@ export function BranchForm({ mode, initialData }: BranchFormProps) {
   const [phone, setPhone] = useState(initialData?.phone ?? "");
   const [email, setEmail] = useState(initialData?.email ?? "");
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
+  const [hasEntranceTest, setHasEntranceTest] = useState(initialData?.hasEntranceTest ?? true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -52,6 +54,7 @@ export function BranchForm({ mode, initialData }: BranchFormProps) {
         address: address || undefined,
         phone: phone || undefined,
         email: email || undefined,
+        hasEntranceTest,
       });
 
       if (!result.success) {
@@ -94,6 +97,7 @@ export function BranchForm({ mode, initialData }: BranchFormProps) {
         phone: phone || undefined,
         email: email || undefined,
         isActive,
+        hasEntranceTest,
       });
 
       if (!result.success) {
@@ -214,6 +218,17 @@ export function BranchForm({ mode, initialData }: BranchFormProps) {
               )}
             </>
           )}
+
+          <div className="flex items-center justify-between px-1 border-t border-outline/10 pt-4 mt-2">
+            <label htmlFor="branch-entrance-test" className="text-body-md text-on-surface cursor-pointer">
+              Enable Entrance Examinations & Interviews
+            </label>
+            <Switch
+              id="branch-entrance-test"
+              checked={hasEntranceTest}
+              onCheckedChange={setHasEntranceTest}
+            />
+          </div>
         </CardContent>
       </Card>
 

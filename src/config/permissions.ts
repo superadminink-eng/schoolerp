@@ -22,6 +22,7 @@ export const MODULES = {
   academic_years: ["create", "read", "update", "delete"],
   branches: ["read", "manage"],
   users: ["create", "read", "update", "delete"],
+  admissions: ["create", "read", "update", "delete"],
 } as const;
 
 /**
@@ -51,6 +52,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
     "academic_years:create", "academic_years:read", "academic_years:update", "academic_years:delete",
     "branches:read", "branches:manage",
     "users:create", "users:read", "users:update", "users:delete",
+    "admissions:create", "admissions:read", "admissions:update", "admissions:delete",
   ],
   BRANCH_ADMIN: [
     "students:create", "students:read", "students:update",
@@ -62,6 +64,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
     "classes:create", "classes:read", "classes:update", "classes:delete",
     "academic_years:create", "academic_years:read", "academic_years:update", "academic_years:delete",
     "branches:read",
+    "admissions:create", "admissions:read", "admissions:update",
   ],
   TEACHER: [
     "students:read",
@@ -109,6 +112,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
     "staff:read",
     "notices:read",
     "events:read",
+    "admissions:create", "admissions:read",
   ],
   TRANSPORT_MANAGER: [
     "students:read",
@@ -130,6 +134,7 @@ export const NAVIGATION_ITEMS = [
   { label: "Classes", href: "/classes", icon: "class", permission: "classes:read" },
   { label: "Students", href: "/students", icon: "school", permission: "students:read" },
   { label: "Fees", href: "/fees", icon: "payments", permission: "fees:read" },
+  { label: "Admissions", href: "/admissions", icon: "app_registration", permission: "admissions:read" },
   // { label: "Attendance", href: "/attendance/students", icon: "fact_check", permission: "attendance:read" },
   // { label: "Exams", href: "/exams", icon: "quiz", permission: "exams:read" },
   // { label: "Timetable", href: "/timetable", icon: "calendar_month", permission: "timetable:read" },

@@ -13,6 +13,7 @@ export const createBranchSchema = z.object({
   address: z.string().max(500).optional().or(z.literal("")),
   phone: z.string().max(20).optional().or(z.literal("")),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  hasEntranceTest: z.boolean().optional(),
 });
 
 export const updateBranchSchema = z.object({
@@ -31,6 +32,7 @@ export const updateBranchSchema = z.object({
   phone: z.string().max(20).optional().or(z.literal("")),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   isActive: z.boolean().optional(),
+  hasEntranceTest: z.boolean().optional(),
 });
 
 export type CreateBranchInput = z.infer<typeof createBranchSchema>;
