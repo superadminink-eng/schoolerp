@@ -1,7 +1,5 @@
 # dependencies
 /node_modules
-package-lock.json
-/package-lock.json
 /.pnp
 .pnp.*
 .yarn/*
@@ -46,3 +44,27 @@ public/uploads/
 
 # prisma
 prisma/migrations/
+
+
+
+.env
+uploads/
+
+# misc
+.DS_Store
+**/.DS_Store
+
+/package-lock.json
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env.local
+# .env.development
+.env.test.local
+.env.production
+next-env.d.ts
+package-lock.json
