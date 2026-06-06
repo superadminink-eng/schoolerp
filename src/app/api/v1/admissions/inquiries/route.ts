@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
           classApplied: { select: { id: true, name: true } },
           branch: { select: { id: true, name: true } },
           academicYear: { select: { id: true, name: true } },
+          followUps: { orderBy: { followUpDate: "desc" } },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,

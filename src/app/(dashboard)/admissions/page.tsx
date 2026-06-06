@@ -73,6 +73,15 @@ interface Application {
   verificationNotes: string | null;
 }
 
+interface FollowUp {
+  id: string;
+  followUpDate: string;
+  conversationNotes: string;
+  nextFollowUpDate: string | null;
+  statusReached: string;
+  counselorId: string;
+}
+
 interface Inquiry {
   id: string;
   studentName: string;
@@ -81,7 +90,12 @@ interface Inquiry {
   parentEmail: string;
   status: string;
   createdAt: string;
+  dateOfBirth: string;
+  gender: string;
+  notes: string | null;
+  source: string;
   classApplied?: { id: string; name: string } | null;
+  followUps?: FollowUp[];
 }
 
 export default function AdmissionsPage() {
@@ -109,9 +123,19 @@ export default function AdmissionsPage() {
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
   const [includeArchives, setIncludeArchives] = useState<boolean>(false); // Hides Admitted/Rejected by default
 
+  // Inquiry Workspace controllers
+  const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
+  const [inquiryWorkspaceOpen, setInquiryWorkspaceOpen] = useState(false);
+  const [followUpForm, setFollowUpForm] = useState({
+    conversationNotes: "",
+    nextFollowUpDate: "",
+    statusReached: "INQUIRY",
+  });
+
   // Loading states
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Dialog & Workspace controllers
   const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
@@ -184,6 +208,76 @@ export default function AdmissionsPage() {
     transactionId: "",
   });
 
+  // Persistent Filters State Engine
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedBranch = localStorage.getItem("adm_branchFilter");
+      const savedSessionBranch = localStorage.getItem("adm_sessionBranchId");
+      const currentSessionBranch = session?.user?.branchId || "";
+
+      if (currentSessionBranch && currentSessionBranch !== savedSessionBranch) {
+        setBranchFilter(currentSessionBranch);
+        localStorage.setItem("adm_branchFilter", currentSessionBranch);
+        localStorage.setItem("adm_sessionBranchId", currentSessionBranch);
+      } else if (savedBranch) {
+        setBranchFilter(savedBranch);
+      } else if (currentSessionBranch) {
+        setBranchFilter(currentSessionBranch);
+        localStorage.setItem("adm_branchFilter", currentSessionBranch);
+        localStorage.setItem("adm_sessionBranchId", currentSessionBranch);
+      }
+
+      const savedClass = localStorage.getItem("adm_classFilter");
+      if (savedClass) setClassFilter(savedClass);
+
+      const savedSearch = localStorage.getItem("adm_searchQuery");
+      if (savedSearch) setSearchQuery(savedSearch);
+
+      const savedTab = localStorage.getItem("adm_activeTab");
+      if (savedTab && (savedTab === "applications" || savedTab === "inquiries")) {
+        setActiveTab(savedTab as any);
+      }
+
+      const savedStage = localStorage.getItem("adm_stageFilter");
+      if (savedStage) setStageFilter(savedStage);
+
+      setIsInitialized(true);
+    }
+  }, [session?.user?.branchId]);
+
+  useEffect(() => {
+    if (isInitialized && branchFilter) {
+      localStorage.setItem("adm_branchFilter", branchFilter);
+      if (session?.user?.branchId) {
+        localStorage.setItem("adm_sessionBranchId", session.user.branchId);
+      }
+    }
+  }, [branchFilter, isInitialized, session?.user?.branchId]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("adm_classFilter", classFilter);
+    }
+  }, [classFilter, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("adm_searchQuery", searchQuery);
+    }
+  }, [searchQuery, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("adm_activeTab", activeTab);
+    }
+  }, [activeTab, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("adm_stageFilter", stageFilter);
+    }
+  }, [stageFilter, isInitialized]);
+
   // 1. Fetch initial branches and academic years
   useEffect(() => {
     async function loadInitialData() {
@@ -197,12 +291,30 @@ export default function AdmissionsPage() {
 
         if (dataBranches.success) {
           setBranches(dataBranches.data);
-          const defaultBranch =
-            dataBranches.data.find((b: Branch) => b.id === session?.user?.branchId) ||
-            dataBranches.data[0];
+          const savedBranch = typeof window !== "undefined" ? localStorage.getItem("adm_branchFilter") : null;
+          const currentSessionBranch = session?.user?.branchId;
+          const savedSessionBranch = typeof window !== "undefined" ? localStorage.getItem("adm_sessionBranchId") : null;
+
+          let defaultBranchId = "";
+          if (currentSessionBranch && currentSessionBranch !== savedSessionBranch) {
+            defaultBranchId = currentSessionBranch;
+          } else if (savedBranch && dataBranches.data.some((b: any) => b.id === savedBranch)) {
+            defaultBranchId = savedBranch;
+          } else {
+            defaultBranchId = currentSessionBranch || dataBranches.data[0]?.id || "";
+          }
+
+          const defaultBranch = dataBranches.data.find((b: any) => b.id === defaultBranchId);
           if (defaultBranch) {
             setBranchFilter(defaultBranch.id);
             setActiveBranch(defaultBranch);
+            
+            if (typeof window !== "undefined") {
+              localStorage.setItem("adm_branchFilter", defaultBranch.id);
+              if (currentSessionBranch) {
+                localStorage.setItem("adm_sessionBranchId", currentSessionBranch);
+              }
+            }
           }
         }
         if (dataAY.success) {
@@ -220,7 +332,7 @@ export default function AdmissionsPage() {
     if (session) {
       loadInitialData();
     }
-  }, [session]);
+  }, [session?.user?.branchId, session !== undefined]);
 
   // 2. Fetch classes whenever branch changes
   useEffect(() => {
@@ -589,6 +701,51 @@ export default function AdmissionsPage() {
       snackbar.show("डमी डेटा तयार करताना त्रुटी आली.", "error");
     } finally {
       setIsGeneratingDemo(false);
+    }
+  };
+
+  // Inquiry Workspace Panel Handlers
+  const handleOpenInquiryWorkspace = (inq: Inquiry) => {
+    setSelectedInquiry(inq);
+    setFollowUpForm({
+      conversationNotes: "",
+      nextFollowUpDate: "",
+      statusReached: inq.status,
+    });
+    setInquiryWorkspaceOpen(true);
+  };
+
+  const handleCreateFollowUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedInquiry) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/v1/admissions/inquiries/${selectedInquiry.id}/follow-ups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(followUpForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Follow-up log saved successfully.", "success");
+        setFollowUpForm((prev) => ({
+          ...prev,
+          conversationNotes: "",
+          nextFollowUpDate: "",
+        }));
+        
+        // Refresh local dashboard list
+        fetchDashboardData();
+        
+        // Close modal workspace
+        setInquiryWorkspaceOpen(false);
+      } else {
+        snackbar.show(data.error?.message || "Failed to log follow-up.", "error");
+      }
+    } catch {
+      snackbar.show("Network error.", "error");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1415,7 +1572,11 @@ export default function AdmissionsPage() {
                   </thead>
                   <tbody>
                     {filteredInquiries.map((inq) => (
-                      <tr key={inq.id} className="border-b border-outline-variant/40 hover:bg-slate-50 transition-colors">
+                      <tr
+                        key={inq.id}
+                        onClick={() => handleOpenInquiryWorkspace(inq)}
+                        className="border-b border-outline-variant/40 hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
                         <td className="py-3.5 px-4 font-bold text-on-surface">{inq.studentName}</td>
                         <td className="py-3.5 px-4">
                           <span className="px-2.5 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800 border">
@@ -1454,7 +1615,8 @@ export default function AdmissionsPage() {
                               variant="outlined"
                               size="sm"
                               icon="app_registration"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setAppForm((prev) => ({
                                   ...prev,
                                   firstName: inq.studentName.split(" ")[0] || "",
@@ -2304,6 +2466,160 @@ export default function AdmissionsPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── C. Counselor Inquiry Workspace Panel ───────────────────────── */}
+      <Dialog open={inquiryWorkspaceOpen} onOpenChange={setInquiryWorkspaceOpen}>
+        <DialogContent className="max-w-4xl h-[78vh] overflow-hidden flex flex-col p-0 rounded-2xl bg-surface-container-lowest border border-outline-variant">
+          {selectedInquiry && (
+            <>
+              {/* Header Title bar */}
+              <div className="p-5 border-b border-outline-variant bg-slate-50 flex items-center justify-between shrink-0">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-sky-600 text-white">
+                      Inquiry Lead
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400">Current Status:</span>
+                    <span className="text-xs font-bold text-slate-700">{selectedInquiry.status}</span>
+                  </div>
+                  <h2 className="text-title-lg font-bold text-on-surface mt-1">
+                    {selectedInquiry.studentName}
+                  </h2>
+                </div>
+                <DialogClose className="p-1.5 rounded-full text-slate-400 hover:bg-slate-200 transition-colors mr-10">
+                  <Icon name="close" size={20} />
+                </DialogClose>
+              </div>
+
+              {/* Main Split Body Area */}
+              <div className="flex-1 flex overflow-hidden min-h-0">
+                {/* A. Left Pane: Inquiry Info */}
+                <div className="w-[40%] overflow-y-auto p-5 border-r border-outline-variant space-y-5">
+                  <div>
+                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Inquiry Profile</h3>
+                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-2 text-xs">
+                      <p><span className="font-semibold text-slate-500">Class Applied:</span> {selectedInquiry.classApplied?.name || "N/A"}</p>
+                      <p><span className="font-semibold text-slate-500">Date of Birth:</span> {new Date(selectedInquiry.dateOfBirth).toLocaleDateString("en-IN")}</p>
+                      <p><span className="font-semibold text-slate-500">Gender:</span> {selectedInquiry.gender}</p>
+                      <p><span className="font-semibold text-slate-500">Source:</span> {selectedInquiry.source}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Parent Contact</h3>
+                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-2 text-xs">
+                      <p><span className="font-semibold text-slate-500">Parent Name:</span> {selectedInquiry.parentName}</p>
+                      <p><span className="font-semibold text-slate-500">Phone Number:</span> {selectedInquiry.parentPhone}</p>
+                      <p><span className="font-semibold text-slate-500">Email Address:</span> {selectedInquiry.parentEmail}</p>
+                    </div>
+                  </div>
+
+                  {selectedInquiry.notes && (
+                    <div>
+                      <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Initial Notes</h3>
+                      <div className="p-3.5 bg-amber-50/30 border border-amber-100 rounded-xl text-xs text-slate-600">
+                        {selectedInquiry.notes}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* B. Right Pane: Follow-up logs & Form */}
+                <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 flex flex-col justify-between">
+                  <div className="space-y-6">
+                    {/* Log New Conversation form */}
+                    <Card variant="outlined" className="bg-white border-sky-100 shadow-sm shrink-0">
+                      <CardContent className="p-4 space-y-4">
+                        <h4 className="font-bold text-xs text-slate-800 flex items-center gap-1.5 border-b pb-2">
+                          <Icon name="campaign" size={16} className="text-primary" />
+                          Log New Conversation
+                        </h4>
+                        
+                        <form onSubmit={handleCreateFollowUp} className="space-y-3">
+                          <TextField
+                            label="Conversation Notes"
+                            value={followUpForm.conversationNotes}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, conversationNotes: e.target.value })}
+                            placeholder="Detail your conversation with the parent..."
+                            required
+                          />
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Status Reached</label>
+                              <Select
+                                value={followUpForm.statusReached}
+                                onValueChange={(val: any) => setFollowUpForm({ ...followUpForm, statusReached: val })}
+                              >
+                                <SelectTrigger fullWidth>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="INQUIRY">Inquiry</SelectItem>
+                                  <SelectItem value="CONTACTED">Contacted</SelectItem>
+                                  <SelectItem value="VISITED">Visited</SelectItem>
+                                  <SelectItem value="CLOSED">Closed (Archived)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <TextField
+                              label="Next Follow-up Date (Optional)"
+                              type="date"
+                              value={followUpForm.nextFollowUpDate}
+                              onChange={(e) => setFollowUpForm({ ...followUpForm, nextFollowUpDate: e.target.value })}
+                            />
+                          </div>
+
+                          <div className="pt-2 flex justify-end">
+                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white text-xs py-1.5 px-4">
+                              Save Follow-up
+                            </Button>
+                          </div>
+                        </form>
+                      </CardContent>
+                    </Card>
+
+                    {/* Historical Timeline Logs */}
+                    <div className="space-y-3">
+                      <h4 className="font-bold text-xs text-slate-400 uppercase tracking-wide">Conversation Log History</h4>
+                      {(!selectedInquiry.followUps || selectedInquiry.followUps.length === 0) ? (
+                        <p className="text-xs text-slate-400 italic">No follow-up conversations logged yet.</p>
+                      ) : (
+                        <div className="space-y-3.5">
+                          {selectedInquiry.followUps.map((log) => (
+                            <div key={log.id} className="p-3 bg-white border rounded-xl shadow-xs space-y-1.5 text-xs">
+                              <div className="flex items-center justify-between border-b pb-1 text-slate-400">
+                                <span className="font-semibold">
+                                  Logged: {new Date(log.followUpDate).toLocaleDateString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">
+                                  {log.statusReached}
+                                </span>
+                              </div>
+                              <p className="text-slate-700 whitespace-pre-wrap">{log.conversationNotes}</p>
+                              {log.nextFollowUpDate && (
+                                <p className="text-[10px] text-amber-600 font-semibold">
+                                  📅 Scheduled Next Follow-up: {new Date(log.nextFollowUpDate).toLocaleDateString("en-IN")}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
