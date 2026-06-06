@@ -1658,9 +1658,9 @@ export default function AdmissionsPage() {
                     <span className="text-xs font-semibold text-slate-400">Application Number:</span>
                     <span className="text-xs font-bold text-slate-700">{selectedApp.applicationNo}</span>
                   </div>
-                  <h2 className="text-title-lg font-bold text-on-surface mt-1">
+                  <DialogTitle className="text-title-lg font-bold text-on-surface mt-1">
                     {selectedApp.firstName} {selectedApp.lastName}
-                  </h2>
+                  </DialogTitle>
                 </div>
                 <DialogClose className="p-1.5 rounded-full text-slate-400 hover:bg-slate-200 transition-colors mr-10">
                   <Icon name="close" size={20} />
@@ -2484,9 +2484,9 @@ export default function AdmissionsPage() {
                     <span className="text-xs font-semibold text-slate-400">Current Status:</span>
                     <span className="text-xs font-bold text-slate-700">{selectedInquiry.status}</span>
                   </div>
-                  <h2 className="text-title-lg font-bold text-on-surface mt-1">
+                  <DialogTitle className="text-title-lg font-bold text-on-surface mt-1">
                     {selectedInquiry.studentName}
-                  </h2>
+                  </DialogTitle>
                 </div>
                 <DialogClose className="p-1.5 rounded-full text-slate-400 hover:bg-slate-200 transition-colors mr-10">
                   <Icon name="close" size={20} />
