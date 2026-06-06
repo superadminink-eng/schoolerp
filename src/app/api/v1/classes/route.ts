@@ -95,19 +95,24 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Find the current academic year for this organization
-    const academicYear = await prisma.academicYear.findFirst({
-      where: { organizationId: ctx.organizationId, isCurrent: true },
-    });
+    const reqAcademicYearId = url.searchParams.get("academicYearId");
+    let targetYearId = reqAcademicYearId;
 
-    if (!academicYear) {
+    if (!targetYearId) {
+      const academicYear = await prisma.academicYear.findFirst({
+        where: { organizationId: ctx.organizationId, isCurrent: true },
+      });
+      targetYearId = academicYear?.id || null;
+    }
+
+    if (!targetYearId) {
       return apiSuccess([]);
     }
 
     const classes = await prisma.class.findMany({
       where: {
         branchId,
-        academicYearId: academicYear.id,
+        academicYearId: targetYearId,
       },
       select: {
         id: true,

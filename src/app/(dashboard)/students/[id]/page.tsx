@@ -103,6 +103,20 @@ export default function StudentProfilePage() {
   const [intakeModalOpen, setIntakeModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  // Leaving Certificate Form States
+  const [lcModalOpen, setLcModalOpen] = useState(false);
+  const [lcLeavingDate, setLcLeavingDate] = useState(new Date().toISOString().split("T")[0]);
+  const [lcReason, setLcReason] = useState("Completed Studies");
+  const [lcCustomReason, setLcCustomReason] = useState("");
+  const [lcConduct, setLcConduct] = useState("Good");
+  const [lcRemarks, setLcRemarks] = useState("");
+  const [lcSignatoryName, setLcSignatoryName] = useState("");
+  const [lcSignatoryTitle, setLcSignatoryTitle] = useState("Principal");
+  const [lcStatus, setLcStatus] = useState("TRANSFERRED");
+  const [lcSubmitting, setLcSubmitting] = useState(false);
+  const [lcDuesWarning, setLcDuesWarning] = useState<number | null>(null);
+  const [lcAllowOverride, setLcAllowOverride] = useState(false);
+
   // Tab data states
   const [academics, setAcademics] = useState<any>(null);
   const [loadingAcademics, setLoadingAcademics] = useState(false);
@@ -203,6 +217,43 @@ export default function StudentProfilePage() {
         return "bg-slate-400 text-white";
       default:
         return "bg-slate-50 border border-slate-100 hover:bg-slate-100/50 text-slate-400";
+    }
+  };
+
+  const handleIssueLc = async (e?: React.FormEvent, forceOverride?: boolean) => {
+    if (e) e.preventDefault();
+    setLcSubmitting(true);
+    try {
+      const finalReason = lcReason === "Other" ? lcCustomReason : lcReason;
+      const res = await fetch(`/api/v1/students/${params.id}/issue-lc`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leavingDate: lcLeavingDate,
+          reasonForLeaving: finalReason,
+          conduct: lcConduct,
+          remarks: lcRemarks,
+          signatoryName: lcSignatoryName,
+          signatoryTitle: lcSignatoryTitle,
+          status: lcStatus,
+          allowOverride: forceOverride ?? lcAllowOverride,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Leaving Certificate issued successfully", "success");
+        setLcModalOpen(false);
+        fetchStudent();
+        window.open(`/students/${params.id}/lc/print`, "_blank");
+      } else if (data.error?.code === "PENDING_DUES") {
+        setLcDuesWarning(data.error.details?.pendingAmount ?? 0);
+      } else {
+        snackbar.show(data.error?.message ?? "Failed to issue Leaving Certificate", "error");
+      }
+    } catch {
+      snackbar.show("An error occurred", "error");
+    } finally {
+      setLcSubmitting(false);
     }
   };
 
@@ -394,6 +445,27 @@ export default function StudentProfilePage() {
                       Edit Profile
                     </Button>
                   </PermissionGate>
+                  {student.status === "TRANSFERRED" || student.status === "GRADUATED" ? (
+                    <Button
+                      variant="filled"
+                      icon="print"
+                      onClick={() => window.open(`/students/${student.id}/lc/print`, "_blank")}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      Print LC
+                    </Button>
+                  ) : (
+                    <PermissionGate module="students" action="update">
+                      <Button
+                        variant="tonal"
+                        icon="assignment_turned_in"
+                        onClick={() => setLcModalOpen(true)}
+                        className="w-full bg-orange-100 text-orange-950 border border-orange-200"
+                      >
+                        Issue LC/TC
+                      </Button>
+                    </PermissionGate>
+                  )}
                   <Button
                     variant="outlined"
                     icon="info"
@@ -1243,6 +1315,194 @@ export default function StudentProfilePage() {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Issue Leaving Certificate Dialog */}
+        <Dialog open={lcModalOpen} onOpenChange={(open) => {
+          setLcModalOpen(open);
+          if (!open) {
+            setLcDuesWarning(null);
+            setLcAllowOverride(false);
+          }
+        }}>
+          <DialogContent className="max-w-md bg-surface-container-lowest border border-outline-variant/60 p-6 rounded-2xl shadow-lg">
+            <form onSubmit={handleIssueLc} className="space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/40">
+                <Icon name="assignment_turned_in" size={24} className="text-orange-600" />
+                <DialogTitle className="text-title-lg font-bold text-on-surface">
+                  शाला सोडल्याचा दाखला जारी करा (Issue LC/TC)
+                </DialogTitle>
+              </div>
+
+              {lcDuesWarning !== null ? (
+                <div className="space-y-4">
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex gap-3 text-rose-800 text-xs">
+                    <Icon name="warning" size={20} className="text-rose-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">शुल्क थकीत चेतावणी (Outstanding Dues Warning)</p>
+                      <p className="text-[11px] text-rose-700/90 mt-1">
+                        या विद्यार्थ्याकडे एकूण <strong>₹{lcDuesWarning.toLocaleString("en-IN")}</strong> शुल्क थकीत (Pending Fees) आहे.
+                      </p>
+                      <p className="text-[11px] text-rose-700/90 mt-1">
+                        तरीही तुम्हाला दाखला जारी करायचा आहे का?
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="tonal"
+                      onClick={() => {
+                        setLcDuesWarning(null);
+                        setLcAllowOverride(false);
+                      }}
+                      className="bg-slate-100 text-on-surface"
+                    >
+                      नाही, रद्द करा (Cancel)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="filled"
+                      onClick={() => {
+                        setLcAllowOverride(true);
+                        handleIssueLc(undefined, true);
+                      }}
+                      className="bg-rose-600 text-white"
+                    >
+                      होय, पुढे जा (Proceed Anyway)
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3.5 max-h-[400px] overflow-y-auto pr-1">
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">सोडल्याची तारीख (Leaving Date)</label>
+                      <input
+                        type="date"
+                        value={lcLeavingDate}
+                        onChange={(e) => setLcLeavingDate(e.target.value)}
+                        required
+                        className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">अंतिम स्थिती (Target Status)</label>
+                      <select
+                        value={lcStatus}
+                        onChange={(e) => setLcStatus(e.target.value)}
+                        required
+                        className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                      >
+                        <option value="TRANSFERRED">TRANSFERRED (सोडून गेले)</option>
+                        <option value="GRADUATED">GRADUATED (उत्तीर्ण झाले)</option>
+                        <option value="DROPPED">DROPPED (शिकणे सोडले)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">सोडण्याचे कारण (Reason for Leaving)</label>
+                    <select
+                      value={lcReason}
+                      onChange={(e) => setLcReason(e.target.value)}
+                      required
+                      className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                    >
+                      <option value="Completed Studies">Completed Studies (शिक्षण पूर्ण झाले)</option>
+                      <option value="Transferred to another school">Transferred to another school (दुसऱ्या शाळेत प्रवेश)</option>
+                      <option value="Parents relocated">Parents relocated (पालकांचे स्थलांतर)</option>
+                      <option value="Other">Other (इतर)</option>
+                    </select>
+                  </div>
+
+                  {lcReason === "Other" && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">इतर कारण लिहा (Custom Reason)</label>
+                      <input
+                        type="text"
+                        value={lcCustomReason}
+                        onChange={(e) => setLcCustomReason(e.target.value)}
+                        required
+                        placeholder="उदा. कौटुंबिक अडचणी"
+                        className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">विद्यार्थ्याचे वर्तन (Conduct)</label>
+                      <select
+                        value={lcConduct}
+                        onChange={(e) => setLcConduct(e.target.value)}
+                        required
+                        className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                      >
+                        <option value="Excellent">Excellent (उत्कृष्ट)</option>
+                        <option value="Good">Good (चांगले)</option>
+                        <option value="Satisfactory">Satisfactory (समाधानकारक)</option>
+                        <option value="Poor">Poor (वाईट)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">स्वाक्षरीकर्ता पद (Signatory Title)</label>
+                      <input
+                        type="text"
+                        value={lcSignatoryTitle}
+                        onChange={(e) => setLcSignatoryTitle(e.target.value)}
+                        required
+                        className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">स्वाक्षरी नाव (Signatory Name)</label>
+                    <input
+                      type="text"
+                      value={lcSignatoryName}
+                      onChange={(e) => setLcSignatoryName(e.target.value)}
+                      placeholder="उदा. डॉ. प्रल्हाद शिंदे"
+                      className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">शेरा (Remarks)</label>
+                    <textarea
+                      value={lcRemarks}
+                      onChange={(e) => setLcRemarks(e.target.value)}
+                      rows={2}
+                      placeholder="काही टिप्पणी असल्यास लिहा..."
+                      className="w-full rounded-xl border border-outline p-3 text-body-md outline-none focus:border-primary bg-white transition-colors resize-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3">
+                    <Button
+                      type="button"
+                      variant="tonal"
+                      onClick={() => setLcModalOpen(false)}
+                      className="bg-slate-100 text-on-surface px-5 py-2 rounded-xl text-xs font-bold"
+                    >
+                      रद्द करा (Cancel)
+                    </Button>
+                    <Button
+                      type="submit"
+                      id="lc-submit-btn"
+                      variant="filled"
+                      loading={lcSubmitting}
+                      className="bg-primary text-white px-5 py-2 rounded-xl text-xs font-bold"
+                    >
+                      दाखला जारी करा (Issue LC)
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </form>
           </DialogContent>
         </Dialog>
 

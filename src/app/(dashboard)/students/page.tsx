@@ -394,6 +394,16 @@ export default function StudentsPage() {
               Filters
             </Button>
           </div>
+          <PermissionGate module="students" action="update">
+            <Button
+              variant="tonal"
+              icon="bolt"
+              onClick={() => router.push("/students/promote")}
+              className="hidden md:inline-flex bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200"
+            >
+              Bulk Promotion
+            </Button>
+          </PermissionGate>
           <PermissionGate module="students" action="create">
             {isSuperAdmin ? (
               <Button

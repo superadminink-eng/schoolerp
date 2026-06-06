@@ -52,6 +52,44 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
       });
     }
 
+    // Get or create Target Academic Year
+    let targetYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, name: "2027-28" } });
+    if (!targetYear) {
+      targetYear = await prisma.academicYear.create({
+        data: {
+          organizationId: org.id,
+          name: "2027-28",
+          startDate: new Date("2027-06-01"),
+          endDate: new Date("2028-04-30"),
+          isCurrent: false,
+        },
+      });
+    }
+
+    // Get or create Target Class
+    let targetClass = await prisma.class.findFirst({ where: { branchId: branch.id, academicYearId: targetYear.id, name: "Class 2" } });
+    if (!targetClass) {
+      targetClass = await prisma.class.create({
+        data: {
+          branchId: branch.id,
+          academicYearId: targetYear.id,
+          name: "Class 2",
+          numericGrade: 2,
+        },
+      });
+    }
+
+    // Get or create Target Section
+    let targetSection = await prisma.section.findFirst({ where: { classId: targetClass.id, name: "A" } });
+    if (!targetSection) {
+      targetSection = await prisma.section.create({
+        data: {
+          classId: targetClass.id,
+          name: "A",
+        },
+      });
+    }
+
     // Clean up any old test student
     await prisma.student.deleteMany({
       where: { admissionNo: "ADM-TEST-12345", branchId: branch.id }
@@ -340,5 +378,118 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     await expect(page.locator("div").filter({ hasText: /^गैरहजर दिवस \(Absent\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("1");
     await expect(page.locator("text=मासिक हजेरी दिनदर्शिका (Monthly Calendar)").first()).toBeVisible();
     await expect(page.locator("text=मासिक सारांश (Monthly Summary)").first()).toBeVisible();
+  });
+
+  test("Admin can issue leaving certificate for a student with dues override and print it", async ({ page }) => {
+    // Clean up leaving certificates from database for test student
+    const student = await prisma.student.findFirst({ where: { admissionNo: "ADM-TEST-12345" } });
+    if (!student) throw new Error("Test student not found");
+
+    await prisma.leavingCertificate.deleteMany({ where: { studentId: student.id } });
+    await prisma.student.update({ where: { id: student.id }, data: { status: "ACTIVE", leavingDate: null, leavingReason: null } });
+
+    // Navigate to student profile page
+    await page.goto(`/students/${student.id}`);
+    await page.waitForLoadState("networkidle");
+
+    // Click "Issue LC/TC" button
+    const issueLcBtn = page.locator("button:has-text('Issue LC/TC')");
+    await expect(issueLcBtn).toBeVisible();
+    await issueLcBtn.click();
+
+    // The modal opens. Verify title
+    await expect(page.locator("h2:has-text('शाला सोडल्याचा दाखला जारी करा')")).toBeVisible();
+
+    // Click submit, should trigger PENDING_DUES warning block
+    const submitBtn = page.locator("#lc-submit-btn");
+    await submitBtn.click();
+
+    // Verify warning text
+    await expect(page.locator("text=शुल्क थकीत चेतावणी (Outstanding Dues Warning)")).toBeVisible();
+    await expect(page.locator("text=₹2,000")).toBeVisible();
+
+    // Click "Proceed Anyway"
+    const proceedBtn = page.locator("button:has-text('होय, पुढे जा')");
+    await proceedBtn.click();
+
+    // The modal should close, student status changes to TRANSFERRED, showing Print LC
+    await expect(page.locator("h2:has-text('शाला सोडल्याचा दाखला जारी करा')")).not.toBeVisible();
+    const printLcBtn = page.locator("button:has-text('Print LC')");
+    await expect(printLcBtn).toBeVisible();
+
+    // Verify database updates
+    const dbLc = await prisma.leavingCertificate.findFirst({ where: { studentId: student.id } });
+    expect(dbLc).not.toBeNull();
+    expect(dbLc?.reasonForLeaving).toBe("Completed Studies");
+
+    const dbStudent = await prisma.student.findUnique({ where: { id: student.id } });
+    expect(dbStudent?.status).toBe("TRANSFERRED");
+  });
+
+  test("Admin can use bulk promotion wizard to promote students with automatic invoice rollover", async ({ page }) => {
+    const org = await prisma.organization.findFirst();
+    if (!org) throw new Error("No organization found");
+    const branch = await prisma.branch.findFirst({ where: { organizationId: org.id } });
+    if (!branch) throw new Error("No branch found");
+    const academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, isCurrent: true } });
+    if (!academicYear) throw new Error("No academic year found");
+    const classRecord = await prisma.class.findFirst({ where: { branchId: branch.id, academicYearId: academicYear.id } });
+    const sourceClassName = classRecord?.name || "Class 1";
+
+    const targetYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, name: "2027-28" } });
+    if (!targetYear) throw new Error("Target academic year not found");
+    const targetClass = await prisma.class.findFirst({ where: { branchId: branch.id, academicYearId: targetYear.id } });
+    const targetClassName = targetClass?.name || "Class 2";
+
+    // Navigate to Bulk Promotion Wizard
+    await page.goto("/students/promote");
+    await page.waitForLoadState("networkidle");
+
+    // Step 1: Select Source Class, Section, Academic Year
+    await page.locator("label:has-text('वर्ग (Class)') + select").first().selectOption({ label: sourceClassName });
+    await page.locator("label:has-text('तुकडी (Section)') + select").first().selectOption({ label: "A" });
+    // Click "पुढे जा (Next)"
+    await page.click("button:has-text('पुढे जा')");
+
+    // Step 2: Select Target Destination
+    await page.locator("label:has-text('पुढील शैक्षणिक वर्ष (Target Academic Year)') + select").selectOption({ label: "2027-28" });
+    await page.locator("label:has-text('पुढील वर्ग (Target Class)') + select").selectOption({ label: targetClassName });
+    await page.locator("label:has-text('पुढील तुकडी (Target Section)') + select").selectOption({ label: "A" });
+    // Click "Load Students"
+    await page.click("button:has-text('विद्यार्थी सूची शोधा')");
+
+    // Step 3: Select Students list should load
+    await expect(page.locator("h3:has-text('बढतीसाठी विद्यार्थी निवडा')")).toBeVisible();
+    // Check that Rajesh Kumar is listed with warning dues badge
+    await expect(page.locator("text=Rajesh Kumar")).toBeVisible();
+    await expect(page.locator("text=थकीत शुल्क: ₹2,000")).toBeVisible();
+
+    // Click "पुढे जा (Next)"
+    await page.click("button:has-text('पुढे जा')");
+
+    // Step 4: Confirm Billing & Discount
+    await expect(page.locator("h3:has-text('खात्री करा आणि फी सवलत निश्चित करा')")).toBeVisible();
+    await page.locator("input[type='number']").fill("10");
+
+    // Click "विद्यार्थी बढती प्रक्रिया सुरू करा"
+    await page.click("button:has-text('विद्यार्थी बढती प्रक्रिया सुरू करा')");
+
+    // Step 5: Process Success
+    await expect(page.locator("h3:has-text('वर्ग बढती यशस्वीरित्या पूर्ण!')")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=प्रमोट झालेले (Promoted)")).toBeVisible();
+
+    // Verify promotion database state
+    const student = await prisma.student.findFirst({ where: { admissionNo: "ADM-TEST-12345" } });
+    if (!student) throw new Error("Test student not found");
+
+    const enrollment = await prisma.studentEnrollment.findUnique({
+      where: {
+        studentId_academicYearId: {
+          studentId: student.id,
+          academicYearId: targetYear.id,
+        },
+      },
+    });
+    expect(enrollment).not.toBeNull();
   });
 });

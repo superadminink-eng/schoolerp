@@ -333,10 +333,30 @@ model Student {
   transportAlloc StudentTransport?
   bookIssues     BookIssue[]
   hostelAlloc    HostelAllocation?
+  leavingCertificate LeavingCertificate?
 
   @@unique([branchId, admissionNo])
   @@index([branchId])
   @@map("students")
+}
+
+model LeavingCertificate {
+  id               String   @id @default(cuid())
+  studentId        String   @unique
+  certificateNo    String   @unique
+  issueDate        DateTime @default(now())
+  conduct          String   @default("Good")
+  leavingDate      DateTime
+  reasonForLeaving String
+  remarks          String?
+  signatoryName    String?
+  signatoryTitle   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("leaving_certificates")
 }
 
 enum Gender {

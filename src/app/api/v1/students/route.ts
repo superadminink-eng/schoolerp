@@ -102,6 +102,10 @@ export async function GET(req: NextRequest) {
           feePayments: {
             select: { amount: true },
           },
+          invoices: {
+            where: { status: { not: "CANCELLED" } },
+            select: { totalAmount: true, paidAmount: true },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
