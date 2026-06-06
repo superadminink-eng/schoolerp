@@ -1680,22 +1680,22 @@ export default function AdmissionsPage() {
           {selectedApp && (
             <>
               {/* Header Title bar */}
-              <div className="p-5 border-b border-outline-variant bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="p-6 border-b border-outline-variant bg-white flex items-center justify-between shrink-0">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-primary text-white">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary">
                       {statusLabels[selectedApp.status] || selectedApp.status}
                     </span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300 mx-1"></span>
                     <span className="text-xs font-semibold text-slate-400">Application Number:</span>
-                    <span className="text-xs font-bold text-slate-700">{selectedApp.applicationNo}</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-800">
+                      {selectedApp.applicationNo}
+                    </span>
                   </div>
-                  <DialogTitle className="text-title-lg font-bold text-on-surface mt-1">
+                  <DialogTitle className="text-xl font-bold text-slate-800 mt-1.5">
                     {selectedApp.firstName} {selectedApp.lastName}
                   </DialogTitle>
                 </div>
-                <DialogClose className="p-1.5 rounded-full text-slate-400 hover:bg-slate-200 transition-colors mr-10">
-                  <Icon name="close" size={20} />
-                </DialogClose>
               </div>
 
               {/* Stepper Wizard Horizontal Path */}
@@ -1775,46 +1775,149 @@ export default function AdmissionsPage() {
               {/* Main Split Body Area */}
               <div className="flex-1 flex overflow-hidden min-h-0">
                 {/* A. Left Pane: Candidate Profile Summary */}
-                <div className="w-[38%] overflow-y-auto p-5 border-r border-outline-variant space-y-5">
-                  <div>
-                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Application Details</h3>
-                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-1.5 text-xs">
-                      <p><span className="font-semibold text-slate-500">Grade Applied:</span> {selectedApp.class?.name || "N/A"}</p>
-                      <p><span className="font-semibold text-slate-500">Academic Year:</span> {selectedApp.academicYear?.name || "N/A"}</p>
-                      <p><span className="font-semibold text-slate-500">Application Status:</span> {selectedApp.status}</p>
+                <div className="w-[38%] overflow-y-auto p-6 bg-slate-50/50 border-r border-outline-variant space-y-6">
+                  {/* Application Details section */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-200">
+                      <Icon name="assignment" size={16} className="text-primary" />
+                      Application Details
+                    </h3>
+                    <div className="space-y-3.5 pl-1.5">
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                          <Icon name="school" size={14} />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Grade Applied</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedApp.class?.name || "N/A"}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                          <Icon name="event" size={14} />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Academic Year</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedApp.academicYear?.name || "N/A"}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                          <Icon name="info" size={14} />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Application Status</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              selectedApp.status === "ADMITTED"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : selectedApp.status === "SHORTLISTED"
+                                ? "bg-teal-100 text-teal-800"
+                                : selectedApp.status === "TEST_SCHEDULED"
+                                ? "bg-purple-100 text-purple-800"
+                                : selectedApp.status === "REJECTED"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-blue-100 text-blue-800"
+                            }`}>
+                              {selectedApp.status}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Personal Details</h3>
-                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-2 text-xs">
-                      <p><span className="font-semibold text-slate-500">Birth Date:</span> {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN")}</p>
-                      <p><span className="font-semibold text-slate-500">Gender:</span> {selectedApp.gender}</p>
-                      <p><span className="font-semibold text-slate-500">Address:</span> {selectedApp.address}, {selectedApp.pincode}</p>
+                  {/* Personal Details section */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-200">
+                      <Icon name="person" size={16} className="text-primary" />
+                      Personal Details
+                    </h3>
+                    <div className="space-y-3.5 pl-1.5">
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                          <Icon name="date_range" size={14} />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Birth Date</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">
+                            {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                          <Icon name="wc" size={14} />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gender</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedApp.gender}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                          <Icon name="home" size={14} />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Residence Address</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5 leading-relaxed">{selectedApp.address}, {selectedApp.pincode}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Family Contacts</h3>
-                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3 text-xs">
-                      {selectedApp.fatherName && (
-                        <div>
-                          <p className="font-bold text-slate-700">Father: {selectedApp.fatherName}</p>
-                          <p className="text-[11px] text-slate-400">Phone: {selectedApp.fatherPhone || "—"} | Occ: {selectedApp.fatherOccupation || "—"}</p>
-                        </div>
-                      )}
-                      {selectedApp.motherName && (
-                        <div>
-                          <p className="font-bold text-slate-700">Mother: {selectedApp.motherName}</p>
-                          <p className="text-[11px] text-slate-400">Phone: {selectedApp.motherPhone || "—"} | Occ: {selectedApp.motherOccupation || "—"}</p>
-                        </div>
-                      )}
+                  {/* Family Contacts section */}
+                  {(selectedApp.fatherName || selectedApp.motherName) && (
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-200">
+                        <Icon name="groups" size={16} className="text-primary" />
+                        Family Contacts
+                      </h3>
+                      <div className="space-y-3.5 pl-1.5">
+                        {selectedApp.fatherName && (
+                          <div className="flex items-start gap-2.5">
+                            <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                              <Icon name="person" size={14} />
+                            </span>
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Father's Details</p>
+                              <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedApp.fatherName}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5 font-medium leading-relaxed">
+                                📞 {selectedApp.fatherPhone || "—"} | 💼 {selectedApp.fatherOccupation || "—"}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedApp.motherName && (
+                          <div className="flex items-start gap-2.5">
+                            <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100">
+                              <Icon name="person" size={14} />
+                            </span>
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Mother's Details</p>
+                              <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedApp.motherName}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5 font-medium leading-relaxed">
+                                📞 {selectedApp.motherPhone || "—"} | 💼 {selectedApp.motherOccupation || "—"}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* B. Right Pane: Wizard Active Card Forms */}
-                <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-6">
+                <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30 space-y-6">
                   {/* Step 2 Form: Document verification */}
                   {(selectedApp.status === "SUBMITTED" || selectedApp.status === "DOCUMENT_VERIFICATION") && (
                     <Card variant="outlined" className="border-amber-200 bg-white shadow-sm">
@@ -2507,73 +2610,145 @@ export default function AdmissionsPage() {
           {selectedInquiry && (
             <>
               {/* Header Title bar */}
-              <div className="p-5 border-b border-outline-variant bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="p-6 border-b border-outline-variant bg-white flex items-center justify-between shrink-0">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-sky-600 text-white">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary">
                       Inquiry Lead
                     </span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300 mx-1"></span>
                     <span className="text-xs font-semibold text-slate-400">Current Status:</span>
-                    <span className="text-xs font-bold text-slate-700">{selectedInquiry.status}</span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                      selectedInquiry.status === "APPLIED"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : selectedInquiry.status === "VISITED"
+                        ? "bg-teal-100 text-teal-800"
+                        : selectedInquiry.status === "CONTACTED"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {selectedInquiry.status}
+                    </span>
                   </div>
-                  <DialogTitle className="text-title-lg font-bold text-on-surface mt-1">
+                  <DialogTitle className="text-xl font-bold text-slate-800 mt-1.5">
                     {selectedInquiry.studentName}
                   </DialogTitle>
                 </div>
-                <DialogClose className="p-1.5 rounded-full text-slate-400 hover:bg-slate-200 transition-colors mr-10">
-                  <Icon name="close" size={20} />
-                </DialogClose>
               </div>
 
               {/* Main Split Body Area */}
               <div className="flex-1 flex overflow-hidden min-h-0">
                 {/* A. Left Pane: Inquiry Info */}
-                <div className="w-[40%] overflow-y-auto p-5 border-r border-outline-variant space-y-5">
-                  <div>
-                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Inquiry Profile</h3>
-                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-2 text-xs">
-                      <p><span className="font-semibold text-slate-500">Class Applied:</span> {selectedInquiry.classApplied?.name || "N/A"}</p>
-                      <p><span className="font-semibold text-slate-500">Date of Birth:</span> {new Date(selectedInquiry.dateOfBirth).toLocaleDateString("en-IN")}</p>
-                      <p><span className="font-semibold text-slate-500">Gender:</span> {selectedInquiry.gender}</p>
-                      <p><span className="font-semibold text-slate-500">Source:</span> {selectedInquiry.source}</p>
+                <div className="w-[38%] overflow-y-auto p-6 bg-slate-50/50 border-r border-outline-variant space-y-6">
+                  {/* Inquiry Profile section */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-200">
+                      <Icon name="school" size={16} className="text-primary" />
+                      Inquiry Profile
+                    </h3>
+                    <div className="space-y-3.5 pl-1.5">
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100"><Icon name="school" size={14} /></span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Class Applied</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedInquiry.classApplied?.name || "N/A"}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100"><Icon name="date_range" size={14} /></span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Date of Birth</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">
+                            {new Date(selectedInquiry.dateOfBirth).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100"><Icon name="person" size={14} /></span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gender</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedInquiry.gender}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100"><Icon name="tag" size={14} /></span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Inquiry Source</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedInquiry.source}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Parent Contact</h3>
-                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-2 text-xs">
-                      <p><span className="font-semibold text-slate-500">Parent Name:</span> {selectedInquiry.parentName}</p>
-                      <p><span className="font-semibold text-slate-500">Phone Number:</span> {selectedInquiry.parentPhone}</p>
-                      <p><span className="font-semibold text-slate-500">Email Address:</span> {selectedInquiry.parentEmail}</p>
+                  {/* Parent Contact section */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-200">
+                      <Icon name="person" size={16} className="text-primary" />
+                      Parent Contact
+                    </h3>
+                    <div className="space-y-3.5 pl-1.5">
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100"><Icon name="person" size={14} /></span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Parent Name</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedInquiry.parentName}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100"><Icon name="phone" size={14} /></span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone Number</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5">{selectedInquiry.parentPhone}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-1.5 rounded bg-white text-slate-500 mt-0.5 shadow-sm border border-slate-100"><Icon name="mail" size={14} /></span>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email Address</p>
+                          <p className="text-sm font-semibold text-slate-700 mt-0.5 break-all">{selectedInquiry.parentEmail || "N/A"}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {selectedInquiry.notes && (
-                    <div>
-                      <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Initial Notes</h3>
-                      <div className="p-3.5 bg-amber-50/30 border border-amber-100 rounded-xl text-xs text-slate-600">
-                        {selectedInquiry.notes}
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-200">
+                        <Icon name="receipt_long" size={16} className="text-primary" />
+                        Initial Notes
+                      </h3>
+                      <div className="p-4 bg-amber-50/40 border border-amber-100/70 rounded-2xl text-xs text-slate-600 leading-relaxed italic shadow-xs">
+                        "{selectedInquiry.notes}"
                       </div>
                     </div>
                   )}
                 </div>
 
                 {/* B. Right Pane: Follow-up logs & Form */}
-                <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 flex flex-col justify-between">
+                <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30 flex flex-col justify-between">
                   <div className="space-y-6">
                     {selectedInquiry.status === "APPLIED" ? (
-                      <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 shrink-0">
+                      <div className="p-4 bg-emerald-50/50 border border-emerald-100/60 rounded-2xl flex items-center gap-3.5 shrink-0 shadow-sm">
                         <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
                           <Icon name="check_circle" size={20} />
                         </div>
                         <div>
-                          <h4 className="font-bold text-xs text-slate-800">Lead Converted to Application</h4>
-                          <p className="text-[11px] text-slate-500 mt-0.5">This inquiry has been promoted to a formal application and is locked for counselor edits.</p>
+                          <h4 className="font-extrabold text-xs text-slate-800">Lead Converted to Application</h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5 font-medium">This inquiry has been promoted to a formal application and is locked for counselor edits.</p>
                         </div>
                       </div>
                     ) : (
                       /* Log New Conversation form */
-                      <Card variant="outlined" className="bg-white border-sky-100 shadow-sm shrink-0">
+                      <Card variant="outlined" className="bg-white border-sky-100/80 shadow-sm shrink-0">
                         <CardContent className="p-4 space-y-4">
                           <h4 className="font-bold text-xs text-slate-800 flex items-center gap-1.5 border-b pb-2">
                             <Icon name="campaign" size={16} className="text-primary" />
@@ -2627,35 +2802,62 @@ export default function AdmissionsPage() {
                     )}
 
                     {/* Historical Timeline Logs */}
-                    <div className="space-y-3">
-                      <h4 className="font-bold text-xs text-slate-400 uppercase tracking-wide">Conversation Log History</h4>
+                    <div className="space-y-4">
+                      <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Icon name="history" size={16} />
+                        Conversation Log History
+                      </h4>
                       {(!selectedInquiry.followUps || selectedInquiry.followUps.length === 0) ? (
-                        <p className="text-xs text-slate-400 italic">No follow-up conversations logged yet.</p>
+                        <p className="text-xs text-slate-400 italic pl-1">No follow-up conversations logged yet.</p>
                       ) : (
-                        <div className="space-y-3.5">
-                          {selectedInquiry.followUps.map((log) => (
-                            <div key={log.id} className="p-3 bg-white border rounded-xl shadow-xs space-y-1.5 text-xs">
-                              <div className="flex items-center justify-between border-b pb-1 text-slate-400">
-                                <span className="font-semibold">
-                                  Logged: {new Date(log.followUpDate).toLocaleDateString("en-IN", {
-                                    day: "numeric",
-                                    month: "short",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">
-                                  {log.statusReached}
-                                </span>
+                        <div className="relative pl-6 border-l border-slate-200 space-y-6 ml-3 mt-4">
+                          {selectedInquiry.followUps.map((log) => {
+                            // Status colors mapping
+                            const statusColors: Record<string, string> = {
+                              INQUIRY: "bg-amber-500",
+                              CONTACTED: "bg-blue-500",
+                              VISITED: "bg-teal-500",
+                              APPLIED: "bg-emerald-500",
+                              CLOSED: "bg-slate-500",
+                            };
+                            const dotColor = statusColors[log.statusReached] || "bg-slate-400";
+                            return (
+                              <div key={log.id} className="relative space-y-2">
+                                {/* Timeline Dot */}
+                                <span className={`absolute -left-[31px] top-1 h-3.5 w-3.5 rounded-full border-2 border-white ring-4 ring-slate-100/80 ${dotColor}`}></span>
+                                
+                                <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
+                                  <div className="flex items-center justify-between border-b border-slate-50 pb-1.5 text-[11px] text-slate-400">
+                                    <span className="font-medium">
+                                      Logged: {new Date(log.followUpDate).toLocaleDateString("en-IN", {
+                                        day: "numeric",
+                                        month: "short",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
+                                      log.statusReached === "APPLIED"
+                                        ? "bg-emerald-50 text-emerald-750"
+                                        : log.statusReached === "VISITED"
+                                        ? "bg-teal-50 text-teal-750"
+                                        : log.statusReached === "CONTACTED"
+                                        ? "bg-blue-50 text-blue-750"
+                                        : "bg-amber-50 text-amber-750"
+                                    }`}>
+                                      {log.statusReached}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{log.conversationNotes}</p>
+                                  {log.nextFollowUpDate && (
+                                    <p className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                                      <span>📅</span> Scheduled Next Follow-up: {new Date(log.nextFollowUpDate).toLocaleDateString("en-IN")}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                              <p className="text-slate-700 whitespace-pre-wrap">{log.conversationNotes}</p>
-                              {log.nextFollowUpDate && (
-                                <p className="text-[10px] text-amber-600 font-semibold">
-                                  📅 Scheduled Next Follow-up: {new Date(log.nextFollowUpDate).toLocaleDateString("en-IN")}
-                                </p>
-                              )}
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
