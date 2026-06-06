@@ -476,7 +476,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
 
     // Step 5: Process Success
     await expect(page.locator("h3:has-text('Class Promotion Completed Successfully!')")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("text=Promoted")).toBeVisible();
+    await expect(page.getByText("Promoted", { exact: true })).toBeVisible();
 
     // Verify promotion database state
     const student = await prisma.student.findFirst({ where: { admissionNo: "ADM-TEST-12345" } });
