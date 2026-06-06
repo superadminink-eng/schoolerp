@@ -523,7 +523,10 @@ export default function StudentsPage() {
             columns={columns}
             data={students}
             keyExtractor={(row) => row.id}
-            onRowClick={(row) => router.push(`/students/${row.id}/edit`)}
+            onRowClick={(row) => {
+              console.log("ROW CLICKED, REDIRECTING TO:", `/students/${row.id}`);
+              router.push(`/students/${row.id}`);
+            }}
             loading={loading}
             emptyIcon="school"
             emptyMessage="No students found"

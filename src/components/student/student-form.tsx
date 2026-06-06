@@ -352,7 +352,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
         }
 
         snackbar.show("Student admitted successfully", "success");
-        router.push("/students");
+        router.push(`/students/${data.data.id}`);
         router.refresh();
       } catch {
         snackbar.show("An error occurred", "error");
@@ -399,7 +399,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
         }
 
         snackbar.show("Student updated successfully", "success");
-        router.push("/students");
+        router.push(`/students/${initialData!.id}`);
         router.refresh();
       } catch {
         snackbar.show("An error occurred", "error");
