@@ -20,9 +20,14 @@ export function useSubjectMasters(): UseSubjectMastersReturn {
 
   useEffect(() => {
     fetch("/api/v1/subject-masters?active=true")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (data.success) {
+        if (data && data.success) {
           setSubjectMasters(
             data.data.map((s: SubjectMasterOption) => ({
               id: s.id,
@@ -33,7 +38,9 @@ export function useSubjectMasters(): UseSubjectMastersReturn {
           );
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error fetching subject masters:", err);
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

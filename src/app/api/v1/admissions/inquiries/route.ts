@@ -13,7 +13,7 @@ import { createInquirySchema } from "@/lib/validations/admission";
  * GET /api/v1/admissions/inquiries — List and filter inquiries with tenancy checking
  */
 export async function GET(req: NextRequest) {
-  const denied = await checkApiPermission(req, "admissions", "read");
+  const denied = await checkApiPermission(req, "admissions", "inquiry_desk");
   if (denied) return denied;
 
   const ctx = getTenantContext(req);
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
  * POST /api/v1/admissions/inquiries — Create a new admission inquiry
  */
 export async function POST(req: NextRequest) {
-  const denied = await checkApiPermission(req, "admissions", "create");
+  const denied = await checkApiPermission(req, "admissions", "inquiry_desk");
   if (denied) return denied;
 
   const ctx = getTenantContext(req);

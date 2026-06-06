@@ -38,6 +38,7 @@ const ROLE_OPTIONS = [
   { value: "ACCOUNTANT", label: "Accountant" },
   { value: "LIBRARIAN", label: "Librarian" },
   { value: "RECEPTIONIST", label: "Receptionist" },
+  { value: "COUNSELOR", label: "Counselor" },
   { value: "TRANSPORT_MANAGER", label: "Transport Manager" },
 ];
 

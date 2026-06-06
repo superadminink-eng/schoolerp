@@ -12,7 +12,7 @@ type RouteContext = { params: Promise<{ id: string }> };
  * POST /api/v1/admissions/applications/[id]/schedule-test — Schedule entrance test & log results
  */
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const denied = await checkApiPermission(req, "admissions", "update");
+  const denied = await checkApiPermission(req, "admissions", "entrance_exam");
   if (denied) return denied;
 
   const ctx = getTenantContext(req);

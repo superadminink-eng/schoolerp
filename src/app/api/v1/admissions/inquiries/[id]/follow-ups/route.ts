@@ -14,7 +14,7 @@ type RouteContext = { params: Promise<{ id: string }> };
  * POST /api/v1/admissions/inquiries/[id]/follow-ups — Log a follow-up conversation
  */
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const denied = await checkApiPermission(req, "admissions", "update");
+  const denied = await checkApiPermission(req, "admissions", "inquiry_desk");
   if (denied) return denied;
 
   const ctx = getTenantContext(req);

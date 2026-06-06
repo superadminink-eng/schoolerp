@@ -29,6 +29,7 @@ const MODULE_ICONS: Record<string, string> = {
   academic_years: "date_range",
   branches: "location_city",
   users: "group",
+  admissions: "assignment_ind",
 };
 
 interface Permission {

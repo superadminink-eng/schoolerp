@@ -31,9 +31,14 @@ export function useTeachers(branchId: string): UseTeachersReturn {
     });
 
     fetch(`/api/v1/staff?${params}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (data.success) {
+        if (data && data.success) {
           setTeachers(
             data.data.map((s: { id: string; name: string }) => ({
               id: s.id,
@@ -42,7 +47,9 @@ export function useTeachers(branchId: string): UseTeachersReturn {
           );
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error fetching teachers:", err);
+      })
       .finally(() => setIsLoading(false));
   }, [branchId]);
 

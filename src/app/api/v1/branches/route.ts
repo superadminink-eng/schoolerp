@@ -24,41 +24,41 @@ export async function GET(req: NextRequest) {
   const { page, limit, search } = parsePagination(url);
   const paginated = url.searchParams.get("paginated") === "true";
 
-  if (!paginated) {
-    // Lightweight response for dropdowns (original Behavior)
-    const branches = await prisma.branch.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-      },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        phone: true,
-        email: true,
-        isMain: true,
-        isActive: true,
-        hasEntranceTest: true,
-      },
-      orderBy: [{ isMain: "desc" }, { name: "asc" }],
-    });
-
-    return apiSuccess(branches);
-  }
-
-  // Paginated response for the list page
-  const where: Record<string, unknown> = {
-    organizationId: session.user.organizationId,
-  };
-
-  if (search) {
-    where.OR = [
-      { name: { contains: search } },
-      { code: { contains: search } },
-    ];
-  }
-
   try {
+    if (!paginated) {
+      // Lightweight response for dropdowns (original Behavior)
+      const branches = await prisma.branch.findMany({
+        where: {
+          organizationId: session.user.organizationId,
+        },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          phone: true,
+          email: true,
+          isMain: true,
+          isActive: true,
+          hasEntranceTest: true,
+        },
+        orderBy: [{ isMain: "desc" }, { name: "asc" }],
+      });
+
+      return apiSuccess(branches);
+    }
+
+    // Paginated response for the list page
+    const where: Record<string, unknown> = {
+      organizationId: session.user.organizationId,
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { code: { contains: search } },
+      ];
+    }
+
     const [branches, total] = await Promise.all([
       prisma.branch.findMany({
         where,

@@ -31,6 +31,14 @@ export const PAYMENT_MODES = [
 
 const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
 
+export const STUDENT_CATEGORIES = [
+  "GENERAL",
+  "RTE",
+  "SCHOLARSHIP",
+  "STAFF_CHILD",
+  "OTHER",
+] as const;
+
 const STUDENT_STATUSES = [
   "ACTIVE",
   "GRADUATED",
@@ -82,6 +90,8 @@ export const createStudentSchema = z.object({
   branchId: z.string().min(1, "Branch is required"),
   classId: z.string().optional().or(z.literal("")),
   sectionId: z.string().optional().or(z.literal("")),
+  house: z.string().max(50).optional().or(z.literal("")),
+  category: z.enum(STUDENT_CATEGORIES).default("GENERAL"),
 
   // Fee collection (optional — only when collecting fees at admission)
   discountPercent: z.preprocess(
@@ -122,6 +132,10 @@ export const updateStudentSchema = z.object({
   branchId: z.string().min(1).optional().or(z.literal("")),
   sectionId: z.string().min(1).optional().or(z.literal("")),
   status: z.enum(STUDENT_STATUSES).optional(),
+  house: z.string().max(50).optional().or(z.literal("")),
+  category: z.enum(STUDENT_CATEGORIES).optional(),
+  leavingDate: z.string().optional().or(z.literal("")),
+  leavingReason: z.string().max(500).optional().or(z.literal("")),
 });
 
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;

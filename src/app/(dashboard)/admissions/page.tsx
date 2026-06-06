@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -142,10 +143,14 @@ function OutlinedSelect({ label, value, onValueChange, children, placeholder, re
 
 export default function AdmissionsPage() {
   const { data: session } = useSession();
+  const { can, isLoading: permissionsLoading } = usePermissions();
   const snackbar = useSnackbar();
 
   // Roles & Permissions check
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
+  const hasAppAccess = can("admissions", "document_verification") || can("admissions", "entrance_exam") || can("admissions", "registrar_desk");
+  const hasInqAccess = can("admissions", "inquiry_desk");
+
 
   // State configurations
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -330,6 +335,17 @@ export default function AdmissionsPage() {
       localStorage.setItem("adm_includeAppliedInquiries", String(includeAppliedInquiries));
     }
   }, [includeAppliedInquiries, isInitialized]);
+
+  // Adjust default active tab based on granular permission access
+  useEffect(() => {
+    if (!permissionsLoading) {
+      if (activeTab === "applications" && !hasAppAccess && hasInqAccess) {
+        setActiveTab("inquiries");
+      } else if (activeTab === "inquiries" && !hasInqAccess && hasAppAccess) {
+        setActiveTab("applications");
+      }
+    }
+  }, [permissionsLoading, hasAppAccess, hasInqAccess, activeTab]);
 
   // 1. Fetch initial branches and academic years
   useEffect(() => {
@@ -1063,6 +1079,27 @@ export default function AdmissionsPage() {
     WITHDRAWN: "Withdrawn",
   };
 
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh] text-slate-400 gap-3">
+        <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+        <span className="text-sm font-bold tracking-wider uppercase">Loading Permissions...</span>
+      </div>
+    );
+  }
+
+  if (!hasInqAccess && !hasAppAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6 space-y-4">
+        <Icon name="lock" size={48} className="text-slate-400" />
+        <h2 className="text-xl font-bold text-slate-800">Access Denied</h2>
+        <p className="text-sm text-slate-500 max-w-md">
+          You do not have permission to view admissions inquiries or applications. Please contact your system administrator.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full space-y-6 overflow-hidden">
       {/* 1. Header & Quick Settings Switch */}
@@ -1110,111 +1147,125 @@ export default function AdmissionsPage() {
       </div>
 
       {/* 2. Connected Funnel Pipeline Stepper (Stats & Filter in one) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
+      <div className={`grid gap-3 shrink-0 ${
+        hasAppAccess
+          ? "grid-cols-2 md:grid-cols-5"
+          : "grid-cols-1 md:grid-cols-1 max-w-xs"
+      }`}>
         {/* Step 1: Counselor Inquiries */}
-        <button
-          onClick={() => handleStageClick("inquiries")}
-          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-sky-50/20 border-sky-100 ${
-            activeTab === "inquiries"
-              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
-              : "hover:border-sky-300 hover:shadow-elevation-1"
-          }`}
-        >
-          <div className={`p-2.5 rounded-xl bg-sky-100 text-sky-700 transition-colors ${
-            activeTab === "inquiries" ? "bg-primary text-white" : ""
-          }`}>
-            <Icon name="group_add" size={18} />
-          </div>
-          <div className="overflow-hidden">
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 1: Inquiry</span>
-            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.inquiryCount}</span>
-            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Counselor logs</span>
-          </div>
-        </button>
+        {hasInqAccess && (
+          <button
+            onClick={() => handleStageClick("inquiries")}
+            className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-sky-50/20 border-sky-100 ${
+              activeTab === "inquiries"
+                ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+                : "hover:border-sky-300 hover:shadow-elevation-1"
+            }`}
+          >
+            <div className={`p-2.5 rounded-xl bg-sky-100 text-sky-700 transition-colors ${
+              activeTab === "inquiries" ? "bg-primary text-white" : ""
+            }`}>
+              <Icon name="group_add" size={18} />
+            </div>
+            <div className="overflow-hidden">
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 1: Inquiry</span>
+              <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.inquiryCount}</span>
+              <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Counselor logs</span>
+            </div>
+          </button>
+        )}
 
         {/* Step 2: Submitted Applications */}
-        <button
-          onClick={() => handleStageClick("SUBMITTED")}
-          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-blue-50/20 border-blue-100 ${
-            activeTab === "applications" && stageFilter === "SUBMITTED"
-              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
-              : "hover:border-blue-300 hover:shadow-elevation-1"
-          }`}
-        >
-          <div className={`p-2.5 rounded-xl bg-blue-100 text-blue-700 transition-colors ${
-            activeTab === "applications" && stageFilter === "SUBMITTED" ? "bg-primary text-white" : ""
-          }`}>
-            <Icon name="app_registration" size={18} />
-          </div>
-          <div className="overflow-hidden">
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 2: Submit</span>
-            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.submittedCount}</span>
-            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">New applications</span>
-          </div>
-        </button>
+        {hasAppAccess && (
+          <button
+            onClick={() => handleStageClick("SUBMITTED")}
+            className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-blue-50/20 border-blue-100 ${
+              activeTab === "applications" && stageFilter === "SUBMITTED"
+                ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+                : "hover:border-blue-300 hover:shadow-elevation-1"
+            }`}
+          >
+            <div className={`p-2.5 rounded-xl bg-blue-100 text-blue-700 transition-colors ${
+              activeTab === "applications" && stageFilter === "SUBMITTED" ? "bg-primary text-white" : ""
+            }`}>
+              <Icon name="app_registration" size={18} />
+            </div>
+            <div className="overflow-hidden">
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 2: Submit</span>
+              <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.submittedCount}</span>
+              <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">New applications</span>
+            </div>
+          </button>
+        )}
 
         {/* Step 3: Document Verification */}
-        <button
-          onClick={() => handleStageClick("DOCUMENT_VERIFICATION")}
-          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-amber-50/20 border-amber-100 ${
-            activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION"
-              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
-              : "hover:border-amber-300 hover:shadow-elevation-1"
-          }`}
-        >
-          <div className={`p-2.5 rounded-xl bg-amber-100 text-amber-700 transition-colors ${
-            activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION" ? "bg-primary text-white" : ""
-          }`}>
-            <Icon name="check_circle" size={18} />
-          </div>
-          <div className="overflow-hidden">
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 3: Verify Docs</span>
-            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.pendingVerify}</span>
-            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Awaiting checks</span>
-          </div>
-        </button>
+        {hasAppAccess && (
+          <button
+            onClick={() => handleStageClick("DOCUMENT_VERIFICATION")}
+            className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-amber-50/20 border-amber-100 ${
+              activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION"
+                ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+                : "hover:border-amber-300 hover:shadow-elevation-1"
+            }`}
+          >
+            <div className={`p-2.5 rounded-xl bg-amber-100 text-amber-700 transition-colors ${
+              activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION" ? "bg-primary text-white" : ""
+            }`}>
+              <Icon name="check_circle" size={18} />
+            </div>
+            <div className="overflow-hidden">
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 3: Verify Docs</span>
+              <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.pendingVerify}</span>
+              <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Awaiting checks</span>
+            </div>
+          </button>
+        )}
 
         {/* Step 4: Entrance Test */}
-        <button
-          onClick={() => handleStageClick("TEST_SCHEDULED")}
-          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-purple-50/20 border-purple-100 ${
-            activeTab === "applications" && stageFilter === "TEST_SCHEDULED"
-              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
-              : "hover:border-purple-300 hover:shadow-elevation-1"
-          }`}
-        >
-          <div className={`p-2.5 rounded-xl bg-purple-100 text-purple-700 transition-colors ${
-            activeTab === "applications" && stageFilter === "TEST_SCHEDULED" ? "bg-primary text-white" : ""
-          }`}>
-            <Icon name="event" size={18} />
-          </div>
-          <div className="overflow-hidden">
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 4: Entrance Exam</span>
-            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.awaitingExam}</span>
-            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Grades & interviews</span>
-          </div>
-        </button>
+        {hasAppAccess && (
+          <button
+            onClick={() => handleStageClick("TEST_SCHEDULED")}
+            className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-purple-50/20 border-purple-100 ${
+              activeTab === "applications" && stageFilter === "TEST_SCHEDULED"
+                ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+                : "hover:border-purple-300 hover:shadow-elevation-1"
+            }`}
+          >
+            <div className={`p-2.5 rounded-xl bg-purple-100 text-purple-700 transition-colors ${
+              activeTab === "applications" && stageFilter === "TEST_SCHEDULED" ? "bg-primary text-white" : ""
+            }`}>
+              <Icon name="event" size={18} />
+            </div>
+            <div className="overflow-hidden">
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 4: Entrance Exam</span>
+              <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.awaitingExam}</span>
+              <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Grades & interviews</span>
+            </div>
+          </button>
+        )}
 
         {/* Step 5: Shortlist/Enroll */}
-        <button
-          onClick={() => handleStageClick("SHORTLISTED")}
-          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-teal-50/20 border-teal-100 ${
-            activeTab === "applications" && stageFilter === "SHORTLISTED"
-              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
-              : "hover:border-teal-300 hover:shadow-elevation-1"
-          }`}
-        >
-          <div className={`p-2.5 rounded-xl bg-teal-100 text-teal-700 transition-colors ${
-            activeTab === "applications" && stageFilter === "SHORTLISTED" ? "bg-primary text-white" : ""
-          }`}>
-            <Icon name="star" size={18} />
-          </div>
-          <div className="overflow-hidden">
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 5: Shortlisted</span>
-            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.readyToEnroll}</span>
-            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Ready to promote</span>
-          </div>
-        </button>
+        {hasAppAccess && (
+          <button
+            onClick={() => handleStageClick("SHORTLISTED")}
+            className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-teal-50/20 border-teal-100 ${
+              activeTab === "applications" && stageFilter === "SHORTLISTED"
+                ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+                : "hover:border-teal-300 hover:shadow-elevation-1"
+            }`}
+          >
+            <div className={`p-2.5 rounded-xl bg-teal-100 text-teal-700 transition-colors ${
+              activeTab === "applications" && stageFilter === "SHORTLISTED" ? "bg-primary text-white" : ""
+            }`}>
+              <Icon name="star" size={18} />
+            </div>
+            <div className="overflow-hidden">
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 5: Shortlisted</span>
+              <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.readyToEnroll}</span>
+              <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Ready to promote</span>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* 3. Filtering Desk Panel */}
@@ -1294,69 +1345,77 @@ export default function AdmissionsPage() {
             </label>
           )}
 
-          <Button
-            variant="tonal"
-            icon="group_add"
-            onClick={() => {
-              if (classes.length === 0) {
-                snackbar.show("Please create classes first.", "warning");
-                return;
-              }
-              setInquiryForm((prev) => ({ ...prev, classAppliedId: classes[0].id }));
-              setInquiryModalOpen(true);
-            }}
-          >
-            New Inquiry
-          </Button>
-          <Button
-            variant="filled"
-            icon="add"
-            className="bg-primary text-white"
-            onClick={() => {
-              if (classes.length === 0) {
-                snackbar.show("Please create classes first.", "warning");
-                return;
-              }
-              setAppForm((prev) => ({ ...prev, classId: classes[0].id }));
-              setApplicationModalOpen(true);
-            }}
-          >
-            New Application
-          </Button>
+          {hasInqAccess && (
+            <Button
+              variant="tonal"
+              icon="group_add"
+              onClick={() => {
+                if (classes.length === 0) {
+                  snackbar.show("Please create classes first.", "warning");
+                  return;
+                }
+                setInquiryForm((prev) => ({ ...prev, classAppliedId: classes[0].id }));
+                setInquiryModalOpen(true);
+              }}
+            >
+              New Inquiry
+            </Button>
+          )}
+          {can("admissions", "document_verification") && (
+            <Button
+              variant="filled"
+              icon="add"
+              className="bg-primary text-white"
+              onClick={() => {
+                if (classes.length === 0) {
+                  snackbar.show("Please create classes first.", "warning");
+                  return;
+                }
+                setAppForm((prev) => ({ ...prev, classId: classes[0].id }));
+                setApplicationModalOpen(true);
+              }}
+            >
+              New Application
+            </Button>
+          )}
         </div>
       </div>
 
       {/* 4. Tab Navigation Desks (Segmented Control style) */}
       <div className="flex items-center justify-between border-b border-outline-variant/40 pb-3 shrink-0">
         <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl border">
-          <button
-            onClick={() => {
-              setActiveTab("applications");
-              setStageFilter("ALL");
-            }}
-            className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 ${
-              activeTab === "applications" && stageFilter === "ALL"
-                ? "bg-white text-primary shadow-sm ring-1 ring-slate-200/50"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <Icon name="app_registration" size={16} />
-            Applications Desk ({filteredApplications.length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("inquiries");
-              setStageFilter("ALL");
-            }}
-            className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 ${
-              activeTab === "inquiries"
-                ? "bg-white text-primary shadow-sm ring-1 ring-slate-200/50"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <Icon name="group_add" size={16} />
-            Counselor Inquiries ({filteredInquiries.length})
-          </button>
+          {hasAppAccess && (
+            <button
+              onClick={() => {
+                setActiveTab("applications");
+                setStageFilter("ALL");
+              }}
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 ${
+                activeTab === "applications" && stageFilter === "ALL"
+                  ? "bg-white text-primary shadow-sm ring-1 ring-slate-200/50"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Icon name="app_registration" size={16} />
+              Applications Desk ({filteredApplications.length})
+            </button>
+          )}
+          {hasInqAccess && (
+            <button
+              onClick={() => {
+                setActiveTab("inquiries");
+                setStageFilter("ALL");
+              }}
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 ${
+                activeTab === "inquiries"
+                  ? "bg-white text-primary shadow-sm ring-1 ring-slate-200/50"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Icon name="group_add" size={16} />
+              Counselor Inquiries ({filteredInquiries.length})
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -1680,7 +1739,7 @@ export default function AdmissionsPage() {
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
-                          {inq.status !== "APPLIED" && (
+                          {inq.status !== "APPLIED" && can("admissions", "document_verification") && (
                             <Button
                               variant="outlined"
                               size="sm"
@@ -1962,304 +2021,334 @@ export default function AdmissionsPage() {
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30 space-y-6">
                   {/* Step 2 Form: Document verification */}
                   {(selectedApp.status === "SUBMITTED" || selectedApp.status === "DOCUMENT_VERIFICATION") && (
-                    <Card variant="outlined" className="border-amber-200 bg-white shadow-sm">
-                      <CardContent className="p-5 space-y-4">
-                        <div className="flex items-center gap-2 text-amber-800 font-bold">
-                          <Icon name="check_circle" size={20} />
-                          <h3>Step 2: Document Checklist Verification</h3>
-                        </div>
-                        <p className="text-xs text-slate-500">Verify candidate documents. If none are present, click to initialize checklist.</p>
+                    can("admissions", "document_verification") ? (
+                      <Card variant="outlined" className="border-amber-200 bg-white shadow-sm">
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-2 text-amber-800 font-bold">
+                            <Icon name="check_circle" size={20} />
+                            <h3>Step 2: Document Checklist Verification</h3>
+                          </div>
+                          <p className="text-xs text-slate-500">Verify candidate documents. If none are present, click to initialize checklist.</p>
 
-                        <form onSubmit={handleVerifyDocuments} className="space-y-4">
-                          {verifyForm.documents.length === 0 ? (
-                            <div className="p-4 bg-slate-50 border border-dashed rounded-xl flex flex-col items-center justify-center">
-                              <p className="text-xs text-slate-400 mb-2">No documents checklists initialized yet.</p>
-                              <Button
-                                type="button"
-                                variant="outlined"
-                                size="sm"
-                                onClick={() => {
-                                  setVerifyForm((prev) => ({
-                                    ...prev,
-                                    documents: [
-                                      { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate" },
-                                      { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card" },
-                                    ],
-                                  }));
-                                }}
-                              >
-                                Initialize Checklist Checklist
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {verifyForm.documents.map((doc, idx) => (
-                                <div key={doc.id} className="p-3.5 border rounded-xl bg-slate-50/50 flex flex-col space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-bold text-xs text-slate-700">{doc.documentType}</span>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const clone = [...verifyForm.documents];
-                                          clone[idx].status = "VERIFIED";
-                                          setVerifyForm({ ...verifyForm, documents: clone });
-                                        }}
-                                        className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
-                                          doc.status === "VERIFIED"
-                                            ? "bg-emerald-600 border-emerald-600 text-white"
-                                            : "bg-white hover:bg-slate-100 text-slate-600"
-                                        }`}
-                                      >
-                                        Verify
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const clone = [...verifyForm.documents];
-                                          clone[idx].status = "REJECTED";
-                                          setVerifyForm({ ...verifyForm, documents: clone });
-                                        }}
-                                        className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
-                                          doc.status === "REJECTED"
-                                            ? "bg-red-600 border-red-600 text-white"
-                                            : "bg-white hover:bg-slate-100 text-slate-600"
-                                        }`}
-                                      >
-                                        Reject
-                                      </button>
+                          <form onSubmit={handleVerifyDocuments} className="space-y-4">
+                            {verifyForm.documents.length === 0 ? (
+                              <div className="p-4 bg-slate-50 border border-dashed rounded-xl flex flex-col items-center justify-center">
+                                <p className="text-xs text-slate-400 mb-2">No documents checklists initialized yet.</p>
+                                <Button
+                                  type="button"
+                                  variant="outlined"
+                                  size="sm"
+                                  onClick={() => {
+                                    setVerifyForm((prev) => ({
+                                      ...prev,
+                                      documents: [
+                                        { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate" },
+                                        { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card" },
+                                      ],
+                                    }));
+                                  }}
+                                >
+                                  Initialize Checklist
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {verifyForm.documents.map((doc, idx) => (
+                                  <div key={doc.id} className="p-3.5 border rounded-xl bg-slate-50/50 flex flex-col space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-xs text-slate-700">{doc.documentType}</span>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const clone = [...verifyForm.documents];
+                                            clone[idx].status = "VERIFIED";
+                                            setVerifyForm({ ...verifyForm, documents: clone });
+                                          }}
+                                          className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                                            doc.status === "VERIFIED"
+                                              ? "bg-emerald-600 border-emerald-600 text-white"
+                                              : "bg-white hover:bg-slate-100 text-slate-600"
+                                          }`}
+                                        >
+                                          Verify
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const clone = [...verifyForm.documents];
+                                            clone[idx].status = "REJECTED";
+                                            setVerifyForm({ ...verifyForm, documents: clone });
+                                          }}
+                                          className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                                            doc.status === "REJECTED"
+                                              ? "bg-red-600 border-red-600 text-white"
+                                              : "bg-white hover:bg-slate-100 text-slate-600"
+                                          }`}
+                                        >
+                                          Reject
+                                        </button>
+                                      </div>
                                     </div>
+                                    <TextField
+                                      label="Remarks"
+                                      value={doc.remarks}
+                                      placeholder="Clerk verification remarks"
+                                      onChange={(e) => {
+                                        const clone = [...verifyForm.documents];
+                                        clone[idx].remarks = e.target.value;
+                                        setVerifyForm({ ...verifyForm, documents: clone });
+                                      }}
+                                      className="h-10 mt-1"
+                                    />
                                   </div>
-                                  <TextField
-                                    label="Remarks"
-                                    value={doc.remarks}
-                                    placeholder="Clerk verification remarks"
-                                    onChange={(e) => {
-                                      const clone = [...verifyForm.documents];
-                                      clone[idx].remarks = e.target.value;
-                                      setVerifyForm({ ...verifyForm, documents: clone });
-                                    }}
-                                    className="h-10 mt-1"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                                ))}
+                              </div>
+                            )}
 
-                          <TextField
-                            label="Summary Verification Notes"
-                            value={verifyForm.verificationNotes}
-                            onChange={(e) => setVerifyForm({ ...verifyForm, verificationNotes: e.target.value })}
-                          />
-
-                          <div>
-                            <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Advance Pipeline To</label>
-                            <Select
-                              value={verifyForm.nextStatus}
-                              onValueChange={(val: any) => setVerifyForm({ ...verifyForm, nextStatus: val })}
-                            >
-                              <SelectTrigger fullWidth>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {activeBranch?.hasEntranceTest ? (
-                                  <SelectItem value="TEST_SCHEDULED">Move to Entrance Examination</SelectItem>
-                                ) : (
-                                  <SelectItem value="SHORTLISTED">Direct Shortlist (Approved)</SelectItem>
-                                )}
-                                <SelectItem value="DOCUMENT_VERIFICATION">Keep in Verification stage</SelectItem>
-                                <SelectItem value="REJECTED">Reject Application</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="pt-2 flex justify-end">
-                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white">
-                              Confirm & Save Step 2
-                            </Button>
-                          </div>
-                        </form>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Step 3 Form: Entrance Examination */}
-                  {selectedApp.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
-                    <Card variant="outlined" className="border-purple-200 bg-white shadow-sm">
-                      <CardContent className="p-5 space-y-4">
-                        <div className="flex items-center gap-2 text-purple-800 font-bold">
-                          <Icon name="event" size={20} />
-                          <h3>Step 3: Entrance Exam Score Log</h3>
-                        </div>
-                        <p className="text-xs text-slate-500">Log results and decide whether to shortlist the applicant.</p>
-
-                        <form onSubmit={handleSaveExam} className="space-y-4">
-                          <TextField
-                            label="Exam Date"
-                            type="date"
-                            value={examForm.examDate}
-                            onChange={(e) => setExamForm({ ...examForm, examDate: e.target.value })}
-                            required
-                          />
-
-                          <div className="grid grid-cols-2 gap-4">
                             <TextField
-                              label="Maximum Marks"
-                              type="number"
-                              value={String(examForm.maxMarks)}
-                              onChange={(e) => setExamForm({ ...examForm, maxMarks: Number(e.target.value) })}
-                              required
+                              label="Summary Verification Notes"
+                              value={verifyForm.verificationNotes}
+                              onChange={(e) => setVerifyForm({ ...verifyForm, verificationNotes: e.target.value })}
                             />
-                            <TextField
-                              label="Marks Obtained"
-                              type="number"
-                              value={examForm.marksObtained}
-                              onChange={(e) => setExamForm({ ...examForm, marksObtained: e.target.value })}
-                            />
-                          </div>
 
-                          <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Verdict</label>
+                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Advance Pipeline To</label>
                               <Select
-                                value={examForm.verdict}
-                                onValueChange={(val: any) => setExamForm((prev) => ({ ...prev, verdict: val }))}
+                                value={verifyForm.nextStatus}
+                                onValueChange={(val: any) => setVerifyForm({ ...verifyForm, nextStatus: val })}
                               >
                                 <SelectTrigger fullWidth>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="PENDING">Pending Verdict</SelectItem>
-                                  <SelectItem value="PASS">Pass (Approved)</SelectItem>
-                                  <SelectItem value="FAIL">Fail</SelectItem>
-                                  <SelectItem value="BORDERLINE">Borderline</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div>
-                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Advance Status</label>
-                              <Select
-                                value={examForm.applicationStatus}
-                                onValueChange={(val: any) => setExamForm({ ...examForm, applicationStatus: val })}
-                              >
-                                <SelectTrigger fullWidth>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="TEST_SCHEDULED">Keep in Examination</SelectItem>
-                                  <SelectItem value="SHORTLISTED">Promote to Shortlisted</SelectItem>
+                                  {activeBranch?.hasEntranceTest ? (
+                                    <SelectItem value="TEST_SCHEDULED">Move to Entrance Examination</SelectItem>
+                                  ) : (
+                                    <SelectItem value="SHORTLISTED">Direct Shortlist (Approved)</SelectItem>
+                                  )}
+                                  <SelectItem value="DOCUMENT_VERIFICATION">Keep in Verification stage</SelectItem>
                                   <SelectItem value="REJECTED">Reject Application</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
-                          </div>
 
-                          <TextField
-                            label="Notes / Interview Summary"
-                            value={examForm.notes}
-                            onChange={(e) => setExamForm({ ...examForm, notes: e.target.value })}
-                          />
+                            <div className="pt-2 flex justify-end">
+                              <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white">
+                                Confirm & Save Step 2
+                              </Button>
+                            </div>
+                          </form>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card variant="outlined" className="border-slate-200 bg-slate-50/50 shadow-sm">
+                        <CardContent className="p-5 flex flex-col items-center justify-center text-center space-y-2">
+                          <Icon name="lock" size={24} className="text-slate-400" />
+                          <h3 className="font-bold text-xs text-slate-700">Document Verification Locked</h3>
+                          <p className="text-[11px] text-slate-500 max-w-sm">You do not have the required permissions to verify and approve candidate documents.</p>
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
 
-                          <div className="pt-2 flex justify-end">
-                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-purple-600 hover:bg-purple-700 text-white">
-                              Confirm & Log Marks
-                            </Button>
+                  {/* Step 3 Form: Entrance Examination */}
+                  {selectedApp.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
+                    can("admissions", "entrance_exam") ? (
+                      <Card variant="outlined" className="border-purple-200 bg-white shadow-sm">
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-2 text-purple-800 font-bold">
+                            <Icon name="event" size={20} />
+                            <h3>Step 3: Entrance Exam Score Log</h3>
                           </div>
-                        </form>
-                      </CardContent>
-                    </Card>
+                          <p className="text-xs text-slate-500">Log results and decide whether to shortlist the applicant.</p>
+
+                          <form onSubmit={handleSaveExam} className="space-y-4">
+                            <TextField
+                              label="Exam Date"
+                              type="date"
+                              value={examForm.examDate}
+                              onChange={(e) => setExamForm({ ...examForm, examDate: e.target.value })}
+                              required
+                            />
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <TextField
+                                label="Maximum Marks"
+                                type="number"
+                                value={String(examForm.maxMarks)}
+                                onChange={(e) => setExamForm({ ...examForm, maxMarks: Number(e.target.value) })}
+                                required
+                              />
+                              <TextField
+                                label="Marks Obtained"
+                                type="number"
+                                value={examForm.marksObtained}
+                                onChange={(e) => setExamForm({ ...examForm, marksObtained: e.target.value })}
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Verdict</label>
+                                <Select
+                                  value={examForm.verdict}
+                                  onValueChange={(val: any) => setExamForm((prev) => ({ ...prev, verdict: val }))}
+                                >
+                                  <SelectTrigger fullWidth>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="PENDING">Pending Verdict</SelectItem>
+                                    <SelectItem value="PASS">Pass (Approved)</SelectItem>
+                                    <SelectItem value="FAIL">Fail</SelectItem>
+                                    <SelectItem value="BORDERLINE">Borderline</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Advance Status</label>
+                                <Select
+                                  value={examForm.applicationStatus}
+                                  onValueChange={(val: any) => setExamForm({ ...examForm, applicationStatus: val })}
+                                >
+                                  <SelectTrigger fullWidth>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="TEST_SCHEDULED">Keep in Examination</SelectItem>
+                                    <SelectItem value="SHORTLISTED">Promote to Shortlisted</SelectItem>
+                                    <SelectItem value="REJECTED">Reject Application</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <TextField
+                              label="Notes / Interview Summary"
+                              value={examForm.notes}
+                              onChange={(e) => setExamForm({ ...examForm, notes: e.target.value })}
+                            />
+
+                            <div className="pt-2 flex justify-end">
+                              <Button type="submit" loading={actionLoading} variant="filled" className="bg-purple-600 hover:bg-purple-700 text-white">
+                                Confirm & Log Marks
+                              </Button>
+                            </div>
+                          </form>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card variant="outlined" className="border-slate-200 bg-slate-50/50 shadow-sm">
+                        <CardContent className="p-5 flex flex-col items-center justify-center text-center space-y-2">
+                          <Icon name="lock" size={24} className="text-slate-400" />
+                          <h3 className="font-bold text-xs text-slate-700">Entrance Examination Locked</h3>
+                          <p className="text-[11px] text-slate-500 max-w-sm">You do not have the required permissions to schedule tests or log exam marks.</p>
+                        </CardContent>
+                      </Card>
+                    )
                   )}
 
                   {/* Step 4 Form: Shortlist & Promote Bridge */}
                   {selectedApp.status === "SHORTLISTED" && (
-                    <Card variant="outlined" className="border-teal-200 bg-white shadow-sm">
-                      <CardContent className="p-5 space-y-4">
-                        <div className="flex items-center gap-2 text-teal-800 font-bold">
-                          <Icon name="star" size={20} />
-                          <h3>Step 4: Promote Candidate to Active Student</h3>
-                        </div>
-                        <p className="text-xs text-slate-500">
-                          Promoting आरव creates their official SIS student profile, user account, and initial enrollment classes.
-                        </p>
-
-                        <form onSubmit={handlePromote} className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <OutlinedSelect
-                              label="Section Assignment"
-                              value={promoteForm.sectionId}
-                              onValueChange={(val) => setPromoteForm({ ...promoteForm, sectionId: val })}
-                              placeholder="Select section"
-                              required
-                            >
-                              {classSections.map((sec) => (
-                                <SelectItem key={sec.id} value={sec.id}>
-                                  {sec.name}
-                                </SelectItem>
-                              ))}
-                            </OutlinedSelect>
-
-                            <TextField
-                              label="Roll Number (Optional)"
-                              value={promoteForm.rollNo}
-                              onChange={(e) => setPromoteForm({ ...promoteForm, rollNo: e.target.value })}
-                            />
+                    can("admissions", "registrar_desk") ? (
+                      <Card variant="outlined" className="border-teal-200 bg-white shadow-sm">
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-2 text-teal-800 font-bold">
+                            <Icon name="star" size={20} />
+                            <h3>Step 4: Promote Candidate to Active Student</h3>
                           </div>
+                          <p className="text-xs text-slate-500">
+                            Promoting updates their official SIS student profile, user account, and initial enrollment classes.
+                          </p>
 
-                          <TextField
-                            label="Admission Date"
-                            type="date"
-                            value={promoteForm.admissionDate}
-                            onChange={(e) => setPromoteForm({ ...promoteForm, admissionDate: e.target.value })}
-                            required
-                          />
-
-                          <h4 className="font-bold border-b pb-1 text-primary text-xs pt-2">Invoice Fee details</h4>
-                          <div className="grid grid-cols-2 gap-4">
-                            <TextField
-                              label="Discount Percent (%)"
-                              type="number"
-                              value={String(promoteForm.discountPercent)}
-                              onChange={(e) => setPromoteForm({ ...promoteForm, discountPercent: Number(e.target.value) })}
-                            />
-                            <TextField
-                              label="Amount Collected (₹)"
-                              type="number"
-                              value={String(promoteForm.amountPaid)}
-                              onChange={(e) => setPromoteForm({ ...promoteForm, amountPaid: Number(e.target.value) })}
-                            />
-                          </div>
-
-                          {promoteForm.amountPaid > 0 && (
+                          <form onSubmit={handlePromote} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                               <OutlinedSelect
-                                label="Payment Mode"
-                                value={promoteForm.paymentMethod}
-                                onValueChange={(val: any) => setPromoteForm({ ...promoteForm, paymentMethod: val })}
+                                label="Section Assignment"
+                                value={promoteForm.sectionId}
+                                onValueChange={(val) => setPromoteForm({ ...promoteForm, sectionId: val })}
+                                placeholder="Select section"
                                 required
                               >
-                                <SelectItem value="CASH">Cash</SelectItem>
-                                <SelectItem value="UPI">UPI</SelectItem>
-                                <SelectItem value="ONLINE">Online Netbanking</SelectItem>
-                                <SelectItem value="CHEQUE">Cheque</SelectItem>
-                                <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                                {classSections.map((sec) => (
+                                  <SelectItem key={sec.id} value={sec.id}>
+                                    {sec.name}
+                                  </SelectItem>
+                                ))}
                               </OutlinedSelect>
+
                               <TextField
-                                label="Transaction ID / Receipt No"
-                                value={promoteForm.transactionId}
-                                onChange={(e) => setPromoteForm({ ...promoteForm, transactionId: e.target.value })}
+                                label="Roll Number (Optional)"
+                                value={promoteForm.rollNo}
+                                onChange={(e) => setPromoteForm({ ...promoteForm, rollNo: e.target.value })}
                               />
                             </div>
-                          )}
 
-                          <div className="pt-2 flex justify-end">
-                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                              Confirm Promotion & Admit Student
-                            </Button>
-                          </div>
-                        </form>
-                      </CardContent>
-                    </Card>
+                            <TextField
+                              label="Admission Date"
+                              type="date"
+                              value={promoteForm.admissionDate}
+                              onChange={(e) => setPromoteForm({ ...promoteForm, admissionDate: e.target.value })}
+                              required
+                            />
+
+                            <h4 className="font-bold border-b pb-1 text-primary text-xs pt-2">Invoice Fee details</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <TextField
+                                label="Discount Percent (%)"
+                                type="number"
+                                value={String(promoteForm.discountPercent)}
+                                onChange={(e) => setPromoteForm({ ...promoteForm, discountPercent: Number(e.target.value) })}
+                              />
+                              <TextField
+                                label="Amount Collected (₹)"
+                                type="number"
+                                value={String(promoteForm.amountPaid)}
+                                onChange={(e) => setPromoteForm({ ...promoteForm, amountPaid: Number(e.target.value) })}
+                              />
+                            </div>
+
+                            {promoteForm.amountPaid > 0 && (
+                              <div className="grid grid-cols-2 gap-4">
+                                <OutlinedSelect
+                                  label="Payment Mode"
+                                  value={promoteForm.paymentMethod}
+                                  onValueChange={(val: any) => setPromoteForm({ ...promoteForm, paymentMethod: val })}
+                                  required
+                                >
+                                  <SelectItem value="CASH">Cash</SelectItem>
+                                  <SelectItem value="UPI">UPI</SelectItem>
+                                  <SelectItem value="ONLINE">Online Netbanking</SelectItem>
+                                  <SelectItem value="CHEQUE">Cheque</SelectItem>
+                                  <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                                </OutlinedSelect>
+                                <TextField
+                                  label="Transaction ID / Receipt No"
+                                  value={promoteForm.transactionId}
+                                  onChange={(e) => setPromoteForm({ ...promoteForm, transactionId: e.target.value })}
+                                />
+                              </div>
+                            )}
+
+                            <div className="pt-2 flex justify-end">
+                              <Button type="submit" loading={actionLoading} variant="filled" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                                Confirm Promotion & Admit Student
+                              </Button>
+                            </div>
+                          </form>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card variant="outlined" className="border-slate-200 bg-slate-50/50 shadow-sm">
+                        <CardContent className="p-5 flex flex-col items-center justify-center text-center space-y-2">
+                          <Icon name="lock" size={24} className="text-slate-400" />
+                          <h3 className="font-bold text-xs text-slate-700">Student Promotion Locked</h3>
+                          <p className="text-[11px] text-slate-500 max-w-sm">You do not have the required permissions to promote shortlisted candidates to active students.</p>
+                        </CardContent>
+                      </Card>
+                    )
                   )}
 
                   {/* Step 5 View: Promoted (Active Student) */}

@@ -6,7 +6,7 @@ import {
   apiValidationError,
   parsePagination,
 } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
 import { createApplicationSchema } from "@/lib/validations/admission";
 import crypto from "crypto";
 
@@ -14,10 +14,21 @@ import crypto from "crypto";
  * GET /api/v1/admissions/applications — List and filter applications
  */
 export async function GET(req: NextRequest) {
-  const denied = await checkApiPermission(req, "admissions", "read");
-  if (denied) return denied;
-
   const ctx = getTenantContext(req);
+  const isSuperOrSchoolAdmin = ctx.roleName === "SUPER_ADMIN" || ctx.roleName === "SCHOOL_ADMIN";
+  let allowed = isSuperOrSchoolAdmin;
+  if (!allowed) {
+    const [hasVerify, hasExam, hasRegistrar] = await Promise.all([
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "document_verification"),
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "entrance_exam"),
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "registrar_desk"),
+    ]);
+    allowed = hasVerify || hasExam || hasRegistrar;
+  }
+
+  if (!allowed) {
+    return apiError("FORBIDDEN", "Insufficient permissions", 403);
+  }
   const url = new URL(req.url);
   const { page, limit, search } = parsePagination(url);
   const branchId = url.searchParams.get("branchId");
@@ -82,7 +93,7 @@ export async function GET(req: NextRequest) {
  * POST /api/v1/admissions/applications — Create/Submit a new application
  */
 export async function POST(req: NextRequest) {
-  const denied = await checkApiPermission(req, "admissions", "create");
+  const denied = await checkApiPermission(req, "admissions", "document_verification");
   if (denied) return denied;
 
   const ctx = getTenantContext(req);

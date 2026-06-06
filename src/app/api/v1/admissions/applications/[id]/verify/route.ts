@@ -12,7 +12,7 @@ type RouteContext = { params: Promise<{ id: string }> };
  * POST /api/v1/admissions/applications/[id]/verify — Verify uploaded documents
  */
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const denied = await checkApiPermission(req, "admissions", "update");
+  const denied = await checkApiPermission(req, "admissions", "document_verification");
   if (denied) return denied;
 
   const ctx = getTenantContext(req);

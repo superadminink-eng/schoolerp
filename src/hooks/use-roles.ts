@@ -15,8 +15,11 @@ export function useRoles() {
     async function fetchRoles() {
       try {
         const res = await fetch("/api/v1/roles");
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const data = await res.json();
-        if (data.success) {
+        if (data && data.success) {
           setRoles(data.data);
         }
       } catch (err) {

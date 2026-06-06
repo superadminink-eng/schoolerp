@@ -14,14 +14,45 @@ async function main() {
     }
   }
 
+  // Auto-cleanup obsolete permissions from DB to prevent orphan duplicates in Roles UI
+  const existingPerms = await prisma.permission.findMany();
+  const activeKeys = new Set(permissions.map(p => `${p.module}:${p.action}`));
+  const permsToDelete = existingPerms.filter(p => !activeKeys.has(`${p.module}:${p.action}`));
+
+  if (permsToDelete.length > 0) {
+    console.log(`Cleaning up ${permsToDelete.length} obsolete permissions...`);
+    const deleteIds = permsToDelete.map(p => p.id);
+    await prisma.rolePermission.deleteMany({
+      where: { permissionId: { in: deleteIds } },
+    });
+    await prisma.userPermission.deleteMany({
+      where: { permissionId: { in: deleteIds } },
+    });
+    await prisma.permission.deleteMany({
+      where: { id: { in: deleteIds } },
+    });
+  }
+
+  const descriptions: Record<string, string> = {
+    "admissions:inquiry_desk": "Inquiry Desk - Register and follow-up counselor inquiries",
+    "admissions:document_verification": "Document Verification - Verify applicant documents",
+    "admissions:entrance_exam": "Entrance Exam - Schedule and score entrance tests",
+    "admissions:registrar_desk": "Registrar Desk - Promote shortlisted candidates and collect fees",
+    "admissions:delete": "Delete admissions inquiries or applications records",
+  };
+
   for (const perm of permissions) {
+    const key = `${perm.module}:${perm.action}`;
+    const desc = descriptions[key] || `${perm.action} ${perm.module}`;
     await prisma.permission.upsert({
       where: { module_action: { module: perm.module, action: perm.action } },
-      update: {},
+      update: {
+        description: desc,
+      },
       create: {
         module: perm.module,
         action: perm.action,
-        description: `${perm.action} ${perm.module}`,
+        description: desc,
       },
     });
   }

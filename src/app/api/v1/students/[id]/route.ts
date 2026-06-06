@@ -63,6 +63,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
         motherOccupation: true,
         admissionDate: true,
         status: true,
+        house: true,
+        category: true,
+        leavingDate: true,
+        leavingReason: true,
         createdAt: true,
         updatedAt: true,
         branch: { select: { id: true, name: true } },
@@ -174,7 +178,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       previousSchool, emergencyContact1, emergencyContact2, idType, idNumber,
       guardianName, fatherName, fatherPhone, fatherEmail, fatherOccupation,
       motherName, motherPhone, motherEmail, motherOccupation, admissionDate,
-      branchId, sectionId, status,
+      branchId, sectionId, status, house, category, leavingDate, leavingReason,
     } = parsed.data;
 
     // If changing branch, verify it belongs to org
@@ -255,6 +259,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (status !== undefined) data.status = status;
     if (photoPath !== undefined) data.photo = photoPath;
     if (idDocumentPath !== undefined) data.idDocument = idDocumentPath;
+    if (house !== undefined) data.house = house || null;
+    if (category !== undefined) data.category = category;
+    if (leavingDate !== undefined) data.leavingDate = leavingDate ? new Date(leavingDate) : null;
+    if (leavingReason !== undefined) data.leavingReason = leavingReason || null;
 
     // Handle section change — update or create enrollment
     if (sectionId && sectionId !== "") {

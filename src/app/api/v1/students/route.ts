@@ -41,6 +41,33 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  const classId = url.searchParams.get("classId");
+  const sectionId = url.searchParams.get("sectionId");
+  if (sectionId) {
+    where.enrollments = {
+      some: { sectionId },
+    };
+  } else if (classId) {
+    where.enrollments = {
+      some: { section: { classId } },
+    };
+  }
+
+  const status = url.searchParams.get("status");
+  if (status && status !== "ALL") {
+    where.status = status;
+  }
+
+  const house = url.searchParams.get("house");
+  if (house && house !== "ALL") {
+    where.house = house;
+  }
+
+  const category = url.searchParams.get("category");
+  if (category && category !== "ALL") {
+    where.category = category;
+  }
+
   try {
     const [rows, total] = await Promise.all([
       prisma.student.findMany({
@@ -262,6 +289,8 @@ export async function POST(req: NextRequest) {
           motherEmail: data.motherEmail || null,
           motherOccupation: data.motherOccupation || null,
           admissionDate: data.admissionDate ? new Date(data.admissionDate) : new Date(),
+          house: data.house || null,
+          category: data.category,
         },
         select: {
           id: true,

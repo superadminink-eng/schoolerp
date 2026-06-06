@@ -40,8 +40,11 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
     return NAVIGATION_ITEMS.filter((item) => {
       if ("roles" in item && item.roles === "all") return true;
       if ("permission" in item && item.permission) {
-        const [module, action] = item.permission.split(":");
-        return can(module, action);
+        const permissions = item.permission.split(",");
+        return permissions.some((perm) => {
+          const [module, action] = perm.trim().split(":");
+          return can(module, action);
+        });
       }
       return false;
     }).map(({ label, href, icon }) => ({ label, href, icon }));

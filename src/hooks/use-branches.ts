@@ -30,13 +30,20 @@ export function useBranches(): UseBranchesReturn {
     }
 
     fetch("/api/v1/branches")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (data.success) {
+        if (data && data.success) {
           setBranches(data.data);
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error fetching branches:", err);
+      })
       .finally(() => setIsLoading(false));
   }, [session, status]);
 

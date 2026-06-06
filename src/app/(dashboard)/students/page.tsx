@@ -19,6 +19,7 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+import { Card, CardContent } from "@/components/ui/card";
 
 
 interface StudentRow {
@@ -28,6 +29,8 @@ interface StudentRow {
   admissionNo: string;
   gender: string;
   status: string;
+  house: string | null;
+  category: string;
   dateOfBirth: string;
   admissionDate: string;
   fatherPhone: string | null;
@@ -77,11 +80,67 @@ export default function StudentsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [branchFilter, setBranchFilter] = useState("ALL");
 
+  // Advanced Filters
+  const [classes, setClasses] = useState<any[]>([]);
+  const [classFilter, setClassFilter] = useState("ALL");
+  const [sections, setSections] = useState<any[]>([]);
+  const [sectionFilter, setSectionFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [houseFilter, setHouseFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Derive active branch ID
+  const activeBranchId = branchFilter !== "ALL" 
+    ? branchFilter 
+    : (session?.user?.branchId || "");
+
+  // Load Classes when active branch changes
+  useEffect(() => {
+    if (activeBranchId) {
+      fetch(`/api/v1/classes?branchId=${activeBranchId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            setClasses(data.data);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setClasses([]);
+    }
+    setClassFilter("ALL");
+    setSectionFilter("ALL");
+    setSections([]);
+  }, [activeBranchId]);
+
+  // Load Sections when class changes
+  useEffect(() => {
+    if (classFilter !== "ALL") {
+      fetch(`/api/v1/classes/${classFilter}/sections`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            setSections(data.data);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setSections([]);
+    }
+    setSectionFilter("ALL");
+  }, [classFilter]);
+
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
     params.set("limit", "9999");
     if (branchFilter !== "ALL") params.set("branchId", branchFilter);
+    if (classFilter !== "ALL") params.set("classId", classFilter);
+    if (sectionFilter !== "ALL") params.set("sectionId", sectionFilter);
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (houseFilter !== "ALL") params.set("house", houseFilter);
+    if (categoryFilter !== "ALL") params.set("category", categoryFilter);
 
     try {
       const res = await fetch(`/api/v1/students?${params}`);
@@ -94,7 +153,7 @@ export default function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchFilter]);
+  }, [branchFilter, classFilter, sectionFilter, statusFilter, houseFilter, categoryFilter]);
 
   useEffect(() => {
     fetchStudents();
@@ -247,6 +306,56 @@ export default function StudentsPage() {
       <h1 className="text-headline-md font-semibold text-on-surface mb-6">
         Students
       </h1>
+
+      {/* Bento Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-5 flex items-center gap-4 shadow-sm hover:shadow transition-all duration-300">
+          <div className="p-3.5 bg-blue-50 text-blue-600 rounded-xl">
+            <Icon name="group" size={24} />
+          </div>
+          <div>
+            <div className="text-body-sm text-on-surface-variant font-semibold">Total Students</div>
+            <div className="text-headline-md font-black text-on-surface">{students.length}</div>
+          </div>
+        </div>
+
+        <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-5 flex items-center gap-4 shadow-sm hover:shadow transition-all duration-300">
+          <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl">
+            <Icon name="check_circle" size={24} />
+          </div>
+          <div>
+            <div className="text-body-sm text-on-surface-variant font-semibold">Active</div>
+            <div className="text-headline-md font-black text-on-surface">
+              {students.filter((s) => s.status === "ACTIVE").length}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-5 flex items-center gap-4 shadow-sm hover:shadow transition-all duration-300">
+          <div className="p-3.5 bg-amber-50 text-amber-600 rounded-xl">
+            <Icon name="star" size={24} />
+          </div>
+          <div>
+            <div className="text-body-sm text-on-surface-variant font-semibold">RTE Category</div>
+            <div className="text-headline-md font-black text-on-surface">
+              {students.filter((s) => s.category === "RTE").length}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-5 flex items-center gap-4 shadow-sm hover:shadow transition-all duration-300">
+          <div className="p-3.5 bg-rose-50 text-rose-600 rounded-xl">
+            <Icon name="person_off" size={24} />
+          </div>
+          <div>
+            <div className="text-body-sm text-on-surface-variant font-semibold">Inactive / Dropped</div>
+            <div className="text-headline-md font-black text-on-surface">
+              {students.filter((s) => ["DROPPED", "SUSPENDED"].includes(s.status)).length}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-4">
         {/* Toolbar */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -262,7 +371,7 @@ export default function StudentsPage() {
                 value={branchFilter}
                 onValueChange={setBranchFilter}
               >
-                <SelectTrigger className="min-w-[160px]">
+                <SelectTrigger className="min-w-[160px] bg-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -275,18 +384,138 @@ export default function StudentsPage() {
                 </SelectContent>
               </Select>
             )}
+
+            <Button
+              variant="outlined"
+              icon="tune"
+              onClick={() => setShowFilters(!showFilters)}
+              className={showFilters ? "bg-primary/5 text-primary border-primary/30" : "bg-white"}
+            >
+              Filters
+            </Button>
           </div>
           <PermissionGate module="students" action="create">
-            <Button
-              variant="filled"
-              icon="person_add"
-              onClick={() => router.push("/students/new")}
-              className="hidden md:inline-flex"
-            >
-              Add Student
-            </Button>
+            {isSuperAdmin ? (
+              <Button
+                variant="filled"
+                icon="upload_file"
+                onClick={() => router.push("/students/new")}
+                className="hidden md:inline-flex bg-primary text-white"
+              >
+                Direct Intake / Migration
+              </Button>
+            ) : (
+              <Button
+                variant="tonal"
+                icon="arrow_forward"
+                onClick={() => router.push("/admissions")}
+                className="hidden md:inline-flex"
+              >
+                New Intake / Admission
+              </Button>
+            )}
           </PermissionGate>
         </div>
+
+        {/* Collapsible Advanced Filters Row */}
+        {showFilters && (
+          <Card className="border border-outline-variant/60 bg-slate-50/40 shadow-none p-5 rounded-2xl">
+            <CardContent className="p-0 grid grid-cols-2 md:grid-cols-5 gap-4">
+              {/* Class Filter */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Class</label>
+                <Select value={classFilter} onValueChange={setClassFilter}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="All Classes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Classes</SelectItem>
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Section Filter */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Section</label>
+                <Select
+                  value={sectionFilter}
+                  onValueChange={setSectionFilter}
+                  disabled={classFilter === "ALL"}
+                >
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="All Sections" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Sections</SelectItem>
+                    {sections.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* House Filter */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">House</label>
+                <Select value={houseFilter} onValueChange={setHouseFilter}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Houses</SelectItem>
+                    <SelectItem value="Red">Red</SelectItem>
+                    <SelectItem value="Blue">Blue</SelectItem>
+                    <SelectItem value="Green">Green</SelectItem>
+                    <SelectItem value="Yellow">Yellow</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Category Filter */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Category</label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Categories</SelectItem>
+                    <SelectItem value="GENERAL">General</SelectItem>
+                    <SelectItem value="RTE">RTE</SelectItem>
+                    <SelectItem value="SCHOLARSHIP">Scholarship</SelectItem>
+                    <SelectItem value="STAFF_CHILD">Staff Child</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status Filter */}
+              <div className="space-y-1 col-span-2 md:col-span-1">
+                <label className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Status</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Statuses</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="GRADUATED">Graduated</SelectItem>
+                    <SelectItem value="TRANSFERRED">Transferred</SelectItem>
+                    <SelectItem value="DROPPED">Dropped</SelectItem>
+                    <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Table */}
         <div className="rounded-md border border-outline-variant bg-surface overflow-hidden">
@@ -304,7 +533,11 @@ export default function StudentsPage() {
       </div>
 
       <PermissionGate module="students" action="create">
-        <FAB icon="person_add" onClick={() => router.push("/students/new")} />
+        {isSuperAdmin ? (
+          <FAB icon="upload_file" onClick={() => router.push("/students/new")} />
+        ) : (
+          <FAB icon="arrow_forward" onClick={() => router.push("/admissions")} />
+        )}
       </PermissionGate>
     </div>
   );

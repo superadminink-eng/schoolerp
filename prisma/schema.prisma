@@ -314,6 +314,10 @@ model Student {
   motherOccupation  String?
   admissionDate     DateTime      @default(now())
   status            StudentStatus @default(ACTIVE)
+  house             String?
+  category          StudentCategory @default(GENERAL)
+  leavingDate       DateTime?
+  leavingReason     String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -347,6 +351,14 @@ enum StudentStatus {
   TRANSFERRED
   DROPPED
   SUSPENDED
+}
+
+enum StudentCategory {
+  GENERAL
+  RTE
+  SCHOLARSHIP
+  STAFF_CHILD
+  OTHER
 }
 
 model StudentEnrollment {

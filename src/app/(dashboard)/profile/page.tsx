@@ -39,7 +39,7 @@ const categories = [
     id: "academics",
     label: "Core Academics",
     icon: "school",
-    modules: ["students", "staff", "classes", "subjects", "timetable", "attendance", "exams"],
+    modules: ["admissions", "students", "staff", "classes", "subjects", "timetable", "attendance", "exams"],
   },
   {
     id: "operations",
