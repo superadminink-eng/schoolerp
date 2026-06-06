@@ -105,6 +105,8 @@ export default function AdmissionsPage() {
   const [classFilter, setClassFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"applications" | "inquiries">("applications");
+  const [stageFilter, setStageFilter] = useState<string>("ALL");
+  const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
   const [includeArchives, setIncludeArchives] = useState<boolean>(false); // Hides Admitted/Rejected by default
 
   // Loading states
@@ -309,6 +311,8 @@ export default function AdmissionsPage() {
       }
       // Grade filter
       if (classFilter !== "ALL" && app.class?.id !== classFilter) return false;
+      // Stage filter
+      if (stageFilter !== "ALL" && app.status !== stageFilter) return false;
       // Search text filter
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
@@ -320,7 +324,7 @@ export default function AdmissionsPage() {
         (app.motherName || "").toLowerCase().includes(q)
       );
     });
-  }, [applications, classFilter, searchQuery, includeArchives]);
+  }, [applications, classFilter, searchQuery, includeArchives, stageFilter]);
 
   const filteredInquiries = useMemo(() => {
     return inquiries.filter((inq) => {
@@ -339,12 +343,254 @@ export default function AdmissionsPage() {
   const stats = useMemo(() => {
     const activeApps = applications.filter((a) => a.status !== "ADMITTED" && a.status !== "REJECTED" && a.status !== "WITHDRAWN");
     return {
+      inquiryCount: inquiries.length,
       activeCount: activeApps.length,
-      pendingVerify: activeApps.filter((a) => a.status === "SUBMITTED" || a.status === "DOCUMENT_VERIFICATION").length,
+      submittedCount: activeApps.filter((a) => a.status === "SUBMITTED").length,
+      pendingVerify: activeApps.filter((a) => a.status === "DOCUMENT_VERIFICATION").length,
       awaitingExam: activeApps.filter((a) => a.status === "TEST_SCHEDULED").length,
       readyToEnroll: activeApps.filter((a) => a.status === "SHORTLISTED").length,
     };
-  }, [applications]);
+  }, [applications, inquiries]);
+
+  const isDatabaseEmpty = applications.length === 0 && inquiries.length === 0;
+
+  // Filter actions
+  const handleStageClick = (stage: "inquiries" | "SUBMITTED" | "DOCUMENT_VERIFICATION" | "TEST_SCHEDULED" | "SHORTLISTED") => {
+    if (stage === "inquiries") {
+      if (activeTab === "inquiries") {
+        setActiveTab("applications");
+        setStageFilter("ALL");
+      } else {
+        setActiveTab("inquiries");
+        setStageFilter("ALL");
+      }
+    } else {
+      setActiveTab("applications");
+      if (stageFilter === stage) {
+        setStageFilter("ALL");
+      } else {
+        setStageFilter(stage);
+      }
+    }
+  };
+
+  const hasActiveFilters = stageFilter !== "ALL" || classFilter !== "ALL" || searchQuery !== "";
+  const handleResetFilters = () => {
+    setStageFilter("ALL");
+    setClassFilter("ALL");
+    setSearchQuery("");
+  };
+
+  // Demo Sandbox Pipeline Generator
+  const handleGenerateDemoData = async () => {
+    if (classes.length === 0) {
+      snackbar.show("कृपया आधी Classes तयार करा, जेणेकरून डमी डेटा तयार करता येईल.", "warning");
+      return;
+    }
+    if (!branchFilter || !activeAcademicYearId) {
+      snackbar.show("Branch किंवा Academic Year कॉन्फिगरेशन सापडले नाही.", "error");
+      return;
+    }
+
+    setIsGeneratingDemo(true);
+    snackbar.show("डमी डेटा पाईपलाईन तयार होत आहे...", "info");
+
+    try {
+      const targetClassId = classes[0].id;
+
+      // 1. Create Counselor Inquiry
+      await fetch("/api/v1/admissions/inquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: "Aditya Kulkarni",
+          dateOfBirth: "2015-08-12",
+          gender: "MALE",
+          classAppliedId: targetClassId,
+          parentName: "Sanjay Kulkarni",
+          parentPhone: "9876543210",
+          parentEmail: "sanjay.kulkarni@example.com",
+          source: "WALK_IN",
+          notes: "Interested in Class 3 admission. Needs school bus facility.",
+          branchId: branchFilter,
+          academicYearId: activeAcademicYearId,
+        }),
+      });
+
+      // 2. Create Application 1 (Rohan Deshmukh - Submitted)
+      await fetch("/api/v1/admissions/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: branchFilter,
+          academicYearId: activeAcademicYearId,
+          classId: targetClassId,
+          firstName: "Rohan",
+          lastName: "Deshmukh",
+          dateOfBirth: "2014-04-20",
+          gender: "MALE",
+          bloodGroup: "O+",
+          address: "402, Shivajinagar, Pune",
+          pincode: "411005",
+          emergencyContact: "9812345678",
+          fatherName: "Anand Deshmukh",
+          fatherPhone: "9812345678",
+          fatherEmail: "anand.d@example.com",
+          fatherOccupation: "Business",
+          motherName: "Sunita Deshmukh",
+          motherPhone: "9823456789",
+          motherEmail: "sunita.d@example.com",
+          motherOccupation: "Teacher",
+        }),
+      });
+
+      // 3. Create Application 2 (Aarav Patel - Document Verification)
+      const resApp2 = await fetch("/api/v1/admissions/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: branchFilter,
+          academicYearId: activeAcademicYearId,
+          classId: targetClassId,
+          firstName: "Aarav",
+          lastName: "Patel",
+          dateOfBirth: "2015-01-15",
+          gender: "MALE",
+          bloodGroup: "A+",
+          address: "B-12, Aundh, Pune",
+          pincode: "411007",
+          emergencyContact: "9833445566",
+          fatherName: "Rajesh Patel",
+          fatherPhone: "9833445566",
+          fatherEmail: "rajesh.patel@example.com",
+          fatherOccupation: "Consultant",
+          motherName: "Kiran Patel",
+          motherPhone: "9844556677",
+          motherEmail: "kiran.patel@example.com",
+          motherOccupation: "Designer",
+        }),
+      });
+      const app2Data = await resApp2.json();
+      if (app2Data.success) {
+        await fetch(`/api/v1/admissions/applications/${app2Data.data.id}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            documents: [
+              { id: "mock-dob", status: "PENDING", remarks: "Birth Certificate uploaded", documentType: "Birth Certificate" },
+              { id: "mock-id", status: "PENDING", remarks: "Aadhaar Card uploaded", documentType: "Aadhaar Card" },
+            ],
+            verificationNotes: "Documents uploaded, pending clerk review",
+            applicationStatus: "DOCUMENT_VERIFICATION",
+          }),
+        });
+      }
+
+      // 4. Create Application 3 (Isha Joshi - Entrance Test)
+      const resApp3 = await fetch("/api/v1/admissions/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: branchFilter,
+          academicYearId: activeAcademicYearId,
+          classId: targetClassId,
+          firstName: "Isha",
+          lastName: "Joshi",
+          dateOfBirth: "2014-11-30",
+          gender: "FEMALE",
+          bloodGroup: "B+",
+          address: "Flat 203, Kothrud, Pune",
+          pincode: "411038",
+          emergencyContact: "9855667788",
+          fatherName: "Milind Joshi",
+          fatherPhone: "9855667788",
+          fatherEmail: "milind.j@example.com",
+          fatherOccupation: "Engineer",
+          motherName: "Anjali Joshi",
+          motherPhone: "9866778899",
+          motherEmail: "anjali.j@example.com",
+          motherOccupation: "Manager",
+        }),
+      });
+      const app3Data = await resApp3.json();
+      if (app3Data.success) {
+        await fetch(`/api/v1/admissions/applications/${app3Data.data.id}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            documents: [
+              { id: "mock-dob", status: "VERIFIED", remarks: "Verified by Clerk", documentType: "Birth Certificate" },
+              { id: "mock-id", status: "VERIFIED", remarks: "Verified by Clerk", documentType: "Aadhaar Card" },
+            ],
+            verificationNotes: "All documents verified successfully. Entrance test scheduled.",
+            applicationStatus: "TEST_SCHEDULED",
+          }),
+        });
+      }
+
+      // 5. Create Application 4 (Ananya Shinde - Shortlisted)
+      const resApp4 = await fetch("/api/v1/admissions/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: branchFilter,
+          academicYearId: activeAcademicYearId,
+          classId: targetClassId,
+          firstName: "Ananya",
+          lastName: "Shinde",
+          dateOfBirth: "2015-06-05",
+          gender: "FEMALE",
+          bloodGroup: "AB+",
+          address: "501, Baner Road, Pune",
+          pincode: "411045",
+          emergencyContact: "9877889900",
+          fatherName: "Prasad Shinde",
+          fatherPhone: "9877889900",
+          fatherEmail: "prasad.s@example.com",
+          fatherOccupation: "Doctor",
+          motherName: "Seema Shinde",
+          motherPhone: "9888990011",
+          motherEmail: "seema.s@example.com",
+          motherOccupation: "Professor",
+        }),
+      });
+      const app4Data = await resApp4.json();
+      if (app4Data.success) {
+        await fetch(`/api/v1/admissions/applications/${app4Data.data.id}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            documents: [
+              { id: "mock-dob", status: "VERIFIED", remarks: "Verified by Clerk", documentType: "Birth Certificate" },
+              { id: "mock-id", status: "VERIFIED", remarks: "Verified by Clerk", documentType: "Aadhaar Card" },
+            ],
+            verificationNotes: "Documents verified. Ready for exam.",
+            applicationStatus: "TEST_SCHEDULED",
+          }),
+        });
+        await fetch(`/api/v1/admissions/applications/${app4Data.data.id}/schedule-test`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            examDate: new Date().toISOString().split("T")[0],
+            maxMarks: 100,
+            marksObtained: 88,
+            verdict: "PASS",
+            notes: "Excellent performance in aptitude and communication. Highly recommended.",
+            applicationStatus: "SHORTLISTED",
+          }),
+        });
+      }
+
+      snackbar.show("डमी पाईपलाईन यशस्वीरित्या तयार झाली आहे!", "success");
+      await fetchDashboardData();
+    } catch (err) {
+      console.error(err);
+      snackbar.show("डमी डेटा तयार करताना त्रुटी आली.", "error");
+    } finally {
+      setIsGeneratingDemo(false);
+    }
+  };
 
   // Open candidate details in Unified Workspace panel
   const handleOpenWorkspace = async (app: Application) => {
@@ -648,59 +894,116 @@ export default function AdmissionsPage() {
         )}
       </div>
 
-      {/* 2. Silicon Valley Style KPI Aggregate Stats Widgets */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
-        <Card variant="outlined" className="bg-gradient-to-br from-white to-sky-50/20 border-sky-100">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-sky-100 text-sky-700">
-              <Icon name="app_registration" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] text-slate-400 font-bold uppercase">Active Applicants</span>
-              <span className="text-headline-sm font-bold text-slate-800">{stats.activeCount}</span>
-            </div>
-          </CardContent>
-        </Card>
+      {/* 2. Connected Funnel Pipeline Stepper (Stats & Filter in one) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
+        {/* Step 1: Counselor Inquiries */}
+        <button
+          onClick={() => handleStageClick("inquiries")}
+          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-sky-50/20 border-sky-100 ${
+            activeTab === "inquiries"
+              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+              : "hover:border-sky-300 hover:shadow-elevation-1"
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl bg-sky-100 text-sky-700 transition-colors ${
+            activeTab === "inquiries" ? "bg-primary text-white" : ""
+          }`}>
+            <Icon name="group_add" size={18} />
+          </div>
+          <div className="overflow-hidden">
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 1: Inquiry</span>
+            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.inquiryCount}</span>
+            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Counselor logs</span>
+          </div>
+        </button>
 
-        <Card variant="outlined" className="bg-gradient-to-br from-white to-amber-50/20 border-amber-100">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-amber-100 text-amber-700">
-              <Icon name="check_circle" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] text-slate-400 font-bold uppercase">Pending Verification</span>
-              <span className="text-headline-sm font-bold text-slate-800">{stats.pendingVerify}</span>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Step 2: Submitted Applications */}
+        <button
+          onClick={() => handleStageClick("SUBMITTED")}
+          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-blue-50/20 border-blue-100 ${
+            activeTab === "applications" && stageFilter === "SUBMITTED"
+              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+              : "hover:border-blue-300 hover:shadow-elevation-1"
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl bg-blue-100 text-blue-700 transition-colors ${
+            activeTab === "applications" && stageFilter === "SUBMITTED" ? "bg-primary text-white" : ""
+          }`}>
+            <Icon name="app_registration" size={18} />
+          </div>
+          <div className="overflow-hidden">
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 2: Submit</span>
+            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.submittedCount}</span>
+            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">New applications</span>
+          </div>
+        </button>
 
-        <Card variant="outlined" className="bg-gradient-to-br from-white to-purple-50/20 border-purple-100">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-purple-100 text-purple-700">
-              <Icon name="event" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] text-slate-400 font-bold uppercase">Awaiting Entrance Exam</span>
-              <span className="text-headline-sm font-bold text-slate-800">{stats.awaitingExam}</span>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Step 3: Document Verification */}
+        <button
+          onClick={() => handleStageClick("DOCUMENT_VERIFICATION")}
+          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-amber-50/20 border-amber-100 ${
+            activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION"
+              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+              : "hover:border-amber-300 hover:shadow-elevation-1"
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl bg-amber-100 text-amber-700 transition-colors ${
+            activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION" ? "bg-primary text-white" : ""
+          }`}>
+            <Icon name="check_circle" size={18} />
+          </div>
+          <div className="overflow-hidden">
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 3: Verify Docs</span>
+            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.pendingVerify}</span>
+            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Awaiting checks</span>
+          </div>
+        </button>
 
-        <Card variant="outlined" className="bg-gradient-to-br from-white to-teal-50/20 border-teal-100">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-teal-100 text-teal-700">
-              <Icon name="star" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] text-slate-400 font-bold uppercase">Ready to Promote</span>
-              <span className="text-headline-sm font-bold text-slate-800">{stats.readyToEnroll}</span>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Step 4: Entrance Test */}
+        <button
+          onClick={() => handleStageClick("TEST_SCHEDULED")}
+          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-purple-50/20 border-purple-100 ${
+            activeTab === "applications" && stageFilter === "TEST_SCHEDULED"
+              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+              : "hover:border-purple-300 hover:shadow-elevation-1"
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl bg-purple-100 text-purple-700 transition-colors ${
+            activeTab === "applications" && stageFilter === "TEST_SCHEDULED" ? "bg-primary text-white" : ""
+          }`}>
+            <Icon name="event" size={18} />
+          </div>
+          <div className="overflow-hidden">
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 4: Entrance Exam</span>
+            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.awaitingExam}</span>
+            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Grades & interviews</span>
+          </div>
+        </button>
+
+        {/* Step 5: Shortlist/Enroll */}
+        <button
+          onClick={() => handleStageClick("SHORTLISTED")}
+          className={`text-left p-3.5 border rounded-2xl transition-all duration-200 group flex items-start gap-3 bg-gradient-to-br from-white to-teal-50/20 border-teal-100 ${
+            activeTab === "applications" && stageFilter === "SHORTLISTED"
+              ? "ring-2 ring-primary border-primary bg-primary/5 shadow-elevation-2"
+              : "hover:border-teal-300 hover:shadow-elevation-1"
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl bg-teal-100 text-teal-700 transition-colors ${
+            activeTab === "applications" && stageFilter === "SHORTLISTED" ? "bg-primary text-white" : ""
+          }`}>
+            <Icon name="star" size={18} />
+          </div>
+          <div className="overflow-hidden">
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Step 5: Shortlisted</span>
+            <span className="block text-headline-sm font-extrabold text-slate-800 mt-0.5">{stats.readyToEnroll}</span>
+            <span className="text-[10px] text-slate-500 block truncate group-hover:text-slate-700">Ready to promote</span>
+          </div>
+        </button>
       </div>
 
       {/* 3. Filtering Desk Panel */}
-      <div className="flex flex-col space-y-4 p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/60 shadow-elevation-1 shrink-0 md:flex-row md:items-center md:space-y-0 md:justify-between gap-4">
+      <div className="flex flex-col space-y-4 p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/60 shadow-elevation-1 shrink-0 md:flex-row md:items-end md:space-y-0 md:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4 flex-1">
           {/* Branch filter (superadmin scope) */}
           <div className="w-52 shrink-0">
@@ -740,9 +1043,10 @@ export default function AdmissionsPage() {
           )}
 
           {/* Search bar */}
-          <div className="flex-1 min-w-[240px] pt-5">
+          <div className="flex-1 min-w-[240px]">
+            <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Search Candidate</label>
             <SearchBar
-              placeholder="Search candidate name, application ID, or parents details..."
+              placeholder="Search candidate name, application ID..."
               value={searchQuery}
               onChange={setSearchQuery}
             />
@@ -750,7 +1054,7 @@ export default function AdmissionsPage() {
         </div>
 
         {/* Toggle include archives and Actions */}
-        <div className="flex items-center gap-4 self-end md:self-auto shrink-0">
+        <div className="flex items-center gap-3 self-end md:self-auto shrink-0">
           {activeTab === "applications" && (
             <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-slate-600 bg-slate-100 border px-3 py-2.5 rounded-xl hover:bg-slate-200 transition-colors">
               <input
@@ -759,7 +1063,7 @@ export default function AdmissionsPage() {
                 onChange={(e) => setIncludeArchives(e.target.checked)}
                 className="rounded text-primary focus:ring-primary w-4 h-4"
               />
-              Show Enrolled/Rejected Archives
+              Show Archives
             </label>
           )}
 
@@ -795,28 +1099,55 @@ export default function AdmissionsPage() {
         </div>
       </div>
 
-      {/* 4. Tab Navigation Desks */}
-      <div className="flex items-center border-b border-outline-variant/60 shrink-0">
-        <button
-          onClick={() => setActiveTab("applications")}
-          className={`px-5 py-3 text-sm font-bold border-b-2 transition-colors ${
-            activeTab === "applications"
-              ? "border-primary text-primary"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          Applications Desk ({filteredApplications.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("inquiries")}
-          className={`px-5 py-3 text-sm font-bold border-b-2 transition-colors ${
-            activeTab === "inquiries"
-              ? "border-primary text-primary"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          Counselor Inquiries ({filteredInquiries.length})
-        </button>
+      {/* 4. Tab Navigation Desks (Segmented Control style) */}
+      <div className="flex items-center justify-between border-b border-outline-variant/40 pb-3 shrink-0">
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl border">
+          <button
+            onClick={() => {
+              setActiveTab("applications");
+              setStageFilter("ALL");
+            }}
+            className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 ${
+              activeTab === "applications" && stageFilter === "ALL"
+                ? "bg-white text-primary shadow-sm ring-1 ring-slate-200/50"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Icon name="app_registration" size={16} />
+            Applications Desk ({filteredApplications.length})
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("inquiries");
+              setStageFilter("ALL");
+            }}
+            className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 ${
+              activeTab === "inquiries"
+                ? "bg-white text-primary shadow-sm ring-1 ring-slate-200/50"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Icon name="group_add" size={16} />
+            Counselor Inquiries ({filteredInquiries.length})
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {stageFilter !== "ALL" && (
+            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1.5 animate-pulse">
+              Active Stage: {statusLabels[stageFilter] || stageFilter}
+              <button onClick={() => setStageFilter("ALL")} className="hover:text-red-600 font-bold p-0.5">×</button>
+            </span>
+          )}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+            >
+              Reset Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 5. Main Desks Lists */}
@@ -824,10 +1155,115 @@ export default function AdmissionsPage() {
         {activeTab === "applications" ? (
           <div className="h-full overflow-y-auto bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6">
             {filteredApplications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40">
-                <Icon name="people" size={48} className="mb-2" />
-                <p className="text-body-lg">No active applicants matching filters.</p>
-              </div>
+              isDatabaseEmpty ? (
+                <div className="max-w-4xl mx-auto py-10 space-y-8">
+                  {/* Onboarding welcome card */}
+                  <div className="text-center space-y-2 p-6 bg-gradient-to-br from-primary/10 to-teal-50/50 border border-primary/10 rounded-3xl shadow-sm">
+                    <span className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary text-white mb-2 shadow-elevation-1">
+                      <Icon name="school" size={32} />
+                    </span>
+                    <h2 className="text-headline-sm font-extrabold text-slate-800">
+                      Welcome to Admissions Overview Control Desk
+                    </h2>
+                    <p className="text-body-md text-slate-600 max-w-xl mx-auto">
+                      Manage prospective student inquiries, documents verification, aptitude entrance testing, and official SIS enrollments in a single, visual workspace.
+                    </p>
+                  </div>
+
+                  {/* Operational Steps Map */}
+                  <div>
+                    <h3 className="text-title-sm font-bold text-slate-400 uppercase tracking-wide text-center mb-5">
+                      Understanding the School Intake Funnel
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                      {/* Step 1 */}
+                      <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2 relative group hover:border-primary/20 transition-all">
+                        <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center font-bold text-sm">
+                          1
+                        </div>
+                        <h4 className="font-bold text-xs text-slate-800">Inquiry Intake</h4>
+                        <p className="text-[11px] text-slate-400">Log walk-ins or calls into prospective lead database.</p>
+                      </div>
+
+                      {/* Step 2 */}
+                      <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2 relative group hover:border-primary/20 transition-all">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">
+                          2
+                        </div>
+                        <h4 className="font-bold text-xs text-slate-800">Submit Application</h4>
+                        <p className="text-[11px] text-slate-400">Fill standard intake application with candidate & family details.</p>
+                      </div>
+
+                      {/* Step 3 */}
+                      <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2 relative group hover:border-primary/20 transition-all">
+                        <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-sm">
+                          3
+                        </div>
+                        <h4 className="font-bold text-xs text-slate-800">Verify Checklist</h4>
+                        <p className="text-[11px] text-slate-400">Review student birth certificates, Aadhaar IDs, and mark sheets.</p>
+                      </div>
+
+                      {/* Step 4 */}
+                      <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2 relative group hover:border-primary/20 transition-all">
+                        <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
+                          4
+                        </div>
+                        <h4 className="font-bold text-xs text-slate-800">Entrance Grading</h4>
+                        <p className="text-[11px] text-slate-400">Score entrance tests & schedule interviews (can be disabled).</p>
+                      </div>
+
+                      {/* Step 5 */}
+                      <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2 relative group hover:border-primary/20 transition-all">
+                        <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-bold text-sm">
+                          5
+                        </div>
+                        <h4 className="font-bold text-xs text-slate-800">Promote to SIS</h4>
+                        <p className="text-[11px] text-slate-400">Section class, issue auto-invoice, and promote to student.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sandbox generator callout */}
+                  <div className="p-6 bg-slate-50 border border-dashed rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                    <div className="text-center md:text-left space-y-1">
+                      <h4 className="font-bold text-sm text-slate-800 flex items-center gap-1.5 justify-center md:justify-start">
+                        <Icon name="sparkles" size={16} className="text-primary" />
+                        Explore with Sandbox Demo Data
+                      </h4>
+                      <p className="text-xs text-slate-500 max-w-md">
+                        Click the button below to generate 4 mock candidate pipeline records at various stages (submitted, verification, test, and shortlist).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="filled"
+                      icon="cpu"
+                      loading={isGeneratingDemo}
+                      className="bg-primary text-white shrink-0 shadow-elevation-1 py-2.5 px-5"
+                      onClick={handleGenerateDemoData}
+                    >
+                      {isGeneratingDemo ? "Creating Demo..." : "⚡ Generate Demo Pipeline"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40 space-y-3">
+                  <Icon name="search_off" size={48} className="text-slate-300" />
+                  <div className="text-center">
+                    <p className="text-body-lg font-bold text-slate-600">No candidates match active filters.</p>
+                    <p className="text-xs text-slate-400 mt-1">Try resetting search query, changing grade filter or clearing the stage.</p>
+                  </div>
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    icon="rotate_ccw"
+                    className="text-primary border-primary/30 mt-2"
+                    onClick={handleResetFilters}
+                  >
+                    Clear Search & Filters
+                  </Button>
+                </div>
+              )
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -938,10 +1374,32 @@ export default function AdmissionsPage() {
             </div>
 
             {filteredInquiries.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40">
-                <Icon name="people" size={48} className="mb-2" />
-                <p className="text-body-lg">No inquiries matching filter logs.</p>
-              </div>
+              isDatabaseEmpty ? (
+                <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant/40 space-y-3">
+                  <Icon name="group_add" size={48} className="text-slate-300 animate-bounce" />
+                  <div className="text-center">
+                    <p className="text-body-lg font-bold text-slate-600">No prospect inquiries registered.</p>
+                    <p className="text-xs text-slate-400 mt-1">Click "New Inquiry" or "Generate Demo Pipeline" to populate this workspace.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant/40 space-y-3">
+                  <Icon name="search_off" size={48} className="text-slate-300" />
+                  <div className="text-center">
+                    <p className="text-body-lg font-bold text-slate-600">No inquiries match active filters.</p>
+                    <p className="text-xs text-slate-400 mt-1">Try resetting search query or clearing the filters.</p>
+                  </div>
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    icon="rotate_ccw"
+                    className="text-primary border-primary/30 mt-2"
+                    onClick={handleResetFilters}
+                  >
+                    Clear Search & Filters
+                  </Button>
+                </div>
+              )
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -1558,8 +2016,37 @@ export default function AdmissionsPage() {
       {/* A. Inquiry Creation Modal */}
       <Dialog open={inquiryModalOpen} onOpenChange={setInquiryModalOpen}>
         <DialogContent className="max-w-xl">
-          <DialogTitle>Register Counselor Inquiry</DialogTitle>
-          <DialogDescription>Log walk-in counseling or web inquiry prospect details.</DialogDescription>
+          <div className="flex justify-between items-start border-b pb-3 mb-4">
+            <div>
+              <DialogTitle>Register Counselor Inquiry</DialogTitle>
+              <DialogDescription>Log walk-in counseling or web inquiry prospect details.</DialogDescription>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (classes.length > 0) {
+                  setInquiryForm({
+                    studentName: "Omkar Ranade",
+                    dateOfBirth: "2016-05-14",
+                    gender: "MALE",
+                    classAppliedId: classes[0].id,
+                    parentName: "Vijay Ranade",
+                    parentPhone: "9876543211",
+                    parentEmail: "vijay.ranade@example.com",
+                    source: "WALK_IN",
+                    notes: "Looking for immediate admission. Good academic record.",
+                  });
+                  snackbar.show("Demo inquiry data filled!", "success");
+                } else {
+                  snackbar.show("No classes found to pre-fill.", "warning");
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-all shrink-0"
+            >
+              <Icon name="sparkles" size={14} />
+              Autofill
+            </button>
+          </div>
 
           <form onSubmit={handleCreateInquiry} className="mt-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -1657,8 +2144,45 @@ export default function AdmissionsPage() {
       {/* B. Formal Application Submission Modal */}
       <Dialog open={applicationModalOpen} onOpenChange={setApplicationModalOpen}>
         <DialogContent className="max-w-2xl overflow-y-auto max-h-[85vh]">
-          <DialogTitle>Formal Intake Application</DialogTitle>
-          <DialogDescription>Submit complete candidate application form data.</DialogDescription>
+          <div className="flex justify-between items-start border-b pb-3 mb-4">
+            <div>
+              <DialogTitle>Formal Intake Application</DialogTitle>
+              <DialogDescription>Submit complete candidate application form data.</DialogDescription>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (classes.length > 0) {
+                  setAppForm({
+                    firstName: "Isha",
+                    lastName: "Kulkarni",
+                    dateOfBirth: "2015-09-18",
+                    gender: "FEMALE",
+                    bloodGroup: "A+",
+                    address: "Flat 101, Shanti Niketan, Kothrud, Pune",
+                    pincode: "411038",
+                    emergencyContact: "9822334455",
+                    fatherName: "Prasanna Kulkarni",
+                    fatherPhone: "9822334455",
+                    fatherEmail: "prasanna.k@example.com",
+                    fatherOccupation: "Software Engineer",
+                    motherName: "Rashmi Kulkarni",
+                    motherPhone: "9855667788",
+                    motherEmail: "rashmi.k@example.com",
+                    motherOccupation: "Doctor",
+                    classId: classes[0].id,
+                  });
+                  snackbar.show("Demo application data filled!", "success");
+                } else {
+                  snackbar.show("No classes found to pre-fill.", "warning");
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-all shrink-0"
+            >
+              <Icon name="sparkles" size={14} />
+              Autofill
+            </button>
+          </div>
 
           <form onSubmit={handleCreateApplication} className="mt-4 space-y-5">
             <h4 className="font-bold border-b pb-1 text-primary text-xs">1. Applied Grade</h4>
