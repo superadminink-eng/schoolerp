@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
@@ -96,6 +96,48 @@ interface Inquiry {
   source: string;
   classApplied?: { id: string; name: string } | null;
   followUps?: FollowUp[];
+}
+
+interface OutlinedSelectProps {
+  label: string;
+  value: string;
+  onValueChange: (value: any) => void;
+  children: ReactNode;
+  placeholder?: string;
+  required?: boolean;
+}
+
+function OutlinedSelect({ label, value, onValueChange, children, placeholder, required }: OutlinedSelectProps) {
+  return (
+    <div className="relative w-full">
+      <div className="relative flex items-center h-[56px] rounded-[8px] group bg-surface-container-lowest">
+        <fieldset className="absolute inset-0 m-0 px-2 pointer-events-none rounded-[8px] border border-outline group-focus-within:border-2 group-focus-within:border-primary">
+          <legend className="block float-none overflow-hidden invisible text-[12px] leading-none max-w-full px-1.5 h-3">
+            <span className="opacity-0">
+              {label}
+              {required && " *"}
+            </span>
+          </legend>
+        </fieldset>
+        
+        <div className="relative flex-1 h-full flex items-center">
+          <label className="absolute pointer-events-none z-10 text-on-surface-variant top-[-9px] text-[12px] leading-4 left-1 px-1 bg-surface-container-lowest font-medium group-focus-within:text-primary">
+            {label}
+            {required && " *"}
+          </label>
+          
+          <Select value={value} onValueChange={onValueChange}>
+            <SelectTrigger className="w-full h-full border-none bg-transparent hover:bg-transparent focus:ring-0 focus:border-none shadow-none px-4 text-[16px] text-on-surface outline-none">
+              <SelectValue placeholder={placeholder} />
+            </SelectTrigger>
+            <SelectContent>
+              {children}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AdmissionsPage() {
@@ -2143,24 +2185,19 @@ export default function AdmissionsPage() {
 
                         <form onSubmit={handlePromote} className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Section Assignment</label>
-                              <Select
-                                value={promoteForm.sectionId}
-                                onValueChange={(val) => setPromoteForm({ ...promoteForm, sectionId: val })}
-                              >
-                                <SelectTrigger fullWidth>
-                                  <SelectValue placeholder="Select section" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {classSections.map((sec) => (
-                                    <SelectItem key={sec.id} value={sec.id}>
-                                      {sec.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                            <OutlinedSelect
+                              label="Section Assignment"
+                              value={promoteForm.sectionId}
+                              onValueChange={(val) => setPromoteForm({ ...promoteForm, sectionId: val })}
+                              placeholder="Select section"
+                              required
+                            >
+                              {classSections.map((sec) => (
+                                <SelectItem key={sec.id} value={sec.id}>
+                                  {sec.name}
+                                </SelectItem>
+                              ))}
+                            </OutlinedSelect>
 
                             <TextField
                               label="Roll Number (Optional)"
@@ -2195,24 +2232,18 @@ export default function AdmissionsPage() {
 
                           {promoteForm.amountPaid > 0 && (
                             <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Payment Mode</label>
-                                <Select
-                                  value={promoteForm.paymentMethod}
-                                  onValueChange={(val: any) => setPromoteForm({ ...promoteForm, paymentMethod: val })}
-                                >
-                                  <SelectTrigger fullWidth>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="CASH">Cash</SelectItem>
-                                    <SelectItem value="UPI">UPI</SelectItem>
-                                    <SelectItem value="ONLINE">Online Netbanking</SelectItem>
-                                    <SelectItem value="CHEQUE">Cheque</SelectItem>
-                                    <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                              <OutlinedSelect
+                                label="Payment Mode"
+                                value={promoteForm.paymentMethod}
+                                onValueChange={(val: any) => setPromoteForm({ ...promoteForm, paymentMethod: val })}
+                                required
+                              >
+                                <SelectItem value="CASH">Cash</SelectItem>
+                                <SelectItem value="UPI">UPI</SelectItem>
+                                <SelectItem value="ONLINE">Online Netbanking</SelectItem>
+                                <SelectItem value="CHEQUE">Cheque</SelectItem>
+                                <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                              </OutlinedSelect>
                               <TextField
                                 label="Transaction ID / Receipt No"
                                 value={promoteForm.transactionId}
@@ -2362,38 +2393,30 @@ export default function AdmissionsPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Gender</label>
-                <Select value={inquiryForm.gender} onValueChange={(val) => setInquiryForm({ ...inquiryForm, gender: val })}>
-                  <SelectTrigger fullWidth>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MALE">Male</SelectItem>
-                    <SelectItem value="FEMALE">Female</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <OutlinedSelect
+                label="Gender"
+                value={inquiryForm.gender}
+                onValueChange={(val) => setInquiryForm({ ...inquiryForm, gender: val })}
+                required
+              >
+                <SelectItem value="MALE">Male</SelectItem>
+                <SelectItem value="FEMALE">Female</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </OutlinedSelect>
 
-              <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Grade Applied</label>
-                <Select
-                  value={inquiryForm.classAppliedId}
-                  onValueChange={(val) => setInquiryForm({ ...inquiryForm, classAppliedId: val })}
-                >
-                  <SelectTrigger fullWidth>
-                    <SelectValue placeholder="Select class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classes.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <OutlinedSelect
+                label="Grade Applied"
+                value={inquiryForm.classAppliedId}
+                onValueChange={(val) => setInquiryForm({ ...inquiryForm, classAppliedId: val })}
+                placeholder="Select class"
+                required
+              >
+                {classes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </OutlinedSelect>
             </div>
 
             <TextField
@@ -2483,21 +2506,19 @@ export default function AdmissionsPage() {
 
           <form onSubmit={handleCreateApplication} className="mt-4 space-y-5">
             <h4 className="font-bold border-b pb-1 text-primary text-xs">1. Applied Grade</h4>
-            <div>
-              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Grade</label>
-              <Select value={appForm.classId} onValueChange={(val) => setAppForm({ ...appForm, classId: val })}>
-                <SelectTrigger fullWidth>
-                  <SelectValue placeholder="Select class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <OutlinedSelect
+              label="Grade"
+              value={appForm.classId}
+              onValueChange={(val) => setAppForm({ ...appForm, classId: val })}
+              placeholder="Select class"
+              required
+            >
+              {classes.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </OutlinedSelect>
 
             <h4 className="font-bold border-b pb-1 text-primary text-xs">2. Applicant Details</h4>
             <div className="grid grid-cols-2 gap-4">
@@ -2523,19 +2544,16 @@ export default function AdmissionsPage() {
                 onChange={(e) => setAppForm({ ...appForm, dateOfBirth: e.target.value })}
                 required
               />
-              <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Gender</label>
-                <Select value={appForm.gender} onValueChange={(val) => setAppForm({ ...appForm, gender: val })}>
-                  <SelectTrigger fullWidth>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MALE">Male</SelectItem>
-                    <SelectItem value="FEMALE">Female</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <OutlinedSelect
+                label="Gender"
+                value={appForm.gender}
+                onValueChange={(val) => setAppForm({ ...appForm, gender: val })}
+                required
+              >
+                <SelectItem value="MALE">Male</SelectItem>
+                <SelectItem value="FEMALE">Female</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </OutlinedSelect>
               <TextField
                 label="Blood Group"
                 value={appForm.bloodGroup}
@@ -2765,23 +2783,17 @@ export default function AdmissionsPage() {
                             />
 
                             <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Status Reached</label>
-                                <Select
-                                  value={followUpForm.statusReached}
-                                  onValueChange={(val: any) => setFollowUpForm({ ...followUpForm, statusReached: val })}
-                                >
-                                  <SelectTrigger fullWidth>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="INQUIRY">Inquiry</SelectItem>
-                                    <SelectItem value="CONTACTED">Contacted</SelectItem>
-                                    <SelectItem value="VISITED">Visited</SelectItem>
-                                    <SelectItem value="CLOSED">Closed (Archived)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                              <OutlinedSelect
+                                label="Status Reached"
+                                value={followUpForm.statusReached}
+                                onValueChange={(val: any) => setFollowUpForm({ ...followUpForm, statusReached: val })}
+                                required
+                              >
+                                <SelectItem value="INQUIRY">Inquiry</SelectItem>
+                                <SelectItem value="CONTACTED">Contacted</SelectItem>
+                                <SelectItem value="VISITED">Visited</SelectItem>
+                                <SelectItem value="CLOSED">Closed (Archived)</SelectItem>
+                              </OutlinedSelect>
 
                               <TextField
                                 label="Next Follow-up Date (Optional)"
