@@ -122,6 +122,7 @@ export default function AdmissionsPage() {
   const [stageFilter, setStageFilter] = useState<string>("ALL");
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
   const [includeArchives, setIncludeArchives] = useState<boolean>(false); // Hides Admitted/Rejected by default
+  const [includeAppliedInquiries, setIncludeAppliedInquiries] = useState<boolean>(false);
 
   // Inquiry Workspace controllers
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
@@ -160,6 +161,7 @@ export default function AdmissionsPage() {
   });
 
   const [appForm, setAppForm] = useState({
+    inquiryId: "",
     firstName: "",
     lastName: "",
     dateOfBirth: "",
@@ -241,6 +243,9 @@ export default function AdmissionsPage() {
       const savedStage = localStorage.getItem("adm_stageFilter");
       if (savedStage) setStageFilter(savedStage);
 
+      const savedApplied = localStorage.getItem("adm_includeAppliedInquiries");
+      if (savedApplied) setIncludeAppliedInquiries(savedApplied === "true");
+
       setIsInitialized(true);
     }
   }, [session?.user?.branchId]);
@@ -277,6 +282,12 @@ export default function AdmissionsPage() {
       localStorage.setItem("adm_stageFilter", stageFilter);
     }
   }, [stageFilter, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("adm_includeAppliedInquiries", String(includeAppliedInquiries));
+    }
+  }, [includeAppliedInquiries, isInitialized]);
 
   // 1. Fetch initial branches and academic years
   useEffect(() => {
@@ -440,6 +451,9 @@ export default function AdmissionsPage() {
 
   const filteredInquiries = useMemo(() => {
     return inquiries.filter((inq) => {
+      if (!includeAppliedInquiries && inq.status === "APPLIED") {
+        return false;
+      }
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
@@ -449,13 +463,14 @@ export default function AdmissionsPage() {
         (inq.parentEmail || "").toLowerCase().includes(q)
       );
     });
-  }, [inquiries, searchQuery]);
+  }, [inquiries, searchQuery, includeAppliedInquiries]);
 
   // Aggregate stats computation
   const stats = useMemo(() => {
     const activeApps = applications.filter((a) => a.status !== "ADMITTED" && a.status !== "REJECTED" && a.status !== "WITHDRAWN");
+    const activeInquiries = inquiries.filter((i) => i.status !== "APPLIED" && i.status !== "CLOSED");
     return {
-      inquiryCount: inquiries.length,
+      inquiryCount: activeInquiries.length,
       activeCount: activeApps.length,
       submittedCount: activeApps.filter((a) => a.status === "SUBMITTED").length,
       pendingVerify: activeApps.filter((a) => a.status === "DOCUMENT_VERIFICATION").length,
@@ -863,6 +878,7 @@ export default function AdmissionsPage() {
         snackbar.show("Application created successfully.", "success");
         setApplicationModalOpen(false);
         setAppForm({
+          inquiryId: "",
           firstName: "",
           lastName: "",
           dateOfBirth: "",
@@ -1221,6 +1237,18 @@ export default function AdmissionsPage() {
                 className="rounded text-primary focus:ring-primary w-4 h-4"
               />
               Show Archives
+            </label>
+          )}
+
+          {activeTab === "inquiries" && (
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-slate-600 bg-slate-100 border px-3 py-2.5 rounded-xl hover:bg-slate-200 transition-colors">
+              <input
+                type="checkbox"
+                checked={includeAppliedInquiries}
+                onChange={(e) => setIncludeAppliedInquiries(e.target.checked)}
+                className="rounded text-primary focus:ring-primary w-4 h-4"
+              />
+              Show Converted
             </label>
           )}
 
@@ -1619,8 +1647,11 @@ export default function AdmissionsPage() {
                                 e.stopPropagation();
                                 setAppForm((prev) => ({
                                   ...prev,
+                                  inquiryId: inq.id,
                                   firstName: inq.studentName.split(" ")[0] || "",
                                   lastName: inq.studentName.split(" ").slice(1).join(" ") || "",
+                                  dateOfBirth: inq.dateOfBirth ? inq.dateOfBirth.split("T")[0] : "",
+                                  gender: inq.gender || "MALE",
                                   fatherName: inq.parentName,
                                   fatherPhone: inq.parentPhone,
                                   fatherEmail: inq.parentEmail,
@@ -2316,6 +2347,7 @@ export default function AdmissionsPage() {
               onClick={() => {
                 if (classes.length > 0) {
                   setAppForm({
+                    inquiryId: "",
                     firstName: "Isha",
                     lastName: "Kulkarni",
                     dateOfBirth: "2015-09-18",
@@ -2529,58 +2561,70 @@ export default function AdmissionsPage() {
                 {/* B. Right Pane: Follow-up logs & Form */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 flex flex-col justify-between">
                   <div className="space-y-6">
-                    {/* Log New Conversation form */}
-                    <Card variant="outlined" className="bg-white border-sky-100 shadow-sm shrink-0">
-                      <CardContent className="p-4 space-y-4">
-                        <h4 className="font-bold text-xs text-slate-800 flex items-center gap-1.5 border-b pb-2">
-                          <Icon name="campaign" size={16} className="text-primary" />
-                          Log New Conversation
-                        </h4>
-                        
-                        <form onSubmit={handleCreateFollowUp} className="space-y-3">
-                          <TextField
-                            label="Conversation Notes"
-                            value={followUpForm.conversationNotes}
-                            onChange={(e) => setFollowUpForm({ ...followUpForm, conversationNotes: e.target.value })}
-                            placeholder="Detail your conversation with the parent..."
-                            required
-                          />
+                    {selectedInquiry.status === "APPLIED" ? (
+                      <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 shrink-0">
+                        <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                          <Icon name="check_circle" size={20} />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-slate-800">Lead Converted to Application</h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5">This inquiry has been promoted to a formal application and is locked for counselor edits.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Log New Conversation form */
+                      <Card variant="outlined" className="bg-white border-sky-100 shadow-sm shrink-0">
+                        <CardContent className="p-4 space-y-4">
+                          <h4 className="font-bold text-xs text-slate-800 flex items-center gap-1.5 border-b pb-2">
+                            <Icon name="campaign" size={16} className="text-primary" />
+                            Log New Conversation
+                          </h4>
+                          
+                          <form onSubmit={handleCreateFollowUp} className="space-y-3">
+                            <TextField
+                              label="Conversation Notes"
+                              value={followUpForm.conversationNotes}
+                              onChange={(e) => setFollowUpForm({ ...followUpForm, conversationNotes: e.target.value })}
+                              placeholder="Detail your conversation with the parent..."
+                              required
+                            />
 
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Status Reached</label>
-                              <Select
-                                value={followUpForm.statusReached}
-                                onValueChange={(val: any) => setFollowUpForm({ ...followUpForm, statusReached: val })}
-                              >
-                                <SelectTrigger fullWidth>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="INQUIRY">Inquiry</SelectItem>
-                                  <SelectItem value="CONTACTED">Contacted</SelectItem>
-                                  <SelectItem value="VISITED">Visited</SelectItem>
-                                  <SelectItem value="CLOSED">Closed (Archived)</SelectItem>
-                                </SelectContent>
-                              </Select>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Status Reached</label>
+                                <Select
+                                  value={followUpForm.statusReached}
+                                  onValueChange={(val: any) => setFollowUpForm({ ...followUpForm, statusReached: val })}
+                                >
+                                  <SelectTrigger fullWidth>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="INQUIRY">Inquiry</SelectItem>
+                                    <SelectItem value="CONTACTED">Contacted</SelectItem>
+                                    <SelectItem value="VISITED">Visited</SelectItem>
+                                    <SelectItem value="CLOSED">Closed (Archived)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <TextField
+                                label="Next Follow-up Date (Optional)"
+                                type="date"
+                                value={followUpForm.nextFollowUpDate}
+                                onChange={(e) => setFollowUpForm({ ...followUpForm, nextFollowUpDate: e.target.value })}
+                              />
                             </div>
 
-                            <TextField
-                              label="Next Follow-up Date (Optional)"
-                              type="date"
-                              value={followUpForm.nextFollowUpDate}
-                              onChange={(e) => setFollowUpForm({ ...followUpForm, nextFollowUpDate: e.target.value })}
-                            />
-                          </div>
-
-                          <div className="pt-2 flex justify-end">
-                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white text-xs py-1.5 px-4">
-                              Save Follow-up
-                            </Button>
-                          </div>
-                        </form>
-                      </CardContent>
-                    </Card>
+                            <div className="pt-2 flex justify-end">
+                              <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white text-xs py-1.5 px-4">
+                                Save Follow-up
+                              </Button>
+                            </div>
+                          </form>
+                        </CardContent>
+                      </Card>
+                    )}
 
                     {/* Historical Timeline Logs */}
                     <div className="space-y-3">
