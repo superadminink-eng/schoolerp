@@ -93,6 +93,213 @@ async function globalSetup(config: FullConfig) {
     });
   }
 
+  // 1.8. Seed Parent User & Linked Active Student with Invoices for integration tests
+  console.log("Global Setup: Seeding parent user, active student, and invoice for tests...");
+  let parentRole = await prisma.role.findFirst({ where: { name: "PARENT" } });
+  if (!parentRole) {
+    parentRole = await prisma.role.create({
+      data: {
+        name: "PARENT",
+        description: "System default PARENT role",
+        isSystem: true,
+      },
+    });
+  }
+
+  const parentEmail = "krishnaverma@test.com";
+  const parentFirebaseUid = await ensureFirebaseUser(parentEmail, "password123");
+  const parentUser = await prisma.user.upsert({
+    where: { organizationId_email: { organizationId: org.id, email: parentEmail } },
+    update: {
+      firebaseUid: parentFirebaseUid,
+      isActive: true,
+      roleId: parentRole.id,
+      branchId: branch.id,
+    },
+    create: {
+      organizationId: org.id,
+      branchId: branch.id,
+      email: parentEmail,
+      name: "Krishna Verma",
+      firebaseUid: parentFirebaseUid,
+      roleId: parentRole.id,
+      isActive: true,
+    },
+  });
+
+  const parent = await prisma.parent.upsert({
+    where: { userId: parentUser.id },
+    update: {},
+    create: {
+      userId: parentUser.id,
+      relationship: "FATHER",
+    },
+  });
+
+  const currentAcademicYear = await prisma.academicYear.findFirst({ where: { isCurrent: true } }) || await prisma.academicYear.findFirst();
+  if (!currentAcademicYear) throw new Error("No academic year found in database");
+
+  const studentClass = await prisma.class.findFirst({ where: { branchId: branch.id } }) || await prisma.class.findFirst();
+  if (!studentClass) throw new Error("No class found in database");
+
+  const studentSection = await prisma.section.findFirst({ where: { classId: studentClass.id } }) || await prisma.section.findFirst();
+  if (!studentSection) throw new Error("No section found in database");
+
+  const student = await prisma.student.upsert({
+    where: { branchId_admissionNo: { branchId: branch.id, admissionNo: "ADM-KV-001" } },
+    update: {
+      firstName: "Aarav",
+      lastName: "Verma",
+      dateOfBirth: new Date("2015-05-15"),
+      gender: "MALE",
+      fatherName: "Krishna Verma",
+      fatherEmail: parentEmail,
+      status: "ACTIVE",
+    },
+    create: {
+      branchId: branch.id,
+      admissionNo: "ADM-KV-001",
+      firstName: "Aarav",
+      lastName: "Verma",
+      dateOfBirth: new Date("2015-05-15"),
+      gender: "MALE",
+      fatherName: "Krishna Verma",
+      fatherEmail: parentEmail,
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.studentParent.upsert({
+    where: { studentId_parentId: { studentId: student.id, parentId: parent.id } },
+    update: {},
+    create: {
+      studentId: student.id,
+      parentId: parent.id,
+      relation: "FATHER",
+      isPrimary: true,
+    },
+  });
+
+  await prisma.studentEnrollment.upsert({
+    where: { studentId_academicYearId: { studentId: student.id, academicYearId: currentAcademicYear.id } },
+    update: {
+      sectionId: studentSection.id,
+    },
+    create: {
+      studentId: student.id,
+      academicYearId: currentAcademicYear.id,
+      sectionId: studentSection.id,
+    },
+  });
+
+  let feeStructure = await prisma.feeStructure.findFirst({ where: { classId: studentClass.id } });
+  if (!feeStructure) {
+    let feeCategory = await prisma.feeCategory.findFirst({ where: { organizationId: org.id } });
+    if (!feeCategory) {
+      feeCategory = await prisma.feeCategory.create({
+        data: {
+          organizationId: org.id,
+          name: "Tuition Fee Test",
+        },
+      });
+    }
+    feeStructure = await prisma.feeStructure.create({
+      data: {
+        academicYearId: currentAcademicYear.id,
+        classId: studentClass.id,
+        feeCategoryId: feeCategory.id,
+        amount: 10000.00,
+        frequency: "MONTHLY",
+      },
+    });
+  }
+
+  // Clean up any existing invoices (and cascade deleted items/payments) for the test student
+  await prisma.invoice.deleteMany({
+    where: {
+      studentId: student.id,
+    },
+  });
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      studentId: student.id,
+      number: `INV-KV-${Date.now().toString().slice(-6)}`,
+      year: new Date().getFullYear(),
+      totalAmount: 15000.00,
+      paidAmount: 0.00,
+      status: "PENDING",
+      dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      items: {
+        create: [
+          {
+            feeStructureId: feeStructure.id,
+            amount: 15000.00,
+            description: "Tuition Fee Payment",
+          },
+        ],
+      },
+    },
+  });
+  console.log(`Created fresh test invoice: ${invoice.number}`);
+
+  // 1.9. Seed 205 dummy students if count is low, ensuring directory E2E search/filter tests pass
+  const currentStudentCount = await prisma.student.count();
+  if (currentStudentCount < 200) {
+    console.log(`Global Setup: Only ${currentStudentCount} students found. Seeding 205 dummy students...`);
+    const studentsToCreate = [];
+    
+    // Test requires at least 2 Aanya Verma and 1 Aanya Pawar in the database
+    const specialStudents = [
+      { firstName: "Aanya", lastName: "Verma", category: "GENERAL", gender: "FEMALE" },
+      { firstName: "Aanya", lastName: "Verma", category: "GENERAL", gender: "FEMALE" },
+      { firstName: "Aanya", lastName: "Pawar", category: "RTE", gender: "FEMALE" },
+    ];
+
+    for (let i = 0; i < 205; i++) {
+      let firstName = `Student${i}`;
+      let lastName = `Test`;
+      let category = i < 35 ? "RTE" : "GENERAL"; // Seed 35 RTE students to satisfy > 0 card assertion
+      let gender = i % 2 === 0 ? "MALE" : "FEMALE";
+
+      if (i < specialStudents.length) {
+        firstName = specialStudents[i].firstName;
+        lastName = specialStudents[i].lastName;
+        category = specialStudents[i].category;
+        gender = specialStudents[i].gender;
+      }
+
+      studentsToCreate.push({
+        branchId: branch.id,
+        admissionNo: `ADM-SEED-${1000 + i}`,
+        firstName,
+        lastName,
+        dateOfBirth: new Date("2015-06-01"),
+        gender: gender as any,
+        category: category as any,
+        status: "ACTIVE",
+      });
+    }
+
+    // Insert all students with enrollments in a transaction
+    await prisma.$transaction(
+      studentsToCreate.map((s) =>
+        prisma.student.create({
+          data: {
+            ...s,
+            enrollments: {
+              create: {
+                academicYearId: currentAcademicYear.id,
+                sectionId: studentSection.id,
+              },
+            },
+          },
+        })
+      )
+    );
+    console.log("Global Setup: Successfully seeded 205 dummy students!");
+  }
+
   console.log("Database & Firebase setup complete. Saving auth sessions...");
 
   // Ensure output directory exists

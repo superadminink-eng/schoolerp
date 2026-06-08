@@ -274,6 +274,16 @@ export async function POST(req: NextRequest, context: RouteContext) {
         FOR UPDATE
       `;
 
+      // 1.5 Verify that the payment amount does not exceed the remaining outstanding balance inside the transaction
+      let freshTotalPending = 0;
+      for (const freshInv of freshInvoices) {
+        freshTotalPending += Number(freshInv.totalAmount) + Number(freshInv.lateFeeAccumulated) - Number(freshInv.paidAmount);
+      }
+
+      if (data.amount > freshTotalPending) {
+        throw new Error(`OVERPAYMENT: Payment amount of ₹${data.amount} exceeds total outstanding dues of ₹${freshTotalPending}`);
+      }
+
       let remainingPayment = data.amount;
       const createdPayments = [];
       let primaryPayment: any = null;
@@ -362,8 +372,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }, { timeout: 15000 });
 
     return apiSuccess(result, undefined, 201);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Record fee payment error:", error);
+    if (error?.message?.startsWith("OVERPAYMENT:")) {
+      return apiError("BAD_REQUEST", error.message.replace("OVERPAYMENT: ", ""), 400);
+    }
     return apiError("INTERNAL_ERROR", "Failed to record payment", 500);
   }
 }

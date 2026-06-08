@@ -435,6 +435,7 @@ export default function NoticesPage() {
                 <Button variant="text">Cancel</Button>
               </DialogClose>
               <Button
+                id="confirm-delete-btn"
                 variant="filled"
                 onClick={() => handleDelete(row.id)}
                 loading={deletingId === row.id}

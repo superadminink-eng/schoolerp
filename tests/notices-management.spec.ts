@@ -134,7 +134,7 @@ test.describe("Notice Board Management & Mobile Sync Test Suite", () => {
     const deleteResponsePromise = page.waitForResponse(
       (response) => response.url().includes("/api/v1/notices/") && response.status() === 200
     );
-    await page.click("button:has-text('Delete')");
+    await page.click("#confirm-delete-btn");
     await deleteResponsePromise;
     console.log("Notice deleted successfully!");
 
@@ -309,7 +309,7 @@ test.describe("Notice Board Management & Mobile Sync Test Suite", () => {
     const deletePromise = page.waitForResponse(
       (response) => response.url().includes("/api/v1/notices/") && response.status() === 200
     );
-    await page.click("button:has-text('Delete')");
+    await page.click("#confirm-delete-btn");
     await deletePromise;
     console.log("SUCCESS: Scheduled/Expired notice cleanup complete!");
   });
