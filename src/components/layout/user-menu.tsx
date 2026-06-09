@@ -7,6 +7,8 @@ import * as Avatar from "@radix-ui/react-avatar";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
+import { useState, useEffect } from "react";
+
 interface UserMenuProps {
   name: string;
   email: string;
@@ -24,6 +26,19 @@ function getInitials(name: string): string {
 
 export function UserMenu({ name, email, image }: UserMenuProps) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-label-lg font-medium text-on-primary">
+        {getInitials(name)}
+      </div>
+    );
+  }
 
   return (
     <DropdownMenu.Root>

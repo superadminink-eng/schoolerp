@@ -78,8 +78,12 @@ test.describe("Class Wizard Draft & Edit Lock E2E", () => {
     await page.click("role=option >> nth=0");
 
     // Select academic year dynamically
+    const activeAY = await prisma.academicYear.findFirst({ where: { isCurrent: true } }) || await prisma.academicYear.findFirst();
+    if (!activeAY) throw new Error("No academic year found");
+    const academicYearName = activeAY.name;
+
     await page.click("button:has-text('Select academic year')");
-    await page.click("role=option >> text=2026-27");
+    await page.click(`role=option >> text=${academicYearName}`);
 
     // Click "Save & Continue" to go to Divisions tab
     await page.click("button:has-text('Save & Continue')");
