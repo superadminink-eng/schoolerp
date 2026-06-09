@@ -154,10 +154,10 @@ test.describe("Setup & Academics Module E2E", () => {
     await page.fill("label:has-text('Class name') + input", className);
     await page.fill("label:has-text('Numeric grade') + input", "10");
 
-    await page.click("button:has-text('Select branch')");
+    await page.click("label:has-text('Branch') + button");
     await page.click(`role=option >> text=${branchName}`);
 
-    await page.click("button:has-text('Select academic year')");
+    await page.click("label:has-text('Academic Year') + button");
     await page.click(`role=option >> text=${academicYearName}`);
 
     // Select the subject in MultiSelect
