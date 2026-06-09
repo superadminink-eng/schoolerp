@@ -15,6 +15,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["html", { outputFolder: path.join(SCRATCH_DIR, "playwright-report"), open: "never" }]],
   globalSetup: require.resolve("./tests/global-setup"),
+  globalTeardown: require.resolve("./tests/global-teardown"),
   use: {
     baseURL: "http://localhost:3007",
     trace: "retain-on-failure",
