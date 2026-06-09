@@ -251,6 +251,13 @@ async function globalSetup(config: FullConfig) {
   console.log(`Created fresh test invoice: ${invoice.number}`);
 
   // 1.9. Seed 205 dummy students if count is low, ensuring directory E2E search/filter tests pass
+  // Clean up any existing seed students first to avoid unique constraint issues
+  await prisma.student.deleteMany({
+    where: {
+      admissionNo: { startsWith: "ADM-SEED-" }
+    }
+  });
+
   const currentStudentCount = await prisma.student.count();
   if (currentStudentCount < 200) {
     console.log(`Global Setup: Only ${currentStudentCount} students found. Seeding 205 dummy students...`);

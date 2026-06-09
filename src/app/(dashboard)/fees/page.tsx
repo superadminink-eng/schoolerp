@@ -24,8 +24,6 @@ interface FeeRow {
   photo: string | null;
   className: string;
   branchName: string;
-  invoiceId: string;
-  invoiceNumber: string;
   totalAmount: number;
   paidAmount: number;
   pendingAmount: number;
@@ -195,7 +193,7 @@ export default function FeesPage() {
           <DataTable
             columns={columns}
             data={fees}
-            keyExtractor={(row) => row.invoiceId}
+            keyExtractor={(row) => row.studentId}
             onRowClick={(row) => router.push(`/fees/${row.studentId}`)}
             loading={loading}
             emptyIcon="payments"

@@ -16,78 +16,119 @@ export async function GET(req: NextRequest) {
   const branchId = url.searchParams.get("branchId");
 
   try {
-    // Build where clause for invoices with pending amounts
-    const invoiceWhere: Record<string, unknown> = {
-      status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
-      student: {
-        branch: { organizationId: ctx.organizationId },
+    // Build where clause for students with pending amounts
+    const studentWhere: Record<string, any> = {
+      branch: { organizationId: ctx.organizationId },
+      invoices: {
+        some: {
+          status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+        },
       },
     };
 
     // Restrict branch-scoped roles to their home branch
     if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
-      (invoiceWhere.student as Record<string, unknown>).branchId = ctx.branchId;
+      studentWhere.branchId = ctx.branchId;
     } else if (branchId) {
-      (invoiceWhere.student as Record<string, unknown>).branchId = branchId;
+      studentWhere.branchId = branchId;
     }
 
     // Search on student fields
     if (search) {
-      (invoiceWhere.student as Record<string, unknown>).OR = [
+      studentWhere.OR = [
         { firstName: { contains: search } },
         { lastName: { contains: search } },
         { admissionNo: { contains: search } },
       ];
     }
 
-    const [invoices, total] = await Promise.all([
-      prisma.invoice.findMany({
-        where: invoiceWhere,
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+        where: studentWhere,
         select: {
           id: true,
-          number: true,
-          totalAmount: true,
-          paidAmount: true,
-          status: true,
-          dueDate: true,
-          student: {
+          firstName: true,
+          lastName: true,
+          admissionNo: true,
+          photo: true,
+          branch: { select: { id: true, name: true } },
+          enrollments: {
+            take: 1,
+            orderBy: { enrolledAt: "desc" },
             select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              admissionNo: true,
-              photo: true,
-              branch: { select: { id: true, name: true } },
-              enrollments: {
-                take: 1,
-                orderBy: { enrolledAt: "desc" },
+              section: {
                 select: {
-                  section: {
-                    select: {
-                      name: true,
-                      class: { select: { name: true } },
-                    },
-                  },
+                  name: true,
+                  class: { select: { name: true } },
                 },
               },
             },
           },
+          invoices: {
+            where: {
+              status: { not: "CANCELLED" },
+            },
+            select: {
+              id: true,
+              totalAmount: true,
+              paidAmount: true,
+              status: true,
+              dueDate: true,
+            },
+          },
         },
-        orderBy: { dueDate: "asc" },
+        orderBy: { firstName: "asc" },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.invoice.count({ where: invoiceWhere }),
+      prisma.student.count({ where: studentWhere }),
     ]);
 
-    const rows = invoices.map((inv) => {
-      const s = inv.student;
+    const rows = students.map((s) => {
       const enrollment = s.enrollments[0];
       const className = enrollment
         ? `${enrollment.section.class.name} - ${enrollment.section.name}`
         : "—";
-      const totalAmount = Number(inv.totalAmount);
-      const paidAmount = Number(inv.paidAmount);
+
+      let totalAmount = 0;
+      let paidAmount = 0;
+      let hasOverdue = false;
+      const unpaidInvoices: typeof s.invoices = [];
+
+      for (const inv of s.invoices) {
+        totalAmount += Number(inv.totalAmount);
+        paidAmount += Number(inv.paidAmount);
+
+        if (
+          inv.status === "PENDING" ||
+          inv.status === "PARTIAL" ||
+          inv.status === "OVERDUE"
+        ) {
+          unpaidInvoices.push(inv);
+          if (inv.status === "OVERDUE") {
+            hasOverdue = true;
+          }
+        }
+      }
+
+      const pendingAmount = totalAmount - paidAmount;
+
+      let dueDate = null;
+      if (unpaidInvoices.length > 0) {
+        const dates = unpaidInvoices.map((inv) => new Date(inv.dueDate).getTime());
+        dueDate = new Date(Math.min(...dates));
+      }
+
+      let status = "PAID";
+      if (pendingAmount > 0) {
+        if (hasOverdue) {
+          status = "OVERDUE";
+        } else if (paidAmount > 0) {
+          status = "PARTIAL";
+        } else {
+          status = "PENDING";
+        }
+      }
 
       return {
         studentId: s.id,
@@ -98,13 +139,11 @@ export async function GET(req: NextRequest) {
         photo: s.photo,
         className,
         branchName: s.branch.name,
-        invoiceId: inv.id,
-        invoiceNumber: inv.number,
         totalAmount,
         paidAmount,
-        pendingAmount: totalAmount - paidAmount,
-        status: inv.status,
-        dueDate: inv.dueDate,
+        pendingAmount,
+        status,
+        dueDate,
       };
     });
 
