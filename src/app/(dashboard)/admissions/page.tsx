@@ -1130,7 +1130,7 @@ export default function AdmissionsPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6 space-y-4">
         <Icon name="lock" size={48} className="text-slate-400" />
-        <h2 className="text-xl font-bold text-slate-800">Access Denied</h2>
+        <h2 className="text-xl font-bold text-slate-800">Insufficient permissions</h2>
         <p className="text-sm text-slate-500 max-w-md">
           You do not have permission to view admissions inquiries or applications. Please contact your system administrator.
         </p>

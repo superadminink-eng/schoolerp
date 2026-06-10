@@ -14,6 +14,8 @@ import {
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { useBranches } from "@/hooks/use-branches";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
+import { usePermissions } from "@/hooks/use-permissions";
+import { Icon } from "@/components/ui/icon";
 
 interface FeeRow {
   studentId: string;
@@ -47,6 +49,7 @@ const statusColor = (status: string) => {
 export default function FeesPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { can, isLoading: permissionsLoading } = usePermissions();
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches } = useBranches();
 
@@ -63,6 +66,7 @@ export default function FeesPage() {
   }, [session?.user?.branchId]);
 
   const fetchFees = useCallback(async () => {
+    if (permissionsLoading || !can("fees", "read")) return;
     setLoading(true);
     const params = new URLSearchParams();
     params.set("limit", "9999");
@@ -79,11 +83,32 @@ export default function FeesPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchFilter]);
+  }, [branchFilter, permissionsLoading, can]);
 
   useEffect(() => {
     fetchFees();
   }, [fetchFees]);
+
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh] text-slate-400 gap-3">
+        <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+        <span className="text-sm font-bold tracking-wider uppercase">Loading Permissions...</span>
+      </div>
+    );
+  }
+
+  if (!can("fees", "read")) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6 space-y-4">
+        <Icon name="lock" size={48} className="text-slate-400" />
+        <h2 className="text-xl font-bold text-slate-800">Insufficient permissions</h2>
+        <p className="text-sm text-slate-500 max-w-md">
+          You do not have permission to view fees. Please contact your system administrator.
+        </p>
+      </div>
+    );
+  }
 
   const columns: Column<FeeRow>[] = [
     {

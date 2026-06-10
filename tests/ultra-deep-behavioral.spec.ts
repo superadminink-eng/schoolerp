@@ -22,7 +22,7 @@ test.describe("Ultra-Deep Behavioral & Integration Test Suite", () => {
 
     const student = await prisma.student.findFirst({
       where: {
-        fatherEmail: "krishnaverma@test.com",
+        admissionNo: "ADM-KV-001",
         status: "ACTIVE",
         invoices: {
           some: {
@@ -37,7 +37,7 @@ test.describe("Ultra-Deep Behavioral & Integration Test Suite", () => {
       }
     });
     if (!student || student.invoices.length === 0) {
-      throw new Error("No active student with invoices found for krishnaverma@test.com");
+      throw new Error("No active student with invoices found with admission number ADM-KV-001");
     }
 
     const token = `parent-mock-token-${parentUser.id}`;

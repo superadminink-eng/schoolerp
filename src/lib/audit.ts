@@ -28,7 +28,7 @@ export async function logAction({
         action,
         module,
         entityId,
-        details: details ? JSON.parse(JSON.stringify(details)) : null,
+        details: details ? (typeof details === "string" ? details : JSON.stringify(details)) : null,
       },
     });
   } catch (error) {

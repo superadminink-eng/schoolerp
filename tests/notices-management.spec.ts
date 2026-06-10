@@ -23,11 +23,11 @@ test.describe("Notice Board Management & Mobile Sync Test Suite", () => {
 
     const student = await prisma.student.findFirst({
       where: {
-        fatherEmail: "krishnaverma@test.com",
+        admissionNo: "ADM-KV-001",
         status: "ACTIVE"
       }
     });
-    if (!student) throw new Error("No active student found for krishnaverma@test.com");
+    if (!student) throw new Error("No active student found with admission number ADM-KV-001");
 
     const token = `parent-mock-token-${parentUser.id}`;
     const mobileDashboardUrl = `http://localhost:3007/api/v1/parent/student/${student.id}/dashboard`;
@@ -161,11 +161,11 @@ test.describe("Notice Board Management & Mobile Sync Test Suite", () => {
 
     const student = await prisma.student.findFirst({
       where: {
-        fatherEmail: "krishnaverma@test.com",
+        admissionNo: "ADM-KV-001",
         status: "ACTIVE"
       }
     });
-    if (!student) throw new Error("No active student found for krishnaverma@test.com");
+    if (!student) throw new Error("No active student found with admission number ADM-KV-001");
 
     const token = `parent-mock-token-${parentUser.id}`;
     const mobileDashboardUrl = `http://localhost:3007/api/v1/parent/student/${student.id}/dashboard`;

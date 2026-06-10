@@ -11,6 +11,8 @@ import { PaymentHistory } from "@/components/fees/payment-history";
 import { FormSkeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { CreateFeePaymentInput } from "@/lib/validations/fee-payment";
+import { usePermissions } from "@/hooks/use-permissions";
+import { Icon } from "@/components/ui/icon";
 
 interface StudentInfo {
   id: string;
@@ -70,6 +72,7 @@ export default function FeeCollectionPage() {
   const params = useParams<{ studentId: string }>();
   const router = useRouter();
   const snackbar = useSnackbar();
+  const { can, isLoading: permissionsLoading } = usePermissions();
 
   const [data, setData] = useState<FeeData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,6 +139,27 @@ export default function FeeCollectionPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh] text-slate-400 gap-3">
+        <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+        <span className="text-sm font-bold tracking-wider uppercase">Loading Permissions...</span>
+      </div>
+    );
+  }
+
+  if (!can("fees", "read")) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6 space-y-4">
+        <Icon name="lock" size={48} className="text-slate-400" />
+        <h2 className="text-xl font-bold text-slate-800">Insufficient permissions</h2>
+        <p className="text-sm text-slate-500 max-w-md">
+          You do not have permission to view fees. Please contact your system administrator.
+        </p>
+      </div>
+    );
   }
 
   if (loading) {

@@ -109,6 +109,7 @@ export function DataTable<T>({
   const gridRef = useRef<AgGridReact>(null);
 
   const renderCell = useCallback((col: Column<T>, row: T) => {
+    if (!row) return "—";
     const colType = col.type || (col.render ? "custom" : "text");
     switch (colType) {
       case "avatar": {
@@ -233,11 +234,14 @@ export function DataTable<T>({
       columns.map((col) => ({
         field: col.key,
         headerName: col.header,
-        cellRenderer: (params: { data: T }) => (
-          <div style={{ display: "flex", alignItems: "center", height: "100%", width: "100%" }}>
-            {renderCell(col, params.data)}
-          </div>
-        ),
+        cellRenderer: (params: { data: T }) => {
+          if (!params.data) return null;
+          return (
+            <div style={{ display: "flex", alignItems: "center", height: "100%", width: "100%" }}>
+              {renderCell(col, params.data)}
+            </div>
+          );
+        },
         ...(col.sortValue
           ? { valueGetter: (params: { data: T }) => params.data ? col.sortValue!(params.data) : null }
           : {}),
