@@ -14,6 +14,7 @@ interface ClassData {
   status: "DRAFT" | "ACTIVE";
   branchId: string;
   academicYearId: string;
+  hasInvoices?: boolean;
   subjects: Array<{
     id: string;
     name: string;

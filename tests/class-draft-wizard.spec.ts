@@ -146,13 +146,22 @@ test.describe("Class Wizard Draft & Edit Lock E2E", () => {
     await page.goto(`/classes/${classRecord!.id}/edit`);
     await page.waitForLoadState("networkidle");
 
-    // Verify warning banner in Marathi is visible
-    await expect(page.locator("text=वर्ग लॉक आहे (Class Locked)")).toBeVisible();
-    await expect(page.locator("text=या वर्गात विद्यार्थी प्रवेशित असल्यामुळे")).toBeVisible();
+    // Verify warning banner is visible
+    await expect(page.locator("text=Granular Lifecycle Lock (स्मार्ट सुरक्षा लॉक)")).toBeVisible();
 
-    // Verify inputs are disabled
-    await expect(page.locator("input[placeholder='e.g. Class 1']")).toBeDisabled();
+    // Verify inputs are smart-locked (Class Name is editable, Numeric Grade is disabled)
+    await expect(page.locator("input[placeholder='e.g. Class 1']")).toBeEnabled();
     await expect(page.locator("input[placeholder='e.g. 1']")).toBeDisabled();
+
+    // Navigate to Divisions tab
+    await page.click("button:has-text('Divisions')");
+    await page.waitForTimeout(500);
+
+    // Verify "Add Division" button is enabled
+    await expect(page.locator("button:has-text('Add Division')")).toBeEnabled();
+
+    // Verify division name A is disabled (has enrolled student)
+    await expect(page.locator("input[value='A']")).toBeDisabled();
 
     // Cleanup student
     await prisma.studentEnrollment.deleteMany({ where: { studentId: testStudent.id } });

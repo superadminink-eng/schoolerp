@@ -44,6 +44,7 @@ interface SectionRow {
   name: string;
   classTeacherId?: string | null;
   subjectTeachers: SubjectTeacherRow[];
+  studentCount?: number;
 }
 
 interface FeeRow {
@@ -73,6 +74,7 @@ interface ClassData {
   status: "DRAFT" | "ACTIVE";
   branchId: string;
   academicYearId: string;
+  hasInvoices?: boolean;
   subjects: Array<{
     id: string;
     name: string;
@@ -147,6 +149,10 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     return initialData.sections.some((s: any) => (s._count?.studentEnrollments ?? 0) > 0);
   }, [initialData]);
 
+  const hasInvoices = useMemo(() => {
+    return initialData?.hasInvoices ?? false;
+  }, [initialData]);
+
   // Selected subject master IDs — initialized from initialData so cleanup effect
   // doesn't strip teachers on the first render
   const [selectedSubjectMasterIds, setSelectedSubjectMasterIds] = useState<string[]>(
@@ -176,6 +182,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           name: sec.name,
           classTeacherId: sec.classTeacher?.id ?? null,
           subjectTeachers,
+          studentCount: sec._count?.studentEnrollments ?? 0,
         };
       });
     }
@@ -718,13 +725,41 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); saveStep("finish"); }} className="mx-auto max-w-2xl">
       {hasEnrolledStudents && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2.5 animate-fadeIn">
-          <Icon name="warning" size={20} className="text-amber-600 mt-0.5" />
-          <div>
-            <strong className="font-bold block text-sm">वर्ग लॉक आहे (Class Locked)</strong>
-            <span className="text-xs">
-              या वर्गात विद्यार्थी प्रवेशित असल्यामुळे मुख्य तपशील, तुकड्या डिलीट करणे आणि फी स्ट्रक्चरमध्ये बदल करणे प्रतिबंधित केले आहे.
-            </span>
+        <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900/30 p-5 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-3.5 shadow-sm backdrop-blur-sm animate-fadeIn">
+          <div className="p-2 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
+            <Icon name="security" size={22} className="animate-pulse" />
+          </div>
+          <div className="space-y-1.5 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <strong className="font-extrabold text-sm text-slate-800 dark:text-slate-200">
+                Granular Lifecycle Lock (स्मार्ट सुरक्षा लॉक)
+              </strong>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 hidden sm:inline-block" />
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                Active Enrolled Students
+              </span>
+            </div>
+            <div className="text-xs leading-relaxed text-slate-600 dark:text-slate-300 space-y-1">
+              {hasInvoices ? (
+                <>
+                  <span className="block font-medium">
+                    🇮🇳 फी आणि हप्ते लॉक केले आहेत कारण फीचे इनव्हॉइस (Invoices) आधीच तयार झाले आहेत. वर्ग नाव, शिक्षक, आणि हप्त्यांच्या तारखा बदलता येतील.
+                  </span>
+                  <span className="block font-medium opacity-90 border-t border-amber-200/40 dark:border-amber-900/20 pt-1">
+                    🇬🇧 Fee structures and installment amounts are locked because invoices have already been generated. Class name, teachers, and installment due dates remain editable.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="block font-medium">
+                    🇮🇳 वर्गात विद्यार्थी असल्याने फक्त श्रेणी (Grade Level) बदलणे प्रतिबंधित आहे. नवीन तुकडी जोडणे, रिकाम्या तुकड्या डिलीट करणे आणि फी बदलणे पूर्णपणे उपलब्ध आहे.
+                  </span>
+                  <span className="block font-medium opacity-90 border-t border-amber-200/40 dark:border-amber-900/20 pt-1">
+                    🇬🇧 Since students are enrolled, only the grade level is locked. Adding new divisions, deleting empty divisions, and updating fee amounts are fully permitted.
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -747,7 +782,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   error={errors.name}
                   placeholder="e.g. Class 1"
                   required
-                  disabled={hasEnrolledStudents}
+                  disabled={false}
                   fullWidth
                 />
                 <TextField
@@ -841,16 +876,14 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                 <p className="text-label-lg font-medium text-on-surface">
                   Divisions
                 </p>
-                {!hasEnrolledStudents && (
-                  <Button
-                    type="button"
-                    variant="text"
-                    icon="add"
-                    onClick={addSection}
-                  >
-                    Add Division
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="text"
+                  icon="add"
+                  onClick={addSection}
+                >
+                  Add Division
+                </Button>
               </div>
               {errors.sections && (
                 <p className="px-4 text-[12px] leading-4 text-error">
@@ -867,11 +900,12 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       <p className="text-label-lg font-medium text-on-surface">
                         Division{section.name ? ` ${section.name}` : ""}
                       </p>
-                      {sections.length > 1 && !hasEnrolledStudents && (
+                      {sections.length > 1 && (
                         <button
                           type="button"
+                          disabled={(section.studentCount ?? 0) > 0}
                           onClick={() => removeSection(sectionIndex)}
-                          className="rounded-full p-1 hover:bg-surface-container-high text-on-surface-variant"
+                          className="rounded-full p-1 hover:bg-surface-container-high text-on-surface-variant disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                         >
                           <Icon name="close" size={20} />
                         </button>
@@ -886,7 +920,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                         updateSectionName(sectionIndex, e.target.value)
                       }
                       error={errors[`sections.${sectionIndex}.name`]}
-                      disabled={hasEnrolledStudents}
+                      disabled={(section.studentCount ?? 0) > 0}
                       fullWidth
                     />
 
@@ -1058,7 +1092,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateFee(index, "name", e.target.value)
                               }
                               error={errors[`fees.${index}.name`]}
-                              disabled={hasEnrolledStudents}
+                              disabled={hasInvoices}
                               fullWidth
                             />
                           </div>
@@ -1072,11 +1106,11 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateFee(index, "amount", e.target.value)
                               }
                               error={errors[`fees.${index}.amount`]}
-                              disabled={hasEnrolledStudents}
+                              disabled={hasInvoices}
                               fullWidth
                             />
                           </div>
-                          {!hasEnrolledStudents && (
+                          {!hasInvoices && (
                             <button
                               type="button"
                               onClick={() => removeFee(index)}
@@ -1094,7 +1128,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       </p>
                     )}
 
-                    {!hasEnrolledStudents && (
+                    {!hasInvoices && (
                       <div className="flex justify-end pt-2">
                         <Button
                           type="button"
@@ -1146,7 +1180,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 Installment #{mappedIdx + 1}
                               </p>
                             </div>
-                            {!hasEnrolledStudents && (
+                            {!hasInvoices && (
                               <button
                                 type="button"
                                 onClick={() => removeInstallment(index)}
@@ -1167,7 +1201,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateInstallment(index, "name", e.target.value)
                               }
                               error={errors[`installments.${index}.name`]}
-                              disabled={hasEnrolledStudents}
+                              disabled={hasInvoices}
                               required
                               fullWidth
                             />
@@ -1181,7 +1215,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateInstallment(index, "amount", e.target.value)
                               }
                               error={errors[`installments.${index}.amount`]}
-                              disabled={hasEnrolledStudents}
+                              disabled={hasInvoices}
                               required
                               fullWidth
                             />
@@ -1194,7 +1228,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateInstallment(index, "dueDate", e.target.value)
                               }
                               error={errors[`installments.${index}.dueDate`]}
-                              disabled={hasEnrolledStudents}
+                              disabled={false}
                               required
                               fullWidth
                             />
@@ -1210,7 +1244,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 onChange={(e) =>
                                   updateInstallment(index, "lateFeeActive", e.target.checked)
                                 }
-                                disabled={hasEnrolledStudents}
+                                disabled={false}
                                 className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40 cursor-pointer"
                               />
                               <label
@@ -1232,7 +1266,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                     updateInstallment(index, "lateFeeValue", 0);
                                     updateInstallment(index, "lateFeePerDay", 0);
                                   }}
-                                  disabled={hasEnrolledStudents}
+                                  disabled={false}
                                   required
                                   fullWidth
                                   options={[
@@ -1264,7 +1298,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                     }
                                   }}
                                   error={errors[`installments.${index}.lateFeeValue`]}
-                                  disabled={hasEnrolledStudents}
+                                  disabled={false}
                                   required
                                   fullWidth
                                 />
@@ -1279,7 +1313,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                     updateInstallment(index, "lateFeeGrace", e.target.value)
                                   }
                                   error={errors[`installments.${index}.lateFeeGrace`]}
-                                  disabled={hasEnrolledStudents}
+                                  disabled={false}
                                   required
                                   fullWidth
                                 />
@@ -1300,7 +1334,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       </div>
                     )}
 
-                    {!hasEnrolledStudents && (
+                    {!hasInvoices && (
                       <div className="flex justify-end pt-2">
                         <Button
                           type="button"

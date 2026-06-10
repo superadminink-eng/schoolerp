@@ -76,7 +76,15 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     if (!classRecord) return apiNotFound("Class");
 
-    return apiSuccess(classRecord);
+    const invoiceCount = await prisma.invoiceItem.count({
+      where: { feeStructure: { classId: id } }
+    });
+    const hasInvoices = invoiceCount > 0;
+
+    return apiSuccess({
+      ...classRecord,
+      hasInvoices,
+    });
   } catch (error) {
     console.error("Get class error:", error);
     return apiError("INTERNAL_ERROR", "Failed to get class", 500);
@@ -135,46 +143,70 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       where: { section: { classId: id } },
     });
 
+    // Smart lock validation
     if (enrollmentCount > 0) {
       if (numericGrade !== undefined && numericGrade !== existing.numericGrade) {
         return apiError("CONFLICT", "Cannot modify numeric grade when students are enrolled", 409);
       }
-      if (name !== undefined && name !== existing.name) {
-        return apiError("CONFLICT", "Cannot rename class when students are enrolled", 409);
-      }
+
       if (sections !== undefined) {
         const existingIds = existing.sections.map(s => s.id);
         const incomingIds = sections.map(s => s.id).filter(Boolean);
         const deletedIds = existingIds.filter(eid => !incomingIds.includes(eid));
+        
         if (deletedIds.length > 0) {
-          return apiError("CONFLICT", "Cannot delete divisions when students are enrolled", 409);
-        }
-        for (const sec of sections) {
-          if (sec.id) {
-            const existSec = existing.sections.find(s => s.id === sec.id);
-            if (existSec && existSec.name !== sec.name) {
-              return apiError("CONFLICT", "Cannot rename divisions when students are enrolled", 409);
+          for (const deletedId of deletedIds) {
+            const activeCount = await prisma.studentEnrollment.count({
+              where: {
+                sectionId: deletedId,
+                student: { status: "ACTIVE" as any }
+              }
+            });
+            if (activeCount > 0) {
+              return apiError("CONFLICT", "Cannot delete a division that has active enrolled students", 409);
             }
           }
         }
       }
+    }
+
+    // Smart billing lock validation: block base fee/installment amount edits only if invoices exist.
+    const invoiceCount = await prisma.invoiceItem.count({
+      where: { feeStructure: { classId: id } }
+    });
+    const hasInvoices = invoiceCount > 0;
+
+    if (hasInvoices) {
       if (fees !== undefined) {
         if (fees.length !== existing.feeStructures.length) {
-          return apiError("CONFLICT", "Cannot modify fee structures when students are enrolled", 409);
+          return apiError("CONFLICT", "Cannot add or remove fee structures when invoices have been generated", 409);
         }
         for (const fee of fees) {
           if (fee.id) {
             const existFee = existing.feeStructures.find(f => f.id === fee.id);
             if (!existFee || Number(existFee.amount) !== Number(fee.amount) || existFee.feeCategory.name !== fee.name) {
-              return apiError("CONFLICT", "Cannot modify fee structures when students are enrolled", 409);
+              return apiError("CONFLICT", "Cannot modify fee structure amounts or names when invoices have been generated", 409);
             }
           } else {
-            return apiError("CONFLICT", "Cannot add new fee structures when students are enrolled", 409);
+            return apiError("CONFLICT", "Cannot add new fee structures when invoices have been generated", 409);
           }
         }
       }
+
       if (installments !== undefined) {
-        return apiError("CONFLICT", "Cannot modify installment plans when students are enrolled", 409);
+        if (installments.length !== existing.feeInstallmentTemplates.length) {
+          return apiError("CONFLICT", "Cannot add or remove installments when invoices have been generated", 409);
+        }
+        for (let i = 0; i < installments.length; i++) {
+          const incoming = installments[i];
+          let match = existing.feeInstallmentTemplates.find(t => t.id === incoming.id);
+          if (!match) {
+            match = existing.feeInstallmentTemplates[i];
+          }
+          if (!match || Number(match.amount) !== Number(incoming.amount) || match.termType !== incoming.termType) {
+            return apiError("CONFLICT", "Cannot modify installment amounts or term types when invoices have been generated", 409);
+          }
+        }
       }
     }
 
@@ -354,15 +386,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         const existingIds = existing.sections.map((s) => s.id);
         const toRemove = existingIds.filter((eid) => !incomingIds.includes(eid));
 
-        // Check if any sections to remove have enrollments
+        // Check if any sections to remove have active student enrollments
         if (toRemove.length > 0) {
-          const enrollmentCount = await tx.studentEnrollment.count({
-            where: { sectionId: { in: toRemove } },
-          });
-          if (enrollmentCount > 0) {
-            throw new Error(
-              "CONFLICT:Cannot remove divisions that have enrolled students"
-            );
+          for (const secId of toRemove) {
+            const activeCount = await tx.studentEnrollment.count({
+              where: {
+                sectionId: secId,
+                student: { status: "ACTIVE" as any }
+              }
+            });
+            if (activeCount > 0) {
+              throw new Error("CONFLICT:Cannot delete a division that has active enrolled students");
+            }
           }
           await tx.section.deleteMany({ where: { id: { in: toRemove } } });
         }
