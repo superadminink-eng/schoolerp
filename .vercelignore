@@ -1,0 +1,19 @@
+# Ignore mobile application code
+mobile/
+
+# Ignore IDE settings
+.idea/
+.vscode/
+
+# Ignore database dumps and scratch scripts
+school_erp (1).sql
+check-fee-structures.ts
+scratch/
+
+# Ignore Playwright E2E tests and reports (not needed for frontend build)
+tests/
+playwright-report/
+playwright.config.ts
+
+# Ignore local next.js build folder
+.next/
