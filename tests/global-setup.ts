@@ -136,16 +136,34 @@ async function globalSetup(config: FullConfig) {
     },
   });
 
-  const currentAcademicYear = await prisma.academicYear.findFirst({ where: { isCurrent: true } }) || await prisma.academicYear.findFirst();
+  let currentAcademicYear = await prisma.academicYear.findFirst({ where: { isCurrent: true } }) || await prisma.academicYear.findFirst();
   if (!currentAcademicYear) throw new Error("No academic year found in database");
 
-  const studentClass = await prisma.class.findFirst({ where: { branchId: branch.id } }) || await prisma.class.findFirst();
+  // Force isCurrent to true on the selected academic year to heal the DB state
+  if (!currentAcademicYear.isCurrent) {
+    await prisma.academicYear.updateMany({
+      where: { organizationId: org.id },
+      data: { isCurrent: false }
+    });
+    currentAcademicYear = await prisma.academicYear.update({
+      where: { id: currentAcademicYear.id },
+      data: { isCurrent: true }
+    });
+  }
+
+  let studentClass = await prisma.class.findFirst({ where: { branchId: branch.id, academicYearId: currentAcademicYear.id } })
+    || await prisma.class.findFirst({ where: { branchId: branch.id } })
+    || await prisma.class.findFirst();
   if (!studentClass) throw new Error("No class found in database");
 
-  if (studentClass.status !== "ACTIVE") {
-    await prisma.class.update({
+  // Align studentClass with current academic year and activate it
+  if (studentClass.academicYearId !== currentAcademicYear.id || studentClass.status !== "ACTIVE") {
+    studentClass = await prisma.class.update({
       where: { id: studentClass.id },
-      data: { status: "ACTIVE" },
+      data: {
+        academicYearId: currentAcademicYear.id,
+        status: "ACTIVE"
+      }
     });
   }
 
@@ -155,6 +173,7 @@ async function globalSetup(config: FullConfig) {
   const student = await prisma.student.upsert({
     where: { branchId_admissionNo: { branchId: branch.id, admissionNo: "ADM-KV-001" } },
     update: {
+      organizationId: org.id,
       firstName: "Aarav",
       lastName: "Verma",
       dateOfBirth: new Date("2015-05-15"),
@@ -164,6 +183,7 @@ async function globalSetup(config: FullConfig) {
       status: "ACTIVE",
     },
     create: {
+      organizationId: org.id,
       branchId: branch.id,
       admissionNo: "ADM-KV-001",
       firstName: "Aarav",
@@ -221,7 +241,13 @@ async function globalSetup(config: FullConfig) {
     });
   }
 
-  // Clean up any existing invoices (and cascade deleted items/payments) for the test student
+  // Clean up any existing fee payments and invoices for the test student
+  await prisma.feePayment.deleteMany({
+    where: {
+      studentId: student.id,
+    },
+  });
+
   await prisma.invoice.deleteMany({
     where: {
       studentId: student.id,
@@ -231,6 +257,7 @@ async function globalSetup(config: FullConfig) {
   const invoice = await prisma.invoice.create({
     data: {
       studentId: student.id,
+      organizationId: org.id,
       number: `INV-KV-${Date.now().toString().slice(-6)}`,
       year: new Date().getFullYear(),
       totalAmount: 15000.00,
@@ -285,6 +312,7 @@ async function globalSetup(config: FullConfig) {
 
       studentsToCreate.push({
         branchId: branch.id,
+        organizationId: org.id,
         admissionNo: `ADM-SEED-${1000 + i}`,
         firstName,
         lastName,

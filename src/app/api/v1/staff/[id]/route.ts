@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
   const where: Record<string, unknown> = {
     id,
-    branch: { organizationId: ctx.organizationId },
+    organizationId: ctx.organizationId,
   };
 
   // Restrict branch-scoped roles to their home branch
@@ -92,7 +92,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const existingWhere: Record<string, unknown> = {
       id,
-      branch: { organizationId: ctx.organizationId },
+      organizationId: ctx.organizationId,
     };
 
     // Restrict branch-scoped roles to their home branch
@@ -270,7 +270,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   try {
     const existingWhere: Record<string, unknown> = {
       id,
-      branch: { organizationId: ctx.organizationId },
+      organizationId: ctx.organizationId,
     };
 
     // Restrict branch-scoped roles to their home branch
@@ -283,7 +283,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
     await prisma.staff.update({
       where: { id },
-      data: { status: "TERMINATED" },
+      data: { status: "TERMINATED", deletedAt: new Date() },
     });
 
     await logAction({

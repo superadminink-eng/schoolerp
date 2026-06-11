@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
     }
 
     const application = await prisma.$transaction(async (tx) => {
-      const applicationNo = await generateUniqueApplicationNo(tx);
+      const applicationNo = await generateUniqueApplicationNo(tx, ctx.organizationId);
 
       const created = await tx.admissionApplication.create({
         data: {

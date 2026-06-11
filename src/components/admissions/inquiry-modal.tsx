@@ -144,6 +144,31 @@ export default function InquiryModal({
               Log prospective lead inquiries from walk-ins, phone calls, or digital referrals.
             </DialogDescription>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (classes.length > 0) {
+                setInquiryForm({
+                  studentName: "Omkar Ranade",
+                  dateOfBirth: "2016-05-14",
+                  gender: "MALE",
+                  classAppliedId: classes[0].id,
+                  parentName: "Vijay Ranade",
+                  parentPhone: "9876543211",
+                  parentEmail: "vijay.ranade@example.com",
+                  source: "WALK_IN",
+                  notes: "Looking for immediate admission. Good academic record.",
+                });
+                snackbar.show("Demo inquiry data filled!", "success");
+              } else {
+                snackbar.show("No classes found to pre-fill.", "warning");
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-all shrink-0"
+          >
+            <Icon name="sparkles" size={14} />
+            Autofill
+          </button>
         </div>
 
         <form onSubmit={handleFormSubmit} className="space-y-6">

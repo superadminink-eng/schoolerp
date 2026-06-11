@@ -29,6 +29,12 @@ model Organization {
   roles                 Role[]
   subjectMasters        SubjectMaster[]
   users                 User[]
+  classes               Class[]
+  students              Student[]
+  staff                 Staff[]
+  systemSequences       SystemSequence[]
+  invoices              Invoice[]
+  feePayments           FeePayment[]
 
   @@map("organizations")
 }
@@ -195,6 +201,7 @@ model AcademicYear {
 model Class {
   id                      String                   @id @default(cuid())
   branchId                String
+  organizationId          String
   academicYearId          String
   name                    String
   numericGrade            Int
@@ -204,6 +211,7 @@ model Class {
   admissionInquiries      AdmissionInquiry[]
   academicYear            AcademicYear             @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   branch                  Branch                   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   feeInstallmentTemplates FeeInstallmentTemplate[]
   feeStructures           FeeStructure[]
   sections                Section[]
@@ -211,6 +219,7 @@ model Class {
 
   @@unique([branchId, academicYearId, name])
   @@index([branchId])
+  @@index([organizationId])
   @@index([academicYearId], map: "classes_academicYearId_fkey")
   @@map("classes")
 }
@@ -255,6 +264,7 @@ model Student {
   id                 String              @id @default(cuid())
   userId             String?             @unique
   branchId           String
+  organizationId     String
   admissionNo        String
   rollNo             String?
   firstName          String
@@ -298,11 +308,15 @@ model Student {
   enrollments        StudentEnrollment[]
   parentLinks        StudentParent[]
   transportAlloc     StudentTransport?
-  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  user               User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  deletedAt          DateTime?
 
   @@unique([branchId, admissionNo])
   @@index([branchId])
+  @@index([organizationId])
+  @@index([deletedAt])
   @@map("students")
 }
 
@@ -371,6 +385,7 @@ model Staff {
   id                      String                     @id @default(cuid())
   userId                  String?                    @unique
   branchId                String
+  organizationId          String
   employeeId              String?
   name                    String
   email                   String?
@@ -386,16 +401,20 @@ model Staff {
   status                  StaffStatus                @default(ACTIVE)
   createdAt               DateTime                   @default(now())
   updatedAt               DateTime                   @updatedAt
+  deletedAt               DateTime?
   sectionSubjectTeachings SectionSubjectTeacher[]    @relation("SectionSubjectTeacher")
   sectionClassTeacherOf   Section[]                  @relation("SectionClassTeacher")
-  branch                  Branch                     @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  user                    User?                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch                  Branch                     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  organization            Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user                    User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
   staffAttendances        StaffAttendance[]
   documents               StaffDocument[]
   subjectAssignments      TeacherSubjectAssignment[]
 
   @@unique([branchId, employeeId])
   @@index([branchId])
+  @@index([organizationId])
+  @@index([deletedAt])
   @@map("staff")
 }
 
@@ -606,9 +625,14 @@ model Invoice {
   lateFeeValue       Decimal       @default(0.00) @db.Decimal(10, 2)
   payments           FeePayment[]
   items              InvoiceItem[]
-  student            Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student            Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  organizationId     String
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deletedAt          DateTime?
 
   @@index([studentId])
+  @@index([organizationId])
+  @@index([deletedAt])
   @@map("invoices")
 }
 
@@ -636,11 +660,16 @@ model FeePayment {
   receiptNo     String?       @unique
   paidAt        DateTime      @default(now())
   remarks       String?
-  invoice       Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  student       Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  student       Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deletedAt     DateTime?
 
   @@index([studentId])
   @@index([invoiceId])
+  @@index([organizationId])
+  @@index([deletedAt])
   @@map("fee_payments")
 }
 
@@ -1139,3 +1168,19 @@ enum TestVerdict {
   FAIL
   BORDERLINE
 }
+
+model SystemSequence {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           String       // "ADMISSION", "INVOICE", "RECEIPT", "APPLICATION"
+  year           Int
+  currentValue   Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type, year])
+  @@index([organizationId])
+  @@map("system_sequences")
+}
+

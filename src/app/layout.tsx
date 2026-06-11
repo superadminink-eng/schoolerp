@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/shared/providers";
+import { auth } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,11 +8,13 @@ export const metadata: Metadata = {
   description: "Multi-tenant School ERP SaaS for managing students, staff, fees, exams, and more.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await auth();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -38,7 +41,7 @@ export default function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
-        <Providers>{children}</Providers>
+        <Providers session={session}>{children}</Providers>
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   apiSuccess,
   apiError,
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const student = await prisma.student.findFirst({
       where: {
         id: studentId,
-        branch: { organizationId: ctx.organizationId },
+        organizationId: ctx.organizationId,
         ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId
           ? { branchId: ctx.branchId }
           : {}),
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const activeInvoices = await prisma.invoice.findMany({
       where: {
         studentId,
+        organizationId: ctx.organizationId,
         status: { not: "CANCELLED" },
       },
       select: {
@@ -88,7 +90,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     // Get all payment records
     const payments = await prisma.feePayment.findMany({
-      where: { studentId },
+      where: { studentId, organizationId: ctx.organizationId },
       select: {
         id: true,
         amount: true,
@@ -250,7 +252,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const student = await prisma.student.findFirst({
       where: {
         id: studentId,
-        branch: { organizationId: ctx.organizationId },
+        organizationId: ctx.organizationId,
         ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId
           ? { branchId: ctx.branchId }
           : {}),
@@ -265,6 +267,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     let unpaidInvoices = await prisma.invoice.findMany({
       where: {
         studentId,
+        organizationId: ctx.organizationId,
         status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
       },
       orderBy: { dueDate: "asc" },
@@ -283,15 +286,18 @@ export async function POST(req: NextRequest, context: RouteContext) {
       }
     }
 
-    let totalPending = 0;
+    let totalPending = new Prisma.Decimal(0);
     unpaidInvoices.forEach((inv) => {
-      totalPending += Number(inv.totalAmount) + Number(inv.lateFeeAccumulated) - Number(inv.paidAmount);
+      const invTotal = new Prisma.Decimal(inv.totalAmount).plus(new Prisma.Decimal(inv.lateFeeAccumulated));
+      const invPending = invTotal.minus(new Prisma.Decimal(inv.paidAmount));
+      totalPending = totalPending.plus(invPending);
     });
 
-    if (data.amount > totalPending) {
+    const paymentAmountDecimal = new Prisma.Decimal(data.amount);
+    if (paymentAmountDecimal.gt(totalPending)) {
       return apiError(
         "BAD_REQUEST",
-        `Payment amount of ₹${data.amount} exceeds total outstanding dues of ₹${totalPending}`,
+        `Payment amount of ₹${data.amount} exceeds total outstanding dues of ₹${totalPending.toFixed(2)}`,
         400
       );
     }
@@ -316,38 +322,41 @@ export async function POST(req: NextRequest, context: RouteContext) {
       }
 
       // 1.5 Verify that the payment amount does not exceed the remaining outstanding balance inside the transaction
-      let freshTotalPending = 0;
+      let freshTotalPending = new Prisma.Decimal(0);
       for (const freshInv of freshInvoices) {
-        freshTotalPending += Number(freshInv.totalAmount) + Number(freshInv.lateFeeAccumulated) - Number(freshInv.paidAmount);
+        const invTotal = new Prisma.Decimal(freshInv.totalAmount).plus(new Prisma.Decimal(freshInv.lateFeeAccumulated));
+        const invPending = invTotal.minus(new Prisma.Decimal(freshInv.paidAmount));
+        freshTotalPending = freshTotalPending.plus(invPending);
       }
 
-      if (data.amount > freshTotalPending) {
-        throw new Error(`OVERPAYMENT: Payment amount of ₹${data.amount} exceeds total outstanding dues of ₹${freshTotalPending}`);
+      if (paymentAmountDecimal.gt(freshTotalPending)) {
+        throw new Error(`OVERPAYMENT: Payment amount of ₹${data.amount} exceeds total outstanding dues of ₹${freshTotalPending.toFixed(2)}`);
       }
 
-      let remainingPayment = data.amount;
+      let remainingPayment = paymentAmountDecimal;
       const createdPayments = [];
       let primaryPayment: any = null;
 
       for (const freshInv of freshInvoices) {
-        if (remainingPayment <= 0) break;
+        if (remainingPayment.lte(0)) break;
 
-        const invTotal = Number(freshInv.totalAmount) + Number(freshInv.lateFeeAccumulated);
-        const invPaid = Number(freshInv.paidAmount);
-        const invPending = invTotal - invPaid;
+        const invTotal = new Prisma.Decimal(freshInv.totalAmount).plus(new Prisma.Decimal(freshInv.lateFeeAccumulated));
+        const invPaid = new Prisma.Decimal(freshInv.paidAmount);
+        const invPending = invTotal.minus(invPaid);
 
-        if (invPending <= 0) continue;
+        if (invPending.lte(0)) continue;
 
-        const paymentToApply = Math.min(remainingPayment, invPending);
-        const newPaidAmount = invPaid + paymentToApply;
-        const newStatus = newPaidAmount >= invTotal ? "PAID" : "PARTIAL";
+        const paymentToApply = remainingPayment.lt(invPending) ? remainingPayment : invPending;
+        const newPaidAmount = invPaid.plus(paymentToApply);
+        const newStatus = newPaidAmount.gte(invTotal) ? "PAID" : "PARTIAL";
 
-        const receiptNo = await generateUniqueReceiptNo(tx);
+        const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
 
         const payment = await tx.feePayment.create({
           data: {
             invoiceId: freshInv.id,
             studentId,
+            organizationId: ctx.organizationId,
             amount: paymentToApply,
             method: data.method,
             transactionId: data.transactionId || null,
@@ -380,7 +389,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
           },
         });
 
-        remainingPayment -= paymentToApply;
+        remainingPayment = remainingPayment.minus(paymentToApply);
       }
 
       // Write audit log

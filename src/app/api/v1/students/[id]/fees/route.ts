@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const student = await prisma.student.findFirst({
       where: {
         id,
-        branch: { organizationId: ctx.organizationId },
+        organizationId: ctx.organizationId,
         ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
       },
     });
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const invoices = await prisma.invoice.findMany({
       where: {
         studentId: id,
+        organizationId: ctx.organizationId,
         status: { not: "CANCELLED" },
       },
       include: {
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
     // 3. Fetch fee payments for this student
     const payments = await prisma.feePayment.findMany({
-      where: { studentId: id },
+      where: { studentId: id, organizationId: ctx.organizationId },
       include: {
         invoice: true,
       },

@@ -40,6 +40,7 @@ test.describe("Setup & Academics Module E2E", () => {
         status: "ACTIVE"
       },
       create: {
+        organizationId: org.id,
         branchId: branch.id,
         employeeId: "EMP-ACAD-123",
         name: "Academics E2E Teacher",

@@ -38,6 +38,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     if (!classRecord) {
       classRecord = await prisma.class.create({
         data: {
+          organizationId: org.id,
           branchId: branch.id,
           academicYearId: academicYear.id,
           name: "Class 1",
@@ -82,6 +83,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     if (!targetClass) {
       targetClass = await prisma.class.create({
         data: {
+          organizationId: org.id,
           branchId: branch.id,
           academicYearId: targetYear.id,
           name: "Class 2",
@@ -186,6 +188,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     // Create our test student
     const student = await prisma.student.create({
       data: {
+        organizationId: org.id,
         branchId: branch.id,
         admissionNo: "ADM-TEST-12345",
         firstName: "Rajesh",
@@ -257,6 +260,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     const invoice = await prisma.invoice.create({
       data: {
         studentId: student.id,
+        organizationId: org.id,
         number: "INV-TEST-9999",
         year: 2026,
         totalAmount: 5000.00,
@@ -281,6 +285,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
       data: {
         invoiceId: invoice.id,
         studentId: student.id,
+        organizationId: org.id,
         amount: 3000.00,
         method: "UPI",
         receiptNo: "REC-TEST-9999",

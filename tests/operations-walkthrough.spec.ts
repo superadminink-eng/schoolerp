@@ -408,7 +408,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
 
     // Counselor: Verify admissions page is accessible, but fees page is blocked (redirects/fails)
     await counselorPage.goto("/admissions");
-    await expect(counselorPage.locator("h1.text-headline-md")).toContainText("Admissions Overview Desk");
+    await expect(counselorPage.locator("h1.text-headline-md")).toContainText("Admissions Pipeline Desk");
     
     await counselorPage.goto("/fees");
     await expect(counselorPage.locator("text=Insufficient permissions").or(counselorPage.locator("h1:has-text('Dashboard')"))).toBeVisible();
@@ -445,6 +445,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
       await classResponsePromise;
       await intakePage.waitForLoadState("networkidle");
       await intakePage.click("button:has-text('Counselor Inquiries')");
+      await intakePage.click("button[title='Table List View']");
       await intakePage.click("button:has-text('New Inquiry')");
       
       // Fill details via Autofill helper and override name for uniqueness
@@ -487,18 +488,20 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
     await page.goto("/admissions");
     await page.waitForLoadState("networkidle");
     await page.click("button:has-text('Counselor Inquiries')");
+    await page.click("button[title='Table List View']");
 
     for (let i = 0; i < 10; i++) {
       // Toggle "Show Converted" if they disappeared or filter by name
-      await page.fill("input[placeholder='Search candidate name, application ID...']", studentNames[i].first);
+      await page.fill("input[placeholder*='Search']", studentNames[i].first);
       await page.waitForTimeout(300);
       const row = page.locator("tr").filter({ hasText: studentNames[i].first }).first();
-      await row.locator("button:has-text('Fill Application')").click();
+      await row.locator("button:has-text('Register App')").click();
 
       // Fill empty required fields
-      await page.fill("label:has-text('Address') + input", `${100 + i} Walkthrough Lane, Karad`);
-      await page.fill("label:has-text('Pincode') + input", "415110");
-      await page.fill("label:has-text('Emergency Phone') + input", `998877665${i}`);
+      await page.click("button:has-text('Contact & Address')");
+      await page.fill("textarea[placeholder*='address']", `${100 + i} Walkthrough Lane, Karad`);
+      await page.fill("input[placeholder*='PIN']", "415110");
+      await page.fill("input[placeholder*='guardian number']", `998877665${i}`);
       
       // Submit Application
       await page.click("button[type='submit']:has-text('Submit Application')");
@@ -510,6 +513,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
     await page.goto("/admissions");
     await page.waitForLoadState("networkidle");
     await page.click("button:has-text('Applications Desk')");
+    await page.click("button[title='Table List View']");
     
     for (let i = 0; i < 10; i++) {
       const appName = `${studentNames[i].first.replace("Student ", "")} Admissions`;
@@ -521,7 +525,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
         continue;
       }
 
-      await page.fill("input[placeholder='Search candidate name, application ID...']", studentNames[i].first.replace("Student ", ""));
+      await page.fill("input[placeholder*='Search']", studentNames[i].first.replace("Student ", ""));
       await page.waitForTimeout(300);
       const row = page.locator("tr").filter({ hasText: studentNames[i].first }).first();
       await row.click(); // Open workspace panel
@@ -562,6 +566,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
     await page.goto("/admissions");
     await page.waitForLoadState("networkidle");
     await page.click("button:has-text('Applications Desk')");
+    await page.click("button[title='Table List View']");
 
     for (let i = 0; i < 10; i++) {
       const appName = `${studentNames[i].first.replace("Student ", "")} Admissions`;
@@ -573,7 +578,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
         continue;
       }
 
-      await page.fill("input[placeholder='Search candidate name, application ID...']", studentNames[i].first.replace("Student ", ""));
+      await page.fill("input[placeholder*='Search']", studentNames[i].first.replace("Student ", ""));
       await page.waitForTimeout(300);
       const row = page.locator("tr").filter({ hasText: studentNames[i].first }).first();
       await row.click();
@@ -606,6 +611,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
     await page.goto("/admissions");
     await page.waitForLoadState("networkidle");
     await page.click("button:has-text('Applications Desk')");
+    await page.click("button[title='Table List View']");
 
     for (let i = 0; i < 10; i++) {
       const appName = `${studentNames[i].first.replace("Student ", "")} Admissions`;
@@ -617,7 +623,7 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
         continue;
       }
 
-      await page.fill("input[placeholder='Search candidate name, application ID...']", studentNames[i].first.replace("Student ", ""));
+      await page.fill("input[placeholder*='Search']", studentNames[i].first.replace("Student ", ""));
       await page.waitForTimeout(300);
       const row = page.locator("tr").filter({ hasText: studentNames[i].first }).first();
       await row.click();

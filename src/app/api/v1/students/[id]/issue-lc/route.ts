@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const student = await prisma.student.findFirst({
       where: {
         id,
-        branch: { organizationId: ctx.organizationId },
+        organizationId: ctx.organizationId,
         ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
       },
     });
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const student = await prisma.student.findFirst({
       where: {
         id,
-        branch: { organizationId: ctx.organizationId },
+        organizationId: ctx.organizationId,
         ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
       },
     });
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // 3. Check for pending dues
     if (!allowOverride) {
       const activeInvoices = await prisma.invoice.findMany({
-        where: { studentId: id, status: { notIn: ["CANCELLED", "PAID"] } },
+        where: { studentId: id, organizationId: ctx.organizationId, status: { notIn: ["CANCELLED", "PAID"] } },
         select: {
           totalAmount: true,
           paidAmount: true,

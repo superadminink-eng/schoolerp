@@ -20,7 +20,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     // Verify staff belongs to caller's org
     const staffWhere: Record<string, unknown> = {
       id,
-      branch: { organizationId: ctx.organizationId },
+      organizationId: ctx.organizationId,
     };
     if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
       staffWhere.branchId = ctx.branchId;

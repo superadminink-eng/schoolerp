@@ -104,6 +104,7 @@ test.describe("Term Fees and Smart Late Fee Rules E2E", () => {
     // 3. Create test class, sections, fee category & structures
     const testClass = await prisma.class.create({
       data: {
+        organizationId: orgId,
         branchId,
         academicYearId,
         name: "SV-Term-Test-Class",
@@ -417,6 +418,7 @@ test.describe("Term Fees and Smart Late Fee Rules E2E", () => {
     // =========================================================================
     const student2 = await prisma.student.create({
       data: {
+        organizationId: orgId,
         branchId,
         admissionNo: `ADM-T-${Date.now()}`,
         firstName: student2FirstName,
@@ -453,6 +455,7 @@ test.describe("Term Fees and Smart Late Fee Rules E2E", () => {
     await prisma.invoice.create({
       data: {
         studentId: student1!.id,
+        organizationId: orgId,
         number: `INV-TEST-P-${Date.now()}`,
         year: today.getFullYear(),
         totalAmount: 20000,
@@ -475,6 +478,7 @@ test.describe("Term Fees and Smart Late Fee Rules E2E", () => {
     await prisma.invoice.create({
       data: {
         studentId: student2.id,
+        organizationId: orgId,
         number: `INV-TEST-L-${Date.now()}`,
         year: today.getFullYear(),
         totalAmount: 15000,
@@ -497,6 +501,7 @@ test.describe("Term Fees and Smart Late Fee Rules E2E", () => {
     await prisma.invoice.create({
       data: {
         studentId: student2.id,
+        organizationId: orgId,
         number: `INV-TEST-D-${Date.now()}`,
         year: today.getFullYear(),
         totalAmount: 10000,

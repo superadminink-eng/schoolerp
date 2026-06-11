@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   apiSuccess,
   apiError,
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   const branchId = url.searchParams.get("branchId");
 
   const where: Record<string, unknown> = {
-    branch: { organizationId: ctx.organizationId },
+    organizationId: ctx.organizationId,
   };
 
   if (ctx.branchId && branchId !== "__all__") {
@@ -136,8 +137,8 @@ export async function GET(req: NextRequest) {
       invoiceTotals.map((row) => [
         row.studentId,
         {
-          totalAmount: Number(row._sum.totalAmount ?? 0),
-          paidAmount: Number(row._sum.paidAmount ?? 0),
+          totalAmount: new Prisma.Decimal(row._sum.totalAmount ?? 0),
+          paidAmount: new Prisma.Decimal(row._sum.paidAmount ?? 0),
         },
       ])
     );
@@ -145,15 +146,18 @@ export async function GET(req: NextRequest) {
     const students = rows.map((s) => {
       const inv = invoiceMap.get(s.id);
       const totalPaid = s.feePayments.reduce(
-        (sum, fp) => sum + Number(fp.amount),
-        0
+        (sum, fp) => sum.plus(new Prisma.Decimal(fp.amount)),
+        new Prisma.Decimal(0)
       );
+      const invTotal = inv?.totalAmount ?? new Prisma.Decimal(0);
+      const invPaid = inv?.paidAmount ?? new Prisma.Decimal(0);
+      const pendingFees = invTotal.minus(invPaid);
       const { feePayments: _, ...rest } = s;
       return {
         ...rest,
-        totalFees: inv?.totalAmount ?? 0,
-        totalFeesPaid: totalPaid,
-        pendingFees: (inv?.totalAmount ?? 0) - (inv?.paidAmount ?? 0),
+        totalFees: invTotal.toNumber(),
+        totalFeesPaid: totalPaid.toNumber(),
+        pendingFees: pendingFees.toNumber(),
       };
     });
 
@@ -235,7 +239,7 @@ export async function POST(req: NextRequest) {
       }
     }
     // Auto-generate admissionNo
-    const admissionNo = await generateUniqueAdmissionNo(prisma);
+    const admissionNo = await generateUniqueAdmissionNo(prisma, ctx.organizationId);
 
     // Handle photo upload
     let photoPath: string | null = null;
@@ -272,6 +276,7 @@ export async function POST(req: NextRequest) {
       const created = await tx.student.create({
         data: {
           branchId: data.branchId,
+          organizationId: ctx.organizationId,
           admissionNo,
           firstName: data.firstName,
           lastName: data.lastName,
@@ -333,17 +338,17 @@ export async function POST(req: NextRequest) {
         if (feeStructures.length > 0) {
           // Compute annual amount per fee structure
           const feeItems = feeStructures.map((fs) => {
-            const base = Number(fs.amount);
-            let annual: number;
+            const base = new Prisma.Decimal(fs.amount);
+            let annual: Prisma.Decimal;
             switch (fs.frequency) {
               case "MONTHLY":
-                annual = base * 12;
+                annual = base.mul(12);
                 break;
               case "QUARTERLY":
-                annual = base * 4;
+                annual = base.mul(4);
                 break;
               case "SEMI_ANNUAL":
-                annual = base * 2;
+                annual = base.mul(2);
                 break;
               default:
                 annual = base;
@@ -351,31 +356,32 @@ export async function POST(req: NextRequest) {
             return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
           });
 
-          const annualTotal = feeItems.reduce((s, f) => s + f.annual, 0);
-          const discountPct = data.discountPercent ?? 0;
-          const discountedTotal = annualTotal * (1 - discountPct / 100);
+          const annualTotal = feeItems.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+          const discountPct = new Prisma.Decimal(data.discountPercent ?? 0);
+          const discountedTotal = annualTotal.mul(new Prisma.Decimal(1).minus(discountPct.div(100)));
 
-          const amountPaid = Math.min(data.amountPaid ?? 0, discountedTotal);
+          const amountPaid = Prisma.Decimal.min(new Prisma.Decimal(data.amountPaid ?? 0), discountedTotal);
 
           // Validate amountPaid doesn't exceed discounted total
-          if ((data.amountPaid ?? 0) > discountedTotal) {
+          if (new Prisma.Decimal(data.amountPaid ?? 0).gt(discountedTotal)) {
             throw new Error("AMOUNT_EXCEEDS_TOTAL");
           }
 
           let status: "PENDING" | "PARTIAL" | "PAID" = "PENDING";
-          if (amountPaid > 0 && amountPaid >= discountedTotal) {
+          if (amountPaid.gt(0) && amountPaid.gte(discountedTotal)) {
             status = "PAID";
-          } else if (amountPaid > 0) {
+          } else if (amountPaid.gt(0)) {
             status = "PARTIAL";
           }
 
-          const invoiceNo = await generateUniqueInvoiceNo(tx);
+          const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
           const dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + 30);
 
           const invoice = await tx.invoice.create({
             data: {
               studentId: created.id,
+              organizationId: ctx.organizationId,
               number: invoiceNo,
               year: new Date().getFullYear(),
               totalAmount: discountedTotal,
@@ -384,7 +390,7 @@ export async function POST(req: NextRequest) {
               dueDate,
               items: {
                 create: feeItems.map((fi) => {
-                  const itemDiscounted = fi.annual * (1 - discountPct / 100);
+                  const itemDiscounted = fi.annual.mul(new Prisma.Decimal(1).minus(discountPct.div(100)));
                   return {
                     feeStructureId: fi.feeStructureId,
                     amount: itemDiscounted,
@@ -397,12 +403,13 @@ export async function POST(req: NextRequest) {
 
           // Create fee payment record if amount was paid
           const pm = data.paymentMethod;
-          if (amountPaid > 0 && pm) {
-            const receiptNo = await generateUniqueReceiptNo(tx);
+          if (amountPaid.gt(0) && pm) {
+            const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
             await tx.feePayment.create({
               data: {
                 invoiceId: invoice.id,
                 studentId: created.id,
+                organizationId: ctx.organizationId,
                 amount: amountPaid,
                 method: pm,
                 transactionId: data.transactionId || null,

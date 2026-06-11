@@ -167,10 +167,10 @@ export async function GET(req: NextRequest) {
       where: { organizationId: orgId, isActive: true },
     }),
     prisma.class.count({
-      where: { branch: { organizationId: orgId } },
+      where: { organizationId: orgId },
     }),
     prisma.section.count({
-      where: { class: { branch: { organizationId: orgId } } },
+      where: { class: { organizationId: orgId } },
     }),
   ]);
 

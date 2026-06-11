@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   apiSuccess,
   apiError,
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     try {
       const where: Record<string, unknown> = {
-        branch: { organizationId: ctx.organizationId },
+        organizationId: ctx.organizationId,
       };
       
       if (ctx.branchId && branchId !== "__all__") {
@@ -185,14 +186,20 @@ export async function POST(req: NextRequest) {
     const termInstallments = installments.filter(i => i.termType === t);
     
     if (termFees.length > 0 || termInstallments.length > 0) {
-      const totalTermFees = termFees.reduce((sum, f) => sum + f.amount, 0);
-      const totalTermInstallments = termInstallments.reduce((sum, i) => sum + i.amount, 0);
+      const totalTermFees = termFees.reduce(
+        (sum, f) => sum.plus(new Prisma.Decimal(f.amount)),
+        new Prisma.Decimal(0)
+      );
+      const totalTermInstallments = termInstallments.reduce(
+        (sum, i) => sum.plus(new Prisma.Decimal(i.amount)),
+        new Prisma.Decimal(0)
+      );
       
-      if (Math.abs(totalTermFees - totalTermInstallments) > 0.01) {
+      if (!totalTermFees.equals(totalTermInstallments)) {
         const termLabel = t === "FULL_TERM" ? "Full Term" : t === "HALF_TERM" ? "Half Term" : "Short Term";
         return apiError(
           "BAD_REQUEST",
-          `The sum of ${termLabel} installments (₹${totalTermInstallments.toLocaleString("en-IN")}) must equal the total ${termLabel} fee amount (₹${totalTermFees.toLocaleString("en-IN")}).`,
+          `The sum of ${termLabel} installments (₹${totalTermInstallments.toNumber().toLocaleString("en-IN")}) must equal the total ${termLabel} fee amount (₹${totalTermFees.toNumber().toLocaleString("en-IN")}).`,
           400
         );
       }
@@ -246,7 +253,7 @@ export async function POST(req: NextRequest) {
       const verifiedStaffCount = await prisma.staff.count({
         where: {
           id: { in: Array.from(staffIdsToVerify) },
-          branch: { organizationId: ctx.organizationId },
+          organizationId: ctx.organizationId,
         },
       });
       if (verifiedStaffCount !== staffIdsToVerify.size) {
@@ -263,6 +270,7 @@ export async function POST(req: NextRequest) {
       const cls = await tx.class.create({
         data: {
           branchId,
+          organizationId: ctx.organizationId,
           academicYearId,
           name,
           numericGrade,

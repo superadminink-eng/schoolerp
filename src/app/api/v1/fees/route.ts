@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     // Build where clause for students with pending amounts
     const studentWhere: Record<string, any> = {
-      branch: { organizationId: ctx.organizationId },
+      organizationId: ctx.organizationId,
       invoices: {
         some: {
           status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },

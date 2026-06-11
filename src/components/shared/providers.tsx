@@ -3,9 +3,14 @@
 import { SessionProvider } from "next-auth/react";
 import { SnackbarProvider } from "@/components/ui/snackbar";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+interface ProvidersProps {
+  children: React.ReactNode;
+  session?: any;
+}
+
+export function Providers({ children, session }: ProvidersProps) {
   return (
-    <SessionProvider>
+    <SessionProvider session={session} key={session?.user?.id}>
       <SnackbarProvider>{children}</SnackbarProvider>
     </SessionProvider>
   );

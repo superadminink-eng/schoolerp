@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   apiSuccess,
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
         const student = await tx.student.findFirst({
           where: {
             id: studentId,
-            branch: { organizationId: ctx.organizationId },
+            organizationId: ctx.organizationId,
           },
         });
 
@@ -107,19 +108,20 @@ export async function POST(req: NextRequest) {
 
         if (feeStructures.length > 0) {
           const annualFees = feeStructures.map((fs) => {
-            const base = Number(fs.amount);
+            const base = new Prisma.Decimal(fs.amount);
             let annual = base;
             switch (fs.frequency) {
-              case "MONTHLY": annual = base * 12; break;
-              case "QUARTERLY": annual = base * 4; break;
-              case "SEMI_ANNUAL": annual = base * 2; break;
+              case "MONTHLY": annual = base.mul(12); break;
+              case "QUARTERLY": annual = base.mul(4); break;
+              case "SEMI_ANNUAL": annual = base.mul(2); break;
               default: annual = base;
             }
             return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
           });
 
-          const annualTotal = annualFees.reduce((acc, item) => acc + item.annual, 0);
-          const discountMultiplier = 1 - discountPercent / 100;
+          const annualTotal = annualFees.reduce((acc, item) => acc.plus(item.annual), new Prisma.Decimal(0));
+          const discountPct = new Prisma.Decimal(discountPercent);
+          const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
 
           // Fetch templates for the resolved term type
           const classTemplates = await tx.feeInstallmentTemplate.findMany({
@@ -132,33 +134,18 @@ export async function POST(req: NextRequest) {
           });
 
           if (classTemplates.length > 0) {
-            const totalTemplateAmount = classTemplates.reduce((sum, inst) => sum + Number(inst.amount), 0);
+            const totalTemplateAmount = classTemplates.reduce((sum, inst) => sum.plus(new Prisma.Decimal(inst.amount)), new Prisma.Decimal(0));
 
             for (const temp of classTemplates) {
-              let invoiceNo = "";
-              let isUnique = false;
+              const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
 
-              for (let attempt = 0; attempt < 5; attempt++) {
-                const candidate = await generateUniqueInvoiceNo(tx);
-                if (!generatedInvoiceNos.has(candidate)) {
-                  invoiceNo = candidate;
-                  generatedInvoiceNos.add(candidate);
-                  isUnique = true;
-                  break;
-                }
-              }
-
-              if (!isUnique) {
-                invoiceNo = `INV-PROMO-FB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-                generatedInvoiceNos.add(invoiceNo);
-              }
-
-              const tempAmount = Number(temp.amount);
-              const discountedTotal = tempAmount * discountMultiplier;
+              const tempAmount = new Prisma.Decimal(temp.amount);
+              const discountedTotal = tempAmount.mul(discountMultiplier);
 
               await tx.invoice.create({
                 data: {
                   studentId,
+                  organizationId: ctx.organizationId,
                   number: invoiceNo,
                   year: new Date().getFullYear(),
                   totalAmount: discountedTotal,
@@ -172,9 +159,9 @@ export async function POST(req: NextRequest) {
                   lateFeeGrace: temp.lateFeeGrace,
                   items: {
                     create: annualFees.map((fi) => {
-                      const proportionalAmount = totalTemplateAmount > 0
-                        ? fi.annual * (tempAmount / totalTemplateAmount) * discountMultiplier
-                        : 0;
+                      const proportionalAmount = totalTemplateAmount.gt(0)
+                        ? fi.annual.mul(tempAmount.div(totalTemplateAmount)).mul(discountMultiplier)
+                        : new Prisma.Decimal(0);
                       return {
                         feeStructureId: fi.feeStructureId,
                         amount: proportionalAmount,
@@ -186,32 +173,16 @@ export async function POST(req: NextRequest) {
               });
             }
           } else {
-            // Fallback to single consolidated annual invoice
-            let invoiceNo = "";
-            let isUnique = false;
+            const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
 
-            for (let attempt = 0; attempt < 5; attempt++) {
-              const candidate = await generateUniqueInvoiceNo(tx);
-              if (!generatedInvoiceNos.has(candidate)) {
-                invoiceNo = candidate;
-                generatedInvoiceNos.add(candidate);
-                isUnique = true;
-                break;
-              }
-            }
-
-            if (!isUnique) {
-              invoiceNo = `INV-PROMO-FB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-              generatedInvoiceNos.add(invoiceNo);
-            }
-
-            const discountedTotal = annualTotal * discountMultiplier;
+            const discountedTotal = annualTotal.mul(discountMultiplier);
             const dueDate = new Date();
             dueDate.setDate(dueDate.getDate() + 30);
 
             await tx.invoice.create({
               data: {
                 studentId,
+                organizationId: ctx.organizationId,
                 number: invoiceNo,
                 year: new Date().getFullYear(),
                 totalAmount: discountedTotal,
@@ -221,7 +192,7 @@ export async function POST(req: NextRequest) {
                 items: {
                   create: annualFees.map((fi) => ({
                     feeStructureId: fi.feeStructureId,
-                    amount: fi.annual * discountMultiplier,
+                    amount: fi.annual.mul(discountMultiplier),
                     description: fi.name,
                   })),
                 },

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
   const where: Record<string, unknown> = {
     id,
-    branch: { organizationId: ctx.organizationId },
+    organizationId: ctx.organizationId,
   };
 
   if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
@@ -164,7 +164,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const existingWhere: Record<string, unknown> = {
       id,
-      branch: { organizationId: ctx.organizationId },
+      organizationId: ctx.organizationId,
     };
 
     if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
@@ -344,7 +344,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   try {
     const existingWhere: Record<string, unknown> = {
       id,
-      branch: { organizationId: ctx.organizationId },
+      organizationId: ctx.organizationId,
     };
 
     if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
@@ -356,7 +356,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
     await prisma.student.update({
       where: { id },
-      data: { status: "DROPPED" },
+      data: { status: "DROPPED", deletedAt: new Date() },
     });
 
     await logAction({

@@ -28,6 +28,7 @@ test.describe("Class Wizard Draft & Edit Lock E2E", () => {
         status: "ACTIVE"
       },
       create: {
+        organizationId: org.id,
         branchId: branch.id,
         employeeId: "EMP-WIZ-123",
         name: "Wizard Test Teacher",
@@ -126,6 +127,7 @@ test.describe("Class Wizard Draft & Edit Lock E2E", () => {
 
     const testStudent = await prisma.student.create({
       data: {
+        organizationId: org!.id,
         branchId: branch!.id,
         admissionNo: `ADM-WIZ-${Date.now()}`,
         firstName: "WizardStudent",

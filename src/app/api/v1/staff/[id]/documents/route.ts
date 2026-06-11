@@ -22,7 +22,7 @@ async function verifyStaffAccess(
 ) {
   const where: Record<string, unknown> = {
     id: staffId,
-    branch: { organizationId: ctx.organizationId },
+    organizationId: ctx.organizationId,
   };
   if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;

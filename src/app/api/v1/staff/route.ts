@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const status = url.searchParams.get("status");
 
   const where: Record<string, unknown> = {
-    branch: { organizationId: ctx.organizationId },
+    organizationId: ctx.organizationId,
   };
 
   // Restrict branch-scoped roles to their home branch
@@ -210,6 +210,7 @@ export async function POST(req: NextRequest) {
     const staff = await prisma.staff.create({
       data: {
         branchId,
+        organizationId: ctx.organizationId,
         employeeId,
         userId,
         name,

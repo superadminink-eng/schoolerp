@@ -90,7 +90,7 @@ export async function GET(
 
     // 3. Fetch Invoices
     const invoices = await prisma.invoice.findMany({
-      where: { studentId },
+      where: { studentId, organizationId: student.organizationId },
       include: {
         items: true,
       },

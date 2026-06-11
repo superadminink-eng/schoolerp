@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   apiSuccess,
   apiError,
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // 3. Database Transaction
     const student = await prisma.$transaction(async (tx) => {
       // a. Create AdmissionApplication programmatically
-      const applicationNo = await generateUniqueApplicationNo(tx);
+      const applicationNo = await generateUniqueApplicationNo(tx, ctx.organizationId);
       const application = await tx.admissionApplication.create({
         data: {
           inquiryId: id,
@@ -147,10 +148,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       });
 
       // b. Create Student profile
-      const admissionNo = await generateUniqueAdmissionNo(tx);
+      const admissionNo = await generateUniqueAdmissionNo(tx, ctx.organizationId);
       const studentRecord = await tx.student.create({
         data: {
           branchId: inquiry.branchId,
+          organizationId: ctx.organizationId,
           admissionNo,
           rollNo: rollNo || null,
           firstName,
@@ -187,22 +189,22 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       if (feeStructures.length > 0) {
         const feeCategoriesAnnual = feeStructures.map((fs) => {
-          const base = Number(fs.amount);
+          const base = new Prisma.Decimal(fs.amount);
           let annual = base;
           switch (fs.frequency) {
-            case "MONTHLY": annual = base * 12; break;
-            case "QUARTERLY": annual = base * 4; break;
-            case "SEMI_ANNUAL": annual = base * 2; break;
+            case "MONTHLY": annual = base.mul(12); break;
+            case "QUARTERLY": annual = base.mul(4); break;
+            case "SEMI_ANNUAL": annual = base.mul(2); break;
             default: annual = base;
           }
           return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
         });
 
-        const annualTotal = feeCategoriesAnnual.reduce((s, f) => s + f.annual, 0);
-        const discountPct = discountPercent ?? 0;
-        const discountMultiplier = 1 - discountPct / 100;
+        const annualTotal = feeCategoriesAnnual.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+        const discountPct = new Prisma.Decimal(discountPercent ?? 0);
+        const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
 
-        let targetInstallments: { name: string; amount: number; dueDate: Date; lateFeeActive: boolean; lateFeeType: string; lateFeeValue: number; lateFeePerDay: number; lateFeeGrace: number }[] = [];
+        let targetInstallments: { name: string; amount: Prisma.Decimal; dueDate: Date; lateFeeActive: boolean; lateFeeType: string; lateFeeValue: Prisma.Decimal; lateFeePerDay: Prisma.Decimal; lateFeeGrace: number }[] = [];
         
         if (installments && installments.length > 0) {
           const templateIds = installments.map(i => i.templateId);
@@ -214,12 +216,12 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             const temp = matchedTemplates.find(t => t.id === inst.templateId);
             return {
               name: temp?.name || "Installment",
-              amount: inst.amount,
+              amount: new Prisma.Decimal(inst.amount),
               dueDate: temp?.dueDate || new Date(),
               lateFeeActive: temp?.lateFeeActive || false,
               lateFeeType: temp?.lateFeeType || "DAILY",
-              lateFeeValue: temp ? Number(temp.lateFeeValue) : 0,
-              lateFeePerDay: temp ? Number(temp.lateFeePerDay) : 0,
+              lateFeeValue: temp ? new Prisma.Decimal(temp.lateFeeValue) : new Prisma.Decimal(0),
+              lateFeePerDay: temp ? new Prisma.Decimal(temp.lateFeePerDay) : new Prisma.Decimal(0),
               lateFeeGrace: temp?.lateFeeGrace || 0,
             };
           });
@@ -236,12 +238,12 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           if (classTemplates.length > 0) {
             targetInstallments = classTemplates.map(t => ({
               name: t.name,
-              amount: Number(t.amount),
+              amount: new Prisma.Decimal(t.amount),
               dueDate: t.dueDate,
               lateFeeActive: t.lateFeeActive,
               lateFeeType: t.lateFeeType,
-              lateFeeValue: Number(t.lateFeeValue),
-              lateFeePerDay: Number(t.lateFeePerDay),
+              lateFeeValue: new Prisma.Decimal(t.lateFeeValue),
+              lateFeePerDay: new Prisma.Decimal(t.lateFeePerDay),
               lateFeeGrace: t.lateFeeGrace,
             }));
           }
@@ -250,11 +252,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         const createdInvoices = [];
 
         if (targetInstallments.length > 0) {
-          const totalTemplateAmount = targetInstallments.reduce((sum, inst) => sum + inst.amount, 0);
+          const totalTemplateAmount = targetInstallments.reduce((sum, inst) => sum.plus(inst.amount), new Prisma.Decimal(0));
 
           for (const inst of targetInstallments) {
-            const invoiceNo = await generateUniqueInvoiceNo(tx);
-            const installmentDiscountedTotal = inst.amount * discountMultiplier;
+            const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
+            const installmentDiscountedTotal = inst.amount.mul(discountMultiplier);
 
             let finalDueDate = new Date(inst.dueDate);
             const today = new Date();
@@ -265,6 +267,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             const invoice = await tx.invoice.create({
               data: {
                 studentId: studentRecord.id,
+                organizationId: ctx.organizationId,
                 number: invoiceNo,
                 year: new Date().getFullYear(),
                 totalAmount: installmentDiscountedTotal,
@@ -278,9 +281,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
                 lateFeeGrace: inst.lateFeeGrace,
                 items: {
                   create: feeCategoriesAnnual.map((fi) => {
-                    const proportionalAmount = totalTemplateAmount > 0 
-                      ? fi.annual * (inst.amount / totalTemplateAmount) * discountMultiplier 
-                      : 0;
+                    const proportionalAmount = totalTemplateAmount.gt(0) 
+                      ? fi.annual.mul(inst.amount.div(totalTemplateAmount)).mul(discountMultiplier) 
+                      : new Prisma.Decimal(0);
                     return {
                       feeStructureId: fi.feeStructureId,
                       amount: proportionalAmount,
@@ -294,14 +297,15 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             createdInvoices.push(invoice);
           }
         } else {
-          const invoiceNo = await generateUniqueInvoiceNo(tx);
-          const discountedTotal = annualTotal * discountMultiplier;
+          const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
+          const discountedTotal = annualTotal.mul(discountMultiplier);
           const dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + 30);
 
           const invoice = await tx.invoice.create({
             data: {
               studentId: studentRecord.id,
+              organizationId: ctx.organizationId,
               number: invoiceNo,
               year: new Date().getFullYear(),
               totalAmount: discountedTotal,
@@ -311,7 +315,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
               items: {
                 create: feeCategoriesAnnual.map((fi) => ({
                   feeStructureId: fi.feeStructureId,
-                  amount: fi.annual * discountMultiplier,
+                  amount: fi.annual.mul(discountMultiplier),
                   description: fi.name,
                 })),
               },
@@ -322,25 +326,26 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         }
 
         // Apply payment rollover
-        let remainingPayment = amountPaid ?? 0;
+        let remainingPayment = new Prisma.Decimal(amountPaid ?? 0);
         
-        if (remainingPayment > 0 && paymentMethod) {
+        if (remainingPayment.gt(0) && paymentMethod) {
           createdInvoices.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
           for (const inv of createdInvoices) {
-            if (remainingPayment <= 0) break;
+            if (remainingPayment.lte(0)) break;
 
-            const invTotal = Number(inv.totalAmount);
-            const paymentToApply = Math.min(remainingPayment, invTotal);
+            const invTotal = new Prisma.Decimal(inv.totalAmount);
+            const paymentToApply = remainingPayment.lt(invTotal) ? remainingPayment : invTotal;
             const newPaidAmount = paymentToApply;
-            const newStatus = newPaidAmount >= invTotal ? "PAID" : "PARTIAL";
+            const newStatus = newPaidAmount.gte(invTotal) ? "PAID" : "PARTIAL";
 
-            const receiptNo = await generateUniqueReceiptNo(tx);
+            const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
 
             await tx.feePayment.create({
               data: {
                 invoiceId: inv.id,
                 studentId: studentRecord.id,
+                organizationId: ctx.organizationId,
                 amount: paymentToApply,
                 method: paymentMethod,
                 transactionId: transactionId || null,
@@ -357,7 +362,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
               },
             });
 
-            remainingPayment -= paymentToApply;
+            remainingPayment = remainingPayment.minus(paymentToApply);
           }
         }
       }

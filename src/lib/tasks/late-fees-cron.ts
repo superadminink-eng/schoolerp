@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 /**
  * Nightly batch task to calculate and apply late fee penalties for overdue invoices.
@@ -33,22 +34,21 @@ export async function runLateFeesCalculation(currentDate: Date = new Date()) {
       const daysOverdue = diffDays - graceDays;
 
       if (daysOverdue > 0) {
-        let accumulatedPenalty = 0;
-        const value = Number(inv.lateFeeValue);
+        let accumulatedPenalty = new Prisma.Decimal(0);
+        const value = new Prisma.Decimal(inv.lateFeeValue);
 
         if (inv.lateFeeType === "LUMP_SUM") {
           accumulatedPenalty = value;
         } else if (inv.lateFeeType === "PERCENTAGE") {
-          accumulatedPenalty = Number(inv.totalAmount) * (value / 100);
+          accumulatedPenalty = new Prisma.Decimal(inv.totalAmount).mul(value).div(100);
         } else {
           // DAILY rule (or fallback to legacy lateFeePerDay)
-          accumulatedPenalty = value > 0 
-            ? daysOverdue * value 
-            : daysOverdue * Number(inv.lateFeePerDay);
+          const rate = value.gt(0) ? value : new Prisma.Decimal(inv.lateFeePerDay);
+          accumulatedPenalty = rate.mul(daysOverdue);
         }
         
         // Only update database if the accumulated penalty is different
-        if (accumulatedPenalty !== Number(inv.lateFeeAccumulated)) {
+        if (!accumulatedPenalty.equals(new Prisma.Decimal(inv.lateFeeAccumulated))) {
           await prisma.invoice.update({
             where: { id: inv.id },
             data: {

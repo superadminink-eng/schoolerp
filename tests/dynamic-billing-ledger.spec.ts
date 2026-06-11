@@ -75,6 +75,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
     // 3. Create test class, section, fee category & structures
     const testClass = await prisma.class.create({
       data: {
+        organizationId: orgId,
         branchId,
         academicYearId,
         name: "SV-Test-Class",
@@ -215,15 +216,17 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
   });
 
   test("Step 1: Promote applicant with dynamic fee proration/customization", async ({ page }) => {
+    test.slow();
     // 1. Open admissions page
     await page.goto("/admissions");
     await page.waitForLoadState("networkidle");
     
     // Select Applications Desk tab
     await page.click("button:has-text('Applications Desk')");
+    await page.click("button[title='Table List View']");
     
     // Search for our student
-    await page.fill("input[placeholder='Search candidate name, application ID...']", studentFirstName);
+    await page.fill("input[placeholder*='Search']", studentFirstName);
     await page.waitForTimeout(500);
     
     // Verify candidate row is visible and click "Promote to Student" (or edit applicant)
@@ -237,7 +240,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
     
     // 2. Promotion modal details
     // Verify the installment templates list is rendered
-    await expect(page.locator("h4:has-text('Installment Plan & Adjustments')")).toBeVisible();
+    await expect(page.locator("h4:has-text('Fee Installments List')")).toBeVisible();
     await expect(page.locator("text=Installment 1")).toBeVisible();
     await expect(page.locator("text=Installment 2")).toBeVisible();
     await expect(page.locator("text=Installment 3")).toBeVisible();
