@@ -124,9 +124,18 @@ export async function GET(req: NextRequest) {
     let targetYearId = reqAcademicYearId;
 
     if (!targetYearId) {
-      const academicYear = await prisma.academicYear.findFirst({
+      let academicYear = await prisma.academicYear.findFirst({
         where: { organizationId: ctx.organizationId, isCurrent: true },
       });
+      
+      // Fallback: Use the latest academic year if none is marked as current
+      if (!academicYear) {
+        academicYear = await prisma.academicYear.findFirst({
+          where: { organizationId: ctx.organizationId },
+          orderBy: { startDate: "desc" },
+        });
+      }
+      
       targetYearId = academicYear?.id || null;
     }
 
