@@ -78,13 +78,25 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         return tx.admissionApplication.update({
           where: { id },
           data: dataToUpdate,
-          include: { documents: true, examResult: true },
+          include: {
+            documents: true,
+            examResult: true,
+            class: { select: { id: true, name: true } },
+            branch: { select: { id: true, name: true } },
+            academicYear: { select: { id: true, name: true } },
+          },
         });
       }
 
       return tx.admissionApplication.findUnique({
         where: { id },
-        include: { documents: true, examResult: true },
+        include: {
+          documents: true,
+          examResult: true,
+          class: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, name: true } },
+        },
       });
     }, { timeout: 15000 });
 

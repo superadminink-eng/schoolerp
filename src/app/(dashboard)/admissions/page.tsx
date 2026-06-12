@@ -161,6 +161,7 @@ export default function AdmissionsPage() {
   const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
   const [applicationModalOpen, setApplicationModalOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Selection configurations
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
@@ -345,7 +346,7 @@ export default function AdmissionsPage() {
             setCustomInstallments(
               data.data.map((t: any) => ({
                 templateId: t.id,
-                amount: Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100),
+                amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
                 checked: true,
               }))
             );
@@ -357,6 +358,25 @@ export default function AdmissionsPage() {
       fetchTemplates();
     }
   }, [workspaceOpen, selectedApp?.class?.id, promoteForm.termType]);
+
+  // Load sections dynamically when selectedApp changes
+  useEffect(() => {
+    if (workspaceOpen && selectedApp && selectedApp.class?.id) {
+      const fetchSections = async () => {
+        try {
+          const res = await fetch(`/api/v1/classes/${selectedApp.class?.id}/sections`);
+          const data = await res.json();
+          if (data.success && data.data.length > 0) {
+            setClassSections(data.data);
+            setPromoteForm((prev) => ({ ...prev, sectionId: data.data[0].id }));
+          }
+        } catch {
+          console.error("Failed to load sections.");
+        }
+      };
+      fetchSections();
+    }
+  }, [workspaceOpen, selectedApp?.class?.id]);
 
   // 1. Fetch initial branches and academic years
   useEffect(() => {
@@ -852,6 +872,7 @@ export default function AdmissionsPage() {
   // Open candidate details in Unified Workspace panel
   const handleOpenWorkspace = async (app: Application) => {
     setSelectedApp(app);
+    setFormError(null);
     const docs = app.documents || [];
     setVerifyForm({
       documents: docs.map((d) => ({
@@ -887,19 +908,6 @@ export default function AdmissionsPage() {
     });
 
     setWorkspaceOpen(true);
-
-    if (app.status === "SHORTLISTED" && app.class?.id) {
-      try {
-        const res = await fetch(`/api/v1/classes/${app.class.id}/sections`);
-        const data = await res.json();
-        if (data.success && data.data.length > 0) {
-          setClassSections(data.data);
-          setPromoteForm((prev) => ({ ...prev, sectionId: data.data[0].id }));
-        }
-      } catch {
-        console.error("Failed to load sections.");
-      }
-    }
   };
 
   // Dialog forms submissions
@@ -996,6 +1004,7 @@ export default function AdmissionsPage() {
     e.preventDefault();
     if (!selectedApp) return;
     setActionLoading(true);
+    setFormError(null);
     try {
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/verify`, {
         method: "POST",
@@ -1009,14 +1018,18 @@ export default function AdmissionsPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show("Document checks updated.", "success");
+        setFormError(null);
         const refreshedApp = data.data;
         setApplications((prev) => prev.map((a) => (a.id === refreshedApp.id ? refreshedApp : a)));
         handleOpenWorkspace(refreshedApp);
         fetchDashboardData();
       } else {
-        snackbar.show(data.error?.message || "Failed to verify documents.", "error");
+        const errMsg = data.error?.message || "Failed to verify documents.";
+        setFormError(errMsg);
+        snackbar.show(errMsg, "error");
       }
     } catch {
+      setFormError("Network error.");
       snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
@@ -1027,6 +1040,7 @@ export default function AdmissionsPage() {
     e.preventDefault();
     if (!selectedApp) return;
     setActionLoading(true);
+    setFormError(null);
     try {
       const payload = {
         examDate: examForm.examDate,
@@ -1044,14 +1058,18 @@ export default function AdmissionsPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show("Exam score saved successfully.", "success");
+        setFormError(null);
         const refreshedApp = data.data;
         setApplications((prev) => prev.map((a) => (a.id === refreshedApp.id ? refreshedApp : a)));
         handleOpenWorkspace(refreshedApp);
         fetchDashboardData();
       } else {
-        snackbar.show(data.error?.message || "Failed to save exam details.", "error");
+        const errMsg = data.error?.message || "Failed to save exam details.";
+        setFormError(errMsg);
+        snackbar.show(errMsg, "error");
       }
     } catch {
+      setFormError("Network error.");
       snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
@@ -1061,15 +1079,88 @@ export default function AdmissionsPage() {
   const handlePromote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedApp) return;
+    setFormError(null);
+
+    // 0. Validate Incomplete Candidate Data
+    if (!selectedApp.class?.id || !selectedApp.academicYear?.id) {
+      const errMsg = "Target Class and Academic Year are required to initialize billing.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    // 1. Validate Division/Section
+    if (!promoteForm.sectionId) {
+      const errMsg = "Class Division (Section) is required.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    // 2. Validate Admission Date
+    if (!promoteForm.admissionDate) {
+      const errMsg = "Admission Date is required.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    // 3. Validate Student Age (Minimum 3 years old on admission date)
+    const dob = new Date(selectedApp.dateOfBirth);
+    const admDate = new Date(promoteForm.admissionDate);
+    const ageAtAdmission = (admDate.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    if (ageAtAdmission < 3.0) {
+      const errMsg = "Student must be at least 3 years old on the admission date.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    // 4. Validate Scholarship / Discount Percentage
+    const discount = Number(promoteForm.discountPercent) || 0;
+    if (discount < 0 || discount > 100) {
+      const errMsg = "Discount percent must be between 0% and 100%.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    // 5. Validate Installments configured
+    if (customInstallments.length === 0) {
+      const errMsg = "At least one fee installment template must be configured for this class.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    const baseTotal = installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const totalDiscountedFee = Math.max(0, Math.round(baseTotal * (1 - discount / 100)));
+
+    // 6. Validate Upfront Payment
+    const amountPaidVal = Number(promoteForm.amountPaid) || 0;
+    if (amountPaidVal < 0) {
+      const errMsg = "Amount paid cannot be negative.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    if (amountPaidVal > 0 && !promoteForm.paymentMethod) {
+      const errMsg = "Please select a payment mode for the upfront payment.";
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
+    if (amountPaidVal > totalDiscountedFee) {
+      const errMsg = `Upfront payment of ₹${amountPaidVal} cannot exceed the onboarding total of ₹${totalDiscountedFee}.`;
+      setFormError(errMsg);
+      snackbar.show(errMsg, "error");
+      return;
+    }
+
     setActionLoading(true);
     try {
-      const activeInstallments = customInstallments
-        .filter((inst) => inst.checked)
-        .map((inst) => ({
-          templateId: inst.templateId,
-          amount: inst.amount,
-        }));
-
       const payload = {
         sectionId: promoteForm.sectionId,
         rollNo: promoteForm.rollNo || undefined,
@@ -1078,7 +1169,7 @@ export default function AdmissionsPage() {
         amountPaid: Number(promoteForm.amountPaid) || undefined,
         paymentMethod: promoteForm.paymentMethod,
         transactionId: promoteForm.transactionId || undefined,
-        installments: activeInstallments.length > 0 ? activeInstallments : undefined,
+        installments: undefined,
         termType: promoteForm.termType,
       };
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/promote`, {
@@ -1089,12 +1180,16 @@ export default function AdmissionsPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show("Candidate successfully promoted to student!", "success");
+        setFormError(null);
         setWorkspaceOpen(false);
         fetchDashboardData();
       } else {
-        snackbar.show(data.error?.message || "Failed to promote student.", "error");
+        const errMsg = data.error?.message || "Failed to promote student.";
+        setFormError(errMsg);
+        snackbar.show(errMsg, "error");
       }
     } catch {
+      setFormError("Network error.");
       snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
@@ -1448,6 +1543,8 @@ export default function AdmissionsPage() {
         onSaveExam={handleSaveExam}
         onPromote={handlePromote}
         actionLoading={actionLoading}
+        formError={formError}
+        setFormError={setFormError}
       />
     </div>
   );

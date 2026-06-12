@@ -86,7 +86,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       const app = await tx.admissionApplication.update({
         where: { id },
         data: { status: nextStatus },
-        include: { documents: true, examResult: true },
+        include: {
+          documents: true,
+          examResult: true,
+          class: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, name: true } },
+        },
       });
 
       return app;

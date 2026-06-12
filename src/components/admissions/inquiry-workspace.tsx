@@ -107,6 +107,23 @@ export default function InquiryWorkspace({
       snackbar.show("Please select a section.", "error");
       return;
     }
+
+    const discount = Number(expressForm.discountPercent) || 0;
+    if (discount < 0 || discount > 100) {
+      snackbar.show("Discount percent must be between 0% and 100%.", "error");
+      return;
+    }
+
+    const amountPaidVal = Number(expressForm.amountPaid) || 0;
+    if (amountPaidVal < 0) {
+      snackbar.show("Amount paid cannot be negative.", "error");
+      return;
+    }
+
+    if (amountPaidVal > 0 && !expressForm.paymentMethod) {
+      snackbar.show("Please select a payment mode for the upfront payment.", "error");
+      return;
+    }
     setExpressAdmitting(true);
     try {
       const res = await fetch(`/api/v1/admissions/inquiries/${selectedInquiry.id}/express-admit`, {

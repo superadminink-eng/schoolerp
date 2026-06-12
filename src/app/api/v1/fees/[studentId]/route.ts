@@ -337,6 +337,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
       const createdPayments = [];
       let primaryPayment: any = null;
 
+      // Generate a unified transaction ID if not provided, to group split allocations
+      const unifiedTransactionId = data.transactionId || `TXN-FEE-${Date.now()}-${crypto.randomBytes ? crypto.randomBytes(4).toString("hex") : Math.random().toString(36).substring(7)}`;
+
       for (const freshInv of freshInvoices) {
         if (remainingPayment.lte(0)) break;
 
@@ -359,7 +362,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
             organizationId: ctx.organizationId,
             amount: paymentToApply,
             method: data.method,
-            transactionId: data.transactionId || null,
+            transactionId: unifiedTransactionId,
             receiptNo,
             paidAt: new Date(data.paidAt),
             remarks: data.remarks || null,

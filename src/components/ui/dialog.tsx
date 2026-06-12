@@ -11,13 +11,14 @@ export const DialogClose = DialogPrimitive.Close;
 
 export const DialogContent = forwardRef<
   HTMLDivElement,
-  DialogPrimitive.DialogContentProps
->(({ className, children, ...props }, ref) => (
+  DialogPrimitive.DialogContentProps & { overlayClassName?: string }
+>(({ className, children, overlayClassName, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay
       className={cn(
         "fixed inset-0 z-50 bg-scrim/30 backdrop-blur-sm",
-        "data-[state=open]:animate-overlay-show data-[state=closed]:animate-overlay-hide"
+        "data-[state=open]:animate-overlay-show data-[state=closed]:animate-overlay-hide",
+        overlayClassName
       )}
     />
     <DialogPrimitive.Content

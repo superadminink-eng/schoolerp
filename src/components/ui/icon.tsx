@@ -73,6 +73,8 @@ interface IconProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const iconMap: Record<string, LucideIcon> = {
+  assignment: ClipboardSignature,
+  calendar_today: Calendar,
   dashboard: LayoutDashboard,
   location_city: Building2,
   domain: Building2,

@@ -7,6 +7,7 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { expressCreateSchema } from "@/lib/validations/express-admission";
+import crypto from "crypto";
 import {
   generateUniqueAdmissionNo,
   generateUniqueInvoiceNo,
@@ -178,162 +179,186 @@ export async function POST(req: NextRequest) {
         include: { feeCategory: { select: { name: true } } },
       });
 
-      if (feeStructures.length > 0) {
-        const feeCategoriesAnnual = feeStructures.map((fs) => {
-          const base = new Prisma.Decimal(fs.amount);
-          let annual = base;
-          switch (fs.frequency) {
-            case "MONTHLY": annual = base.mul(12); break;
-            case "QUARTERLY": annual = base.mul(4); break;
-            case "SEMI_ANNUAL": annual = base.mul(2); break;
-            default: annual = base;
-          }
-          return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
-        });
+      if (feeStructures.length === 0) {
+        throw new Error("FEE_STRUCTURE_UNCONFIGURED: No active fee structures found for this class.");
+      }
 
-        const annualTotal = feeCategoriesAnnual.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
-        const discountPct = new Prisma.Decimal(data.discountPercent ?? 0);
-        const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
+      const feeCategoriesAnnual = feeStructures.map((fs) => {
+        const base = new Prisma.Decimal(fs.amount);
+        let annual = base;
+        switch (fs.frequency) {
+          case "MONTHLY": annual = base.mul(12); break;
+          case "QUARTERLY": annual = base.mul(4); break;
+          case "SEMI_ANNUAL": annual = base.mul(2); break;
+          default: annual = base;
+        }
+        return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
+      });
 
-        let targetInstallments: { name: string; amount: Prisma.Decimal; dueDate: Date; lateFeeActive: boolean; lateFeeType: string; lateFeeValue: Prisma.Decimal; lateFeePerDay: Prisma.Decimal; lateFeeGrace: number }[] = [];
+      const annualTotal = feeCategoriesAnnual.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+      const discountPct = new Prisma.Decimal(data.discountPercent ?? 0);
+      const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
+
+      const totalDiscountedFee = annualTotal.mul(discountMultiplier);
+      const amountPaidDecimal = new Prisma.Decimal(data.amountPaid ?? 0);
+
+      if (amountPaidDecimal.gt(0) && !data.paymentMethod) {
+        throw new Error("MISSING_PAYMENT_METHOD: Upfront payment requires a payment method to be selected.");
+      }
+
+      if (amountPaidDecimal.gt(totalDiscountedFee)) {
+        throw new Error(`OVERPAYMENT: Upfront payment of ₹${amountPaidDecimal.toFixed(2)} exceeds total discounted fee of ₹${totalDiscountedFee.toFixed(2)}.`);
+      }
+
+      let targetInstallments: { name: string; amount: Prisma.Decimal; dueDate: Date; lateFeeActive: boolean; lateFeeType: string; lateFeeValue: Prisma.Decimal; lateFeePerDay: Prisma.Decimal; lateFeeGrace: number }[] = [];
+      
+      const classTemplates = await tx.feeInstallmentTemplate.findMany({
+        where: {
+          classId: data.classAppliedId,
+          academicYearId: data.academicYearId,
+          termType: data.termType || "FULL_TERM",
+        },
+        orderBy: { dueDate: "asc" },
+      });
+
+      if (classTemplates.length > 0) {
+        const totalTemplateAmount = classTemplates.reduce((sum, inst) => sum.plus(new Prisma.Decimal(inst.amount)), new Prisma.Decimal(0));
         
-        const classTemplates = await tx.feeInstallmentTemplate.findMany({
-          where: {
-            classId: data.classAppliedId,
-            academicYearId: data.academicYearId,
-            termType: data.termType || "FULL_TERM",
-          },
-          orderBy: { dueDate: "asc" },
-        });
-
-        if (classTemplates.length > 0) {
-          targetInstallments = classTemplates.map(t => ({
-            name: t.name,
-            amount: new Prisma.Decimal(t.amount),
-            dueDate: t.dueDate,
-            lateFeeActive: t.lateFeeActive,
-            lateFeeType: t.lateFeeType,
-            lateFeeValue: new Prisma.Decimal(t.lateFeeValue),
-            lateFeePerDay: new Prisma.Decimal(t.lateFeePerDay),
-            lateFeeGrace: t.lateFeeGrace,
-          }));
+        // Strict verification of installment total matching fee structure total
+        if (!totalTemplateAmount.equals(annualTotal)) {
+          throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of installment templates (₹${totalTemplateAmount}) does not match the total fee structures (₹${annualTotal}).`);
         }
 
-        const createdInvoices = [];
+        targetInstallments = classTemplates.map(t => ({
+          name: t.name,
+          amount: new Prisma.Decimal(t.amount),
+          dueDate: t.dueDate,
+          lateFeeActive: t.lateFeeActive,
+          lateFeeType: t.lateFeeType,
+          lateFeeValue: new Prisma.Decimal(t.lateFeeValue),
+          lateFeePerDay: new Prisma.Decimal(t.lateFeePerDay),
+          lateFeeGrace: t.lateFeeGrace,
+        }));
+      } else {
+        // Fallback: Copy late fee parameters from another template of the same class
+        const fallbackTemplate = await tx.feeInstallmentTemplate.findFirst({
+          where: { classId: data.classAppliedId },
+        });
 
-        if (targetInstallments.length > 0) {
-          const totalTemplateAmount = targetInstallments.reduce((sum, inst) => sum.plus(inst.amount), new Prisma.Decimal(0));
+        targetInstallments = [{
+          name: "Consolidated Annual Fee",
+          amount: annualTotal,
+          dueDate: new Date(),
+          lateFeeActive: fallbackTemplate?.lateFeeActive ?? false,
+          lateFeeType: fallbackTemplate?.lateFeeType ?? "DAILY",
+          lateFeeValue: new Prisma.Decimal(fallbackTemplate?.lateFeeValue ?? 0),
+          lateFeePerDay: new Prisma.Decimal(fallbackTemplate?.lateFeePerDay ?? 0),
+          lateFeeGrace: fallbackTemplate?.lateFeeGrace ?? 0,
+        }];
+      }
 
-          for (const inst of targetInstallments) {
-            const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
-            const installmentDiscountedTotal = inst.amount.mul(discountMultiplier);
+      const createdInvoices = [];
 
-            let finalDueDate = new Date(inst.dueDate);
-            const today = new Date();
-            if (finalDueDate < today) {
-              finalDueDate = today;
-            }
+      for (const inst of targetInstallments) {
+        const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
+        const installmentDiscountedTotal = inst.amount.mul(discountMultiplier);
 
-            const invoice = await tx.invoice.create({
-              data: {
-                studentId: studentRecord.id,
-                organizationId: ctx.organizationId,
-                number: invoiceNo,
-                year: new Date().getFullYear(),
-                totalAmount: installmentDiscountedTotal,
-                paidAmount: 0,
-                status: "PENDING",
-                dueDate: finalDueDate,
-                lateFeeActive: inst.lateFeeActive,
-                lateFeeType: (inst.lateFeeType || "DAILY") as any,
-                lateFeeValue: inst.lateFeeValue,
-                lateFeePerDay: inst.lateFeePerDay,
-                lateFeeGrace: inst.lateFeeGrace,
-                items: {
-                  create: feeCategoriesAnnual.map((fi) => {
-                    const proportionalAmount = totalTemplateAmount.gt(0) 
-                      ? fi.annual.mul(inst.amount.div(totalTemplateAmount)).mul(discountMultiplier) 
-                      : new Prisma.Decimal(0);
-                    return {
-                      feeStructureId: fi.feeStructureId,
-                      amount: proportionalAmount,
-                      description: `${fi.name} - ${inst.name}`,
-                    };
-                  }),
-                },
-              },
-            });
+        let finalDueDate = new Date(inst.dueDate);
+        const today = new Date();
+        if (finalDueDate < today) {
+          finalDueDate = today;
+        }
 
-            createdInvoices.push(invoice);
+        // Proportional Allocation with Remainder Balancing
+        const itemData = [];
+        let allocatedSum = new Prisma.Decimal(0);
+
+        for (let i = 0; i < feeCategoriesAnnual.length; i++) {
+          const fi = feeCategoriesAnnual[i];
+          let proportionalAmount;
+
+          if (i === feeCategoriesAnnual.length - 1) {
+            proportionalAmount = installmentDiscountedTotal.minus(allocatedSum);
+          } else {
+            proportionalAmount = installmentDiscountedTotal
+              .mul(fi.annual)
+              .div(annualTotal)
+              .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+            allocatedSum = allocatedSum.plus(proportionalAmount);
           }
-        } else {
-          const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
-          const discountedTotal = annualTotal.mul(discountMultiplier);
-          const dueDate = new Date();
-          dueDate.setDate(dueDate.getDate() + 30);
 
-          const invoice = await tx.invoice.create({
+          itemData.push({
+            feeStructureId: fi.feeStructureId,
+            amount: proportionalAmount,
+            description: `${fi.name} - ${inst.name}`,
+          });
+        }
+
+        const invoice = await tx.invoice.create({
+          data: {
+            studentId: studentRecord.id,
+            organizationId: ctx.organizationId,
+            number: invoiceNo,
+            year: new Date().getFullYear(),
+            totalAmount: installmentDiscountedTotal,
+            paidAmount: 0,
+            status: "PENDING",
+            dueDate: finalDueDate,
+            lateFeeActive: inst.lateFeeActive,
+            lateFeeType: inst.lateFeeType as any,
+            lateFeeValue: inst.lateFeeValue,
+            lateFeePerDay: inst.lateFeePerDay,
+            lateFeeGrace: inst.lateFeeGrace,
+            items: {
+              create: itemData,
+            },
+          },
+        });
+
+        createdInvoices.push(invoice);
+      }
+
+      // Apply payment rollover
+      let remainingPayment = new Prisma.Decimal(data.amountPaid ?? 0);
+      
+      if (remainingPayment.gt(0) && data.paymentMethod) {
+        createdInvoices.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        
+        // Single transaction ID for unified payment grouping
+        const unifiedTransactionId = data.transactionId || `TXN-ADM-${Date.now()}-${crypto.randomBytes ? crypto.randomBytes(4).toString("hex") : Math.random().toString(36).substring(7)}`;
+
+        for (const inv of createdInvoices) {
+          if (remainingPayment.lte(0)) break;
+
+          const invTotal = new Prisma.Decimal(inv.totalAmount);
+          const paymentToApply = remainingPayment.lt(invTotal) ? remainingPayment : invTotal;
+          const newPaidAmount = paymentToApply;
+          const newStatus = newPaidAmount.gte(invTotal) ? "PAID" : "PARTIAL";
+
+          const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
+
+          await tx.feePayment.create({
             data: {
+              invoiceId: inv.id,
               studentId: studentRecord.id,
               organizationId: ctx.organizationId,
-              number: invoiceNo,
-              year: new Date().getFullYear(),
-              totalAmount: discountedTotal,
-              paidAmount: 0,
-              status: "PENDING",
-              dueDate,
-              items: {
-                create: feeCategoriesAnnual.map((fi) => ({
-                  feeStructureId: fi.feeStructureId,
-                  amount: fi.annual.mul(discountMultiplier),
-                  description: fi.name,
-                })),
-              },
+              amount: paymentToApply,
+              method: data.paymentMethod,
+              transactionId: unifiedTransactionId,
+              receiptNo,
+              paidAt: new Date(),
             },
           });
 
-          createdInvoices.push(invoice);
-        }
+          await tx.invoice.update({
+            where: { id: inv.id },
+            data: {
+              paidAmount: newPaidAmount,
+              status: newStatus,
+            },
+          });
 
-        // Apply payment rollover
-        let remainingPayment = new Prisma.Decimal(data.amountPaid ?? 0);
-        
-        if (remainingPayment.gt(0) && data.paymentMethod) {
-          createdInvoices.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-          for (const inv of createdInvoices) {
-            if (remainingPayment.lte(0)) break;
-
-            const invTotal = new Prisma.Decimal(inv.totalAmount);
-            const paymentToApply = remainingPayment.lt(invTotal) ? remainingPayment : invTotal;
-            const newPaidAmount = paymentToApply;
-            const newStatus = newPaidAmount.gte(invTotal) ? "PAID" : "PARTIAL";
-
-            const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
-
-            await tx.feePayment.create({
-              data: {
-                invoiceId: inv.id,
-                studentId: studentRecord.id,
-                organizationId: ctx.organizationId,
-                amount: paymentToApply,
-                method: data.paymentMethod,
-                transactionId: data.transactionId || null,
-                receiptNo,
-                paidAt: new Date(),
-              },
-            });
-
-            await tx.invoice.update({
-              where: { id: inv.id },
-              data: {
-                paidAmount: newPaidAmount,
-                status: newStatus,
-              },
-            });
-
-            remainingPayment = remainingPayment.minus(paymentToApply);
-          }
+          remainingPayment = remainingPayment.minus(paymentToApply);
         }
       }
 
@@ -361,8 +386,16 @@ export async function POST(req: NextRequest) {
     });
 
     return apiSuccess(result.student, undefined, 201);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Express create candidate error:", error);
+    if (
+      error?.message?.startsWith("FEE_STRUCTURE_UNCONFIGURED:") ||
+      error?.message?.startsWith("INSTALLMENT_AMOUNT_MISMATCH:") ||
+      error?.message?.startsWith("OVERPAYMENT:") ||
+      error?.message?.startsWith("MISSING_PAYMENT_METHOD:")
+    ) {
+      return apiError("BAD_REQUEST", error.message.split(": ")[1], 400);
+    }
     return apiError("INTERNAL_ERROR", "Failed to express create candidate", 500);
   }
 }

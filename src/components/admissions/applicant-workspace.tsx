@@ -97,6 +97,8 @@ interface WorkspaceProps {
   onSaveExam: (e: React.FormEvent) => void;
   onPromote: (e: React.FormEvent) => void;
   actionLoading: boolean;
+  formError?: string | null;
+  setFormError?: (err: string | null) => void;
 }
 
 export default function ApplicantWorkspace({
@@ -119,13 +121,22 @@ export default function ApplicantWorkspace({
   onSaveExam,
   onPromote,
   actionLoading,
+  formError,
+  setFormError,
 }: WorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"general" | "parents">("general");
 
   if (!selectedApp) return null;
 
+  const clearError = () => {
+    if (formError) {
+      setFormError?.(null);
+    }
+  };
+
   // Doc verification change handlers
   const handleDocStatusChange = (index: number, status: "PENDING" | "VERIFIED" | "REJECTED") => {
+    clearError();
     const nextDocs = [...verifyForm.documents];
     nextDocs[index] = { ...nextDocs[index], status };
     const allVerified = nextDocs.every((d) => d.status === "VERIFIED");
@@ -146,6 +157,7 @@ export default function ApplicantWorkspace({
   };
 
   const handleDocRemarksChange = (index: number, remarks: string) => {
+    clearError();
     const nextDocs = [...verifyForm.documents];
     nextDocs[index] = { ...nextDocs[index], remarks };
     setVerifyForm((prev: any) => ({ ...prev, documents: nextDocs }));
@@ -153,6 +165,7 @@ export default function ApplicantWorkspace({
 
   // Exam change handlers
   const handleExamChange = (field: string, value: any) => {
+    clearError();
     setExamForm((prev: any) => {
       const next = { ...prev, [field]: value };
       if (field === "verdict") {
@@ -170,6 +183,7 @@ export default function ApplicantWorkspace({
 
   // Promote change handlers
   const handlePromoteChange = (field: string, value: any) => {
+    clearError();
     setPromoteForm((prev: any) => {
       const next = { ...prev, [field]: value };
       if (field === "discountPercent") {
@@ -189,26 +203,19 @@ export default function ApplicantWorkspace({
     });
   };
 
-  const handleInstallmentCheckChange = (index: number, checked: boolean) => {
-    const nextInsts = [...customInstallments];
-    nextInsts[index] = { ...nextInsts[index], checked };
-    setCustomInstallments(nextInsts);
-  };
-
-  const handleInstallmentAmountChange = (index: number, amount: number) => {
-    const nextInsts = [...customInstallments];
-    nextInsts[index] = { ...nextInsts[index], amount };
-    setCustomInstallments(nextInsts);
+  const handleInstallmentAmountChange = (templateId: string, amount: number) => {
+    clearError();
+    setCustomInstallments((prev: CustomInstallment[]) =>
+      prev.map((inst) => (inst.templateId === templateId ? { ...inst, amount } : inst))
+    );
   };
 
   const baseTotal = installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0);
-  const activeInstallmentsTotal = customInstallments
-    .filter((inst) => inst.checked)
-    .reduce((acc, curr) => acc + curr.amount, 0);
+  const totalDiscountedFee = Math.max(0, Math.round(baseTotal * (1 - (promoteForm.discountPercent || 0) / 100)));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[88vh] overflow-hidden flex flex-col p-0 rounded-3xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 shadow-2xl">
+      <DialogContent className="max-w-7xl h-[90vh] overflow-hidden flex flex-col p-0 rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800 shadow-2xl">
         {/* Header */}
         <div className="p-6 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/20 flex items-center justify-between shrink-0">
           <div>
@@ -305,7 +312,7 @@ export default function ApplicantWorkspace({
         {/* Main Split Body Area */}
         <div className="flex-1 flex overflow-hidden min-h-0">
           {/* A. Left Pane: Candidate Summary Profile */}
-          <div className="w-[38%] overflow-y-auto p-6 bg-slate-50/50 dark:bg-zinc-950/10 border-r border-slate-100 dark:border-zinc-800/80 space-y-6">
+          <div className="w-[26%] min-w-[280px] max-w-[320px] overflow-y-auto p-6 bg-slate-50/50 dark:bg-zinc-950/20 border-r border-slate-200/60 dark:border-zinc-800/80 space-y-6">
             {/* Tab toggles */}
             <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-zinc-900 border rounded-xl shrink-0">
               <button
@@ -434,7 +441,7 @@ export default function ApplicantWorkspace({
           </div>
 
           {/* B. Right Pane: Process Actions Desk (Dynamic Stage Wizards) */}
-          <div className="flex-1 overflow-y-auto p-6 min-h-0">
+          <div className="w-[74%] flex-1 overflow-y-auto p-6 min-h-0 bg-slate-50/10 dark:bg-zinc-900/10">
             {/* WIZARD: DOCUMENT CHECK (Submitted or Document Verification stages) */}
             {(selectedApp.status === "SUBMITTED" || selectedApp.status === "DOCUMENT_VERIFICATION") && (
               <form onSubmit={onVerifyDocs} className="space-y-6">
@@ -558,6 +565,13 @@ export default function ApplicantWorkspace({
                     </div>
                   </div>
                 </div>
+
+                {formError && (
+                  <div className="p-4 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2.5">
+                    <Icon name="warning" size={16} className="text-red-500 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-2">
                   <Button
@@ -699,6 +713,13 @@ export default function ApplicantWorkspace({
                   </div>
                 </div>
 
+                {formError && (
+                  <div className="p-4 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2.5">
+                    <Icon name="warning" size={16} className="text-red-500 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-end pt-2">
                   <Button
                     type="submit"
@@ -715,184 +736,208 @@ export default function ApplicantWorkspace({
 
             {/* WIZARD: PROMOTION (SHORTLISTED) */}
             {selectedApp.status === "SHORTLISTED" && (
-              <form onSubmit={onPromote} className="space-y-6">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
-                  <Icon name="school" size={16} className="text-teal-500" />
-                  SIS Promotion & Setup
-                </h3>
+              <form onSubmit={onPromote} className="space-y-7 pr-1">
+                
+                {/* 1. Academic Placement Card */}
+                <div className="p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/85 shadow-md shadow-slate-100/50 dark:shadow-none space-y-5 transition-all duration-300 hover:shadow-lg">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
+                    <span className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400">
+                      <Icon name="assignment" size={14} />
+                    </span>
+                    <span className="font-extrabold uppercase tracking-wider text-[11px]">Academic Placement Settings</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {/* Section Select */}
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Class Division (Section) <span className="text-red-500">*</span>
+                      </span>
+                      <Select
+                        value={promoteForm.sectionId}
+                        onValueChange={(val) => handlePromoteChange("sectionId", val)}
+                      >
+                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
+                          <SelectValue placeholder="Select Section" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {classSections.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              Section {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                {/* Placement info */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {/* Section Select */}
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                      Class Division (Section) <span className="text-red-500">*</span>
-                    </label>
-                    <Select
-                      value={promoteForm.sectionId}
-                      onValueChange={(val) => handlePromoteChange("sectionId", val)}
-                    >
-                      <SelectTrigger fullWidth className="h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
-                        <SelectValue placeholder="Select Section" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {classSections.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            Section {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    {/* Roll No */}
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Roll Number (Optional)
+                      </span>
+                      <input
+                        type="text"
+                        value={promoteForm.rollNo}
+                        onChange={(e) => handlePromoteChange("rollNo", e.target.value)}
+                        placeholder="e.g. 101"
+                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300"
+                      />
+                    </div>
 
-                  {/* Roll No */}
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                      Roll Number (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={promoteForm.rollNo}
-                      onChange={(e) => handlePromoteChange("rollNo", e.target.value)}
-                      placeholder="e.g. 101"
-                      className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
-                    />
-                  </div>
-
-                  {/* Admission Date */}
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                      Admission Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={promoteForm.admissionDate}
-                      onChange={(e) => handlePromoteChange("admissionDate", e.target.value)}
-                      className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
-                    />
+                    {/* Admission Date */}
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Admission Date <span className="text-red-500">*</span>
+                      </span>
+                      <input
+                        type="date"
+                        required
+                        value={promoteForm.admissionDate}
+                        onChange={(e) => handlePromoteChange("admissionDate", e.target.value)}
+                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Fee Allocations */}
-                <div className="p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/20 space-y-4">
-                  <div className="flex justify-between items-center border-b pb-2 border-slate-100 dark:border-zinc-800">
-                    <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
-                      <Icon name="receipt_long" size={14} className="text-amber-500" />
-                      Fee Installments List
+                {/* 2. Billing & Installments Side-by-Side Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
+                  
+                  {/* Left: Billing Controls Card (5 cols) */}
+                  <div className="lg:col-span-5 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/85 shadow-md shadow-slate-100/50 dark:shadow-none space-y-5 transition-all duration-300 hover:shadow-lg">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
+                      <span className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                        <Icon name="payments" size={14} />
+                      </span>
+                      <span className="font-extrabold uppercase tracking-wider text-[11px]">Billing Controls</span>
                     </h4>
-                    <select
-                      value={promoteForm.termType}
-                      onChange={(e) => handlePromoteChange("termType", e.target.value)}
-                      className="text-xs font-extrabold bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800/80 rounded-lg p-1.5 text-slate-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="FULL_TERM">Full Term</option>
-                      <option value="HALF_TERM">Half Term</option>
-                      <option value="SHORT_TERM">Short Term</option>
-                    </select>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    {/* Term Selection */}
                     <div className="flex flex-col gap-1.5 w-full">
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Billing Term / Intake Type
+                      </span>
+                      <Select
+                        value={promoteForm.termType}
+                        onValueChange={(val: any) => handlePromoteChange("termType", val)}
+                      >
+                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
+                          <SelectValue placeholder="Select Term" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="FULL_TERM">Full Term</SelectItem>
+                          <SelectItem value="HALF_TERM">Half Term</SelectItem>
+                          <SelectItem value="SHORT_TERM">Short Term</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Scholarship / Discount */}
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                         Scholarship / Discount (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={String(promoteForm.discountPercent)}
-                        onChange={(e) => handlePromoteChange("discountPercent", e.target.value)}
-                        placeholder="e.g. 10"
-                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Base Dues
-                      </label>
-                      <div className="flex items-center justify-center h-12 rounded-xl bg-slate-100/50 dark:bg-zinc-950/40 border border-slate-200/60 dark:border-zinc-800/80 text-sm font-extrabold text-slate-700 dark:text-zinc-300 select-none">
-                        ₹{baseTotal}
+                      </span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={String(promoteForm.discountPercent)}
+                          onChange={(e) => handlePromoteChange("discountPercent", e.target.value)}
+                          placeholder="0"
+                          className="w-full h-11 pl-4 pr-8 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 select-none">%</span>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Onboarding Total
-                      </label>
-                      <div className="flex items-center justify-center h-12 rounded-xl bg-primary/5 dark:bg-sky-500/[0.03] border border-primary/20 dark:border-sky-500/20 text-sm font-black text-primary dark:text-sky-400 select-none">
-                        ₹{activeInstallmentsTotal}
+
+                    {/* Dues Displays */}
+                    <div className="grid grid-cols-2 gap-4 pt-1">
+                      <div className="p-4 rounded-xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/60 dark:bg-zinc-950/40">
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block">Base Dues</span>
+                        <span className="text-base font-extrabold text-slate-700 dark:text-zinc-300 mt-1.5 block">₹{baseTotal}</span>
+                      </div>
+                      <div className="p-4 rounded-xl border border-primary/20 dark:border-sky-500/20 bg-primary/[0.03] dark:bg-sky-500/[0.02]">
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-primary block">Onboarding Total</span>
+                        <span className="text-base font-black text-primary mt-1.5 block">₹{totalDiscountedFee}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                    {installmentTemplates.map((t, index) => {
-                      const inst = customInstallments.find((ci) => ci.templateId === t.id) || { checked: false, amount: 0 };
-                      return (
-                        <div
-                          key={t.id}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-4 transition-colors ${
-                            inst.checked ? "bg-white dark:bg-zinc-900 border-primary/20" : "bg-slate-100/40 opacity-60"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={inst.checked}
-                              onChange={(e) => handleInstallmentCheckChange(index, e.target.checked)}
-                              className="rounded text-primary focus:ring-primary w-4 h-4"
-                            />
-                            <div>
-                              <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">{t.name}</span>
-                              <span className="text-[9px] text-slate-400 block">
-                                Due: {new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  {/* Right: Installments Schedule Card (7 cols) */}
+                  <div className="lg:col-span-7 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/85 shadow-md shadow-slate-100/50 dark:shadow-none space-y-5 transition-all duration-300 hover:shadow-lg">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
+                      <span className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+                        <Icon name="receipt_long" size={14} />
+                      </span>
+                      <span className="font-extrabold uppercase tracking-wider text-[11px]">Fee Installments Schedule</span>
+                    </h4>
+
+                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin">
+                      {installmentTemplates.map((t, index) => {
+                        let amount = Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100));
+                        if (index === installmentTemplates.length - 1) {
+                          const previousSum = installmentTemplates.slice(0, -1).reduce((sum, temp) => {
+                            return sum + Math.round(Number(temp.amount) * (1 - (promoteForm.discountPercent || 0) / 100));
+                          }, 0);
+                          amount = Math.max(0, totalDiscountedFee - previousSum);
+                        }
+                        return (
+                          <div
+                            key={t.id}
+                            className="p-3.5 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-white dark:bg-zinc-950/50 flex items-center justify-between gap-4 shadow-sm transition-all duration-250 hover:bg-slate-50/50 dark:hover:bg-zinc-850/30"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800 text-slate-500 dark:text-zinc-400">
+                                <Icon name="calendar_today" size={14} />
+                              </span>
+                              <div>
+                                <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{t.name}</span>
+                                <span className="text-[9px] text-slate-400 dark:text-zinc-500 block mt-1">
+                                  Due: {new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-extrabold text-slate-800 dark:text-zinc-100 bg-slate-50 dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-slate-200/50 dark:border-zinc-800 select-none">
+                                ₹{amount}
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-slate-400">₹</span>
-                            <input
-                              type="number"
-                              disabled={!inst.checked}
-                              value={String(inst.amount)}
-                              onChange={(e) => handleInstallmentAmountChange(index, Number(e.target.value) || 0)}
-                              className="w-20 h-7 text-xs font-bold bg-slate-50 dark:bg-zinc-900 border rounded p-1 text-right text-slate-800 dark:text-zinc-200 outline-none"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/20 space-y-4">
-                  <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
-                    <Icon name="payments" size={14} className="text-emerald-500" />
-                    3. Process Admission Payment
+                {/* 3. Upfront Payment Summary Drawer */}
+                <div className="p-5 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/20 dark:bg-zinc-950/20 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5 border-b pb-2.5 border-slate-100 dark:border-zinc-800">
+                    <Icon name="payments" size={15} className="text-emerald-500" />
+                    Upfront Payment Processing
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                     {/* Amount Paid Now */}
                     <div className="flex flex-col gap-1.5 w-full">
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                         Amount Paid Now
-                      </label>
+                      </span>
                       <input
                         type="number"
                         value={String(promoteForm.amountPaid)}
                         onChange={(e) => handlePromoteChange("amountPaid", e.target.value)}
                         placeholder="e.g. 5000"
-                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
 
                     {/* Payment Method */}
                     <div className="flex flex-col gap-1.5 w-full">
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                         Payment Method
-                      </label>
+                      </span>
                       <Select
                         value={promoteForm.paymentMethod}
                         onValueChange={(val: any) => handlePromoteChange("paymentMethod", val)}
                       >
-                        <SelectTrigger fullWidth className="h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
+                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:ring-2 focus:ring-primary/20">
                           <SelectValue placeholder="Select Method" />
                         </SelectTrigger>
                         <SelectContent>
@@ -907,19 +952,26 @@ export default function ApplicantWorkspace({
 
                     {/* Transaction ID */}
                     <div className="flex flex-col gap-1.5 w-full">
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                         Transaction ID
-                      </label>
+                      </span>
                       <input
                         type="text"
                         value={promoteForm.transactionId}
                         onChange={(e) => handlePromoteChange("transactionId", e.target.value)}
                         placeholder="e.g. TXN987654"
-                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
                   </div>
                 </div>
+
+                {formError && (
+                  <div className="p-4 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2.5">
+                    <Icon name="warning" size={16} className="text-red-500 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-2">
                   <Button
