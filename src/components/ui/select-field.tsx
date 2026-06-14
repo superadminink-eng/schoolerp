@@ -40,7 +40,7 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
       required,
       fullWidth = false,
       className,
-      labelBg = "bg-surface",
+      labelBg = "bg-white dark:bg-zinc-950",
       variant = "outlined",
     },
     ref

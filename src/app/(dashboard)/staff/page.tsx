@@ -194,7 +194,7 @@ export default function StaffPage() {
     },
     {
       key: "joinDate",
-      header: "Join Date",
+      header: "Joining Date",
       type: "date",
       dateConfig: {
         value: (row) => row.joinDate,

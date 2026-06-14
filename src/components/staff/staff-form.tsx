@@ -830,7 +830,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                     Professional Details
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-                    Specify the branch assignment, primary job role, and join date.
+                    Specify the branch assignment, primary job role, and joining date.
                   </p>
                 </div>
 
@@ -858,11 +858,9 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                       fullWidth
                     />
                   ) : null}
-                </div>
 
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <TextField
-                    label="Join Date"
+                    label="Joining Date"
                     type="date"
                     value={joinDate}
                     onChange={(e) => setJoinDate(e.target.value)}

@@ -338,10 +338,25 @@ body {
   height: auto !important;
 }
 
-/* Global Reset: Prevent elements inside AG-Grid cells from inheriting row line-height */
 .ag-theme-quartz .ag-cell * {
   line-height: normal !important;
 }
+
+/* Hide browser default calendar picker icon on date inputs and make the entire input trigger the picker */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  background: transparent;
+  bottom: 0;
+  color: transparent;
+  cursor: pointer;
+  height: auto;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: auto;
+  opacity: 0;
+}
+
 
 
 

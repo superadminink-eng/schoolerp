@@ -26,7 +26,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
       trailingIcon,
       onTrailingIconClick,
       fullWidth = false,
-      labelBg = "bg-surface",
+      labelBg = "bg-white dark:bg-zinc-950",
       className,
       disabled,
       required,
