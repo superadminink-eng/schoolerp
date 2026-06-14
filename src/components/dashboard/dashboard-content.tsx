@@ -89,9 +89,10 @@ interface MetricCardProps {
   icon: string;
   progress?: number;
   color: "teal" | "emerald" | "amber" | "sky";
+  onClick?: () => void;
 }
 
-function MetricCard({ title, value, subtitle, icon, progress, color }: MetricCardProps) {
+function MetricCard({ title, value, subtitle, icon, progress, color, onClick }: MetricCardProps) {
   const colors = {
     teal: {
       bg: "bg-teal-500/10 border-teal-200/40 text-teal-600 dark:text-teal-400 dark:border-teal-900/60",
@@ -120,7 +121,13 @@ function MetricCard({ title, value, subtitle, icon, progress, color }: MetricCar
   }[color];
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-outline-variant bg-white dark:bg-surface-container p-5 shadow-elevation-1 hover:shadow-elevation-2 hover:scale-[1.01] transition-all duration-300">
+    <div
+      onClick={onClick}
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-outline-variant bg-white dark:bg-surface-container p-5 shadow-elevation-1 transition-all duration-300",
+        onClick ? "cursor-pointer hover:shadow-elevation-2 hover:scale-[1.01] hover:border-primary/40 active:scale-[0.99]" : ""
+      )}
+    >
       <div className={cn("absolute top-0 right-0 h-16 w-16 bg-gradient-to-br rounded-bl-full", colors.glow)} />
       
       <div className="flex items-center justify-between gap-4">
@@ -155,7 +162,7 @@ function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboardin
       isCompleted: onboarding.steps.academicYear,
       icon: "date_range",
       actionUrl: "/academic-years",
-      actionLabel: "Configure Calendar",
+      actionLabel: "Set Academic Year",
     },
     {
       number: 2,
@@ -191,7 +198,7 @@ function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboardin
       isCompleted: onboarding.steps.class && onboarding.steps.section,
       icon: "class",
       actionUrl: "/classes",
-      actionLabel: "Manage Classes",
+      actionLabel: "Create Classes",
     },
   ];
 
@@ -212,9 +219,7 @@ function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboardin
             <Icon name="rocket_launch" size={16} className="text-primary" />
             Quick Setup
           </h3>
-          <p className="text-[11px] text-on-surface-variant/80 font-medium">
-            Setup wizard checklist
-          </p>
+          
         </div>
 
         {/* Circular Progress Gauge */}
@@ -475,7 +480,7 @@ export function DashboardContent({ userName, roleName, branchId }: DashboardCont
               onClick={() => router.push("/staff/new")}
               className="hover:scale-[1.02] transition-all duration-200"
             >
-              Register Faculty
+              Register Staff
             </Button>
           </PermissionGate>
           <PermissionGate module="fees" action="create">
@@ -499,6 +504,7 @@ export function DashboardContent({ userName, roleName, branchId }: DashboardCont
           subtitle="Enrolled Active Profiles"
           icon="school"
           color="sky"
+          onClick={() => router.push("/students")}
         />
         <MetricCard
           title="Active Staff"
@@ -506,6 +512,7 @@ export function DashboardContent({ userName, roleName, branchId }: DashboardCont
           subtitle="Registered Employees"
           icon="group"
           color="teal"
+          onClick={() => router.push("/staff")}
         />
         <MetricCard
           title="Today's Attendance"
@@ -522,6 +529,7 @@ export function DashboardContent({ userName, roleName, branchId }: DashboardCont
           progress={data.financials.collectionRate}
           icon="payments"
           color="amber"
+          onClick={() => router.push("/fees")}
         />
       </div>
 
