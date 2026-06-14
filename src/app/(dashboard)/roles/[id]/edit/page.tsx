@@ -36,7 +36,7 @@ export default async function EditRolePage(props: PageProps) {
     <div>
       <Breadcrumb>
         <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem href="/settings/roles">Roles</BreadcrumbItem>
+        <BreadcrumbItem href="/roles">Roles</BreadcrumbItem>
         <BreadcrumbItem>{canEdit ? "Edit Role" : "View Role"}</BreadcrumbItem>
       </Breadcrumb>
 

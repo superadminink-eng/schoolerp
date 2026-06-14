@@ -6,7 +6,7 @@ export default function NewRolePage() {
     <div>
       <Breadcrumb>
         <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem href="/settings/roles">Roles</BreadcrumbItem>
+        <BreadcrumbItem href="/roles">Roles</BreadcrumbItem>
         <BreadcrumbItem>New Role</BreadcrumbItem>
       </Breadcrumb>
 

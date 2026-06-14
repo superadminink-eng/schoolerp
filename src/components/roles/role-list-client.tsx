@@ -69,7 +69,7 @@ export function RoleListClient() {
                 icon={canEdit ? "edit" : "visibility"}
                 onClick={(e) => {
                   e.stopPropagation();
-                  router.push(`/settings/roles/${row.id}/edit`);
+                  router.push(`/roles/${row.id}/edit`);
                 }}
               >
                 {canEdit ? "Edit" : "View"}
@@ -98,7 +98,7 @@ export function RoleListClient() {
           <Button
             variant="filled"
             icon="add"
-            onClick={() => router.push("/settings/roles/new")}
+            onClick={() => router.push("/roles/new")}
             className="hidden md:inline-flex"
           >
             Create Role
@@ -112,7 +112,7 @@ export function RoleListClient() {
           columns={columns}
           data={roles}
           keyExtractor={(row) => row.id}
-          onRowClick={(row) => router.push(`/settings/roles/${row.id}/edit`)}
+          onRowClick={(row) => router.push(`/roles/${row.id}/edit`)}
           loading={loading}
           emptyIcon="security"
           emptyMessage="No roles found"
@@ -121,7 +121,7 @@ export function RoleListClient() {
       </div>
 
       <PermissionGate module="settings" action="manage">
-        <FAB icon="add" onClick={() => router.push("/settings/roles/new")} />
+        <FAB icon="add" onClick={() => router.push("/roles/new")} />
       </PermissionGate>
     </div>
   );

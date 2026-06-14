@@ -171,7 +171,7 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
       }
 
       snackbar.show(mode === "create" ? "Role created" : "Role updated");
-      router.push("/settings/roles");
+      router.push("/roles");
       router.refresh();
     } catch (err) {
       snackbar.show("An error occurred");
@@ -381,7 +381,7 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
         <Button
           type="button"
           variant="outlined"
-          onClick={() => router.push("/settings/roles")}
+          onClick={() => router.push("/roles")}
           className="rounded-xl border-slate-300 text-slate-600 hover:bg-slate-100 font-bold px-6"
         >
           {disableEdits ? "Go Back" : "Cancel"}
