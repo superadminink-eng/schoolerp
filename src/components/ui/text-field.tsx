@@ -26,7 +26,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
       trailingIcon,
       onTrailingIconClick,
       fullWidth = false,
-      labelBg = "bg-white dark:bg-zinc-950",
+      labelBg = "bg-transparent",
       className,
       disabled,
       required,
@@ -233,12 +233,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
               isFocused ? "border-2" : "border"
             )}
             style={{
-              paddingLeft: leadingIcon ? "32px" : "8px"
+              paddingLeft: leadingIcon ? "32px" : "0px"
             }}
           >
             <legend
               className={cn(
-                "block float-none overflow-hidden text-[12px] leading-none transition-all duration-200",
+                "float-none overflow-hidden text-[12px] leading-none transition-all duration-200",
                 isFloating ? "max-w-full px-1.5 h-3" : "max-w-[0.01px] px-0 h-0"
               )}
             >

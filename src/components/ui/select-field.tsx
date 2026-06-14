@@ -40,7 +40,7 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
       required,
       fullWidth = false,
       className,
-      labelBg = "bg-white dark:bg-zinc-950",
+      labelBg = "bg-transparent",
       variant = "outlined",
     },
     ref
@@ -138,12 +138,12 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
               isOpen ? "border-2" : "border"
             )}
             style={{
-              paddingLeft: "8px"
+              paddingLeft: "0px"
             }}
           >
             <legend
               className={cn(
-                "block float-none overflow-hidden text-[12px] leading-none transition-all duration-200",
+                "float-none overflow-hidden text-[12px] leading-none transition-all duration-200",
                 isFloating ? "max-w-full px-1.5 h-3" : "max-w-[0.01px] px-0 h-0"
               )}
             >
