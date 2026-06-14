@@ -220,9 +220,9 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
               value={type}
               onValueChange={(val) => setType(val as any)}
               options={[
-                { value: "STAFF", label: "Staff (शालेय कर्मचारी)" },
-                { value: "STUDENT", label: "Student (विद्यार्थी)" },
-                { value: "PARENT", label: "Parent (पालक)" }
+                { value: "STAFF", label: "Staff" },
+                { value: "STUDENT", label: "Student" },
+                { value: "PARENT", label: "Parent" }
               ]}
               fullWidth
               disabled={isSystem}
