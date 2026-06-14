@@ -4,17 +4,21 @@ export interface Role {
   id: string;
   name: string;
   description: string | null;
+  type: "STAFF" | "STUDENT" | "PARENT";
   isSystem: boolean;
 }
 
-export function useRoles() {
+export function useRoles(options?: { type?: "STAFF" | "STUDENT" | "PARENT" }) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const filterType = options?.type;
 
   useEffect(() => {
     async function fetchRoles() {
       try {
-        const res = await fetch("/api/v1/roles");
+        const url = filterType ? `/api/v1/roles?type=${filterType}` : "/api/v1/roles";
+        const res = await fetch(url);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
@@ -30,7 +34,7 @@ export function useRoles() {
     }
 
     fetchRoles();
-  }, []);
+  }, [filterType]);
 
   return { roles, loading };
 }

@@ -72,6 +72,8 @@ async function main() {
       permKeys.map((key) => permMap.get(key)).filter(Boolean) as string[]
     );
 
+    const roleType = role === "STUDENT" ? "STUDENT" : role === "PARENT" ? "PARENT" : "STAFF";
+
     // Upsert the system Role manually because of nullable unique constraint
     let roleRecord = await prisma.role.findFirst({
       where: { organizationId: null, name: role },
@@ -83,6 +85,7 @@ async function main() {
           name: role,
           description: `System default ${role} role`,
           isSystem: true,
+          type: roleType,
         },
       });
     } else {
@@ -91,6 +94,7 @@ async function main() {
         data: {
           description: `System default ${role} role`,
           isSystem: true,
+          type: roleType,
         },
       });
     }

@@ -25,6 +25,7 @@ export default async function EditRolePage(props: PageProps) {
     id: role.id,
     name: role.name,
     description: role.description,
+    type: role.type,
     isSystem: role.isSystem,
     permissions: role.rolePermissions.map((rp) => rp.permissionId),
   };

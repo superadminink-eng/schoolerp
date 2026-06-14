@@ -104,7 +104,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
 
   const isSuperAdmin = session?.user?.roleName === "SCHOOL_ADMIN" || session?.user?.roleName === "SUPER_ADMIN";
 
-  const { roles, loading: rolesLoading } = useRoles();
+  const { roles, loading: rolesLoading } = useRoles({ type: "STAFF" });
   const { permissions: allPermissions, loading: permsLoading } = useAllPermissions();
 
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);

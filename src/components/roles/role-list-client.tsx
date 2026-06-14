@@ -39,13 +39,38 @@ export function RoleListClient() {
       render: (row) => row.description || "—",
     },
     {
-      key: "type",
-      header: "Type",
+      key: "isSystem",
+      header: "Status",
       type: "badge",
       badgeConfig: {
         label: (row) => row.isSystem ? "System" : "Custom",
-        color: (row) => row.isSystem ? "primary" : "default",
+        color: (row) => row.isSystem ? "default" : "primary",
         icon: (row) => row.isSystem ? "cpu" : "sparkles",
+      },
+    },
+    {
+      key: "type",
+      header: "Category",
+      type: "badge",
+      badgeConfig: {
+        label: (row) => {
+          if (row.type === "STAFF") return "Staff";
+          if (row.type === "STUDENT") return "Student";
+          if (row.type === "PARENT") return "Parent";
+          return "Staff";
+        },
+        color: (row) => {
+          if (row.type === "STAFF") return "primary";
+          if (row.type === "STUDENT") return "success";
+          if (row.type === "PARENT") return "warning";
+          return "default";
+        },
+        icon: (row) => {
+          if (row.type === "STAFF") return "badge";
+          if (row.type === "STUDENT") return "school";
+          if (row.type === "PARENT") return "family_restroom";
+          return "help";
+        },
       },
     },
     {

@@ -7,6 +7,7 @@ import { z } from "zod";
 const createRoleSchema = z.object({
   name: z.string().min(2, "Name is required").max(50),
   description: z.string().optional(),
+  type: z.enum(["STAFF", "STUDENT", "PARENT"]).default("STAFF"),
   permissions: z.array(z.string()).min(1, "At least one permission is required"),
 });
 
@@ -40,15 +41,26 @@ export async function GET(req: NextRequest) {
   }
 
   const ctx = getTenantContext(req);
+  const { searchParams } = new URL(req.url);
+  const typeFilter = searchParams.get("type");
 
   try {
+    const whereClause: any = {
+      OR: [
+        { organizationId: ctx.organizationId },
+        { organizationId: null }, // System roles
+      ]
+    };
+
+    if (typeFilter) {
+      const upperType = typeFilter.toUpperCase();
+      if (["STAFF", "STUDENT", "PARENT"].includes(upperType)) {
+        whereClause.type = upperType;
+      }
+    }
+
     const roles = await prisma.role.findMany({
-      where: {
-        OR: [
-          { organizationId: ctx.organizationId },
-          { organizationId: null }, // System roles
-        ]
-      },
+      where: whereClause,
       include: {
         rolePermissions: {
           include: { permission: true }
@@ -82,7 +94,7 @@ export async function POST(req: NextRequest) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, description, permissions } = parsed.data;
+  const { name, description, type, permissions } = parsed.data;
 
   // Cannot create SUPER_ADMIN or other system roles
   if (name.toUpperCase() === "SUPER_ADMIN" || name.toUpperCase() === "SCHOOL_ADMIN") {
@@ -121,6 +133,7 @@ export async function POST(req: NextRequest) {
         organizationId: ctx.organizationId,
         name,
         description,
+        type,
         isSystem: false,
         rolePermissions: {
           create: permissions.map(permId => ({

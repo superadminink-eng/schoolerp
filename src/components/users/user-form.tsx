@@ -45,7 +45,7 @@ export function UserForm({ mode, initialData }: UserFormProps) {
   const router = useRouter();
   const snackbar = useSnackbar();
   const { branches, isLoading: branchesLoading } = useBranches();
-  const { roles, loading: rolesLoading } = useRoles();
+  const { roles, loading: rolesLoading } = useRoles({ type: "STAFF" });
 
   const [name, setName] = useState(initialData?.name ?? "");
   const [email, setEmail] = useState(initialData?.email ?? "");

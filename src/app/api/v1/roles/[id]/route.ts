@@ -9,6 +9,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const updateRoleSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   description: z.string().optional(),
+  type: z.enum(["STAFF", "STUDENT", "PARENT"]).optional(),
   permissions: z.array(z.string()).min(1).optional(),
 });
 
@@ -63,7 +64,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, description, permissions } = parsed.data;
+  const { name, description, type, permissions } = parsed.data;
 
   try {
     const existing = await prisma.role.findFirst({
@@ -77,8 +78,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN") {
           return apiError("FORBIDDEN", "Cannot modify system roles", 403);
         }
-        if (name !== undefined || description !== undefined) {
-          return apiError("BAD_REQUEST", "Cannot modify system role metadata (name or description)", 400);
+        if (name !== undefined || description !== undefined || type !== undefined) {
+          return apiError("BAD_REQUEST", "Cannot modify system role metadata (name, description, or type)", 400);
         }
       } else {
         return apiNotFound("Role");
@@ -99,6 +100,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
+    if (type !== undefined) updateData.type = type;
 
     if (permissions) {
       const permRecords = await prisma.permission.findMany({

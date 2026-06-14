@@ -44,7 +44,7 @@ const roleLabel = (name: string) =>
 export function UserListClient() {
   const router = useRouter();
   const { branches } = useBranches();
-  const { roles } = useRoles();
+  const { roles } = useRoles({ type: "STAFF" });
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);

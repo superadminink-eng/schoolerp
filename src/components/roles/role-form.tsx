@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { SelectField } from "@/components/ui/select-field";
 
 const MODULE_ICONS: Record<string, string> = {
   students: "school",
@@ -43,6 +44,7 @@ interface RoleData {
   id: string;
   name: string;
   description: string | null;
+  type: "STAFF" | "STUDENT" | "PARENT";
   isSystem: boolean;
   permissions: string[];
 }
@@ -59,6 +61,7 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
 
   const [name, setName] = useState(initialData?.name ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
+  const [type, setType] = useState<"STAFF" | "STUDENT" | "PARENT">(initialData?.type ?? "STAFF");
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(
     new Set(initialData?.permissions ?? [])
   );
@@ -151,6 +154,7 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
       : {
           name: name.trim(),
           description: description.trim(),
+          type: type,
           permissions: Array.from(selectedPerms),
         };
 
@@ -201,13 +205,25 @@ export function RoleForm({ mode, initialData }: RoleFormProps) {
           </h3>
         </div>
         <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             <TextField
               label="Role Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               error={errors.name}
               required
+              fullWidth
+              disabled={isSystem}
+            />
+            <SelectField
+              label="Role Category"
+              value={type}
+              onValueChange={(val) => setType(val as any)}
+              options={[
+                { value: "STAFF", label: "Staff (शालेय कर्मचारी)" },
+                { value: "STUDENT", label: "Student (विद्यार्थी)" },
+                { value: "PARENT", label: "Parent (पालक)" }
+              ]}
               fullWidth
               disabled={isSystem}
             />

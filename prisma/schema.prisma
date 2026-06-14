@@ -103,11 +103,18 @@ model User {
   @@map("users")
 }
 
+enum RoleType {
+  STAFF
+  STUDENT
+  PARENT
+}
+
 model Role {
   id              String           @id @default(cuid())
   organizationId  String?
   name            String
   description     String?
+  type            RoleType         @default(STAFF)
   isSystem        Boolean          @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
