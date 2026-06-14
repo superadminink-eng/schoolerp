@@ -577,7 +577,7 @@ export default function ApplicantWorkspace({
                   <Button
                     type="submit"
                     variant="filled"
-                    icon="save"
+                    icon="check"
                     loading={actionLoading}
                     className="bg-primary text-white hover:bg-primary/95 rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/15"
                   >
@@ -724,7 +724,7 @@ export default function ApplicantWorkspace({
                   <Button
                     type="submit"
                     variant="filled"
-                    icon="save"
+                    icon="check"
                     loading={actionLoading}
                     className="bg-primary text-white hover:bg-primary/95 rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/15"
                   >

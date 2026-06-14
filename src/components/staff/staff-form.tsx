@@ -1299,7 +1299,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                     type="submit"
                     variant="filled"
                     loading={loading}
-                    icon="save"
+                    icon={mode === "create" ? "add" : "check"}
                     className="px-8 rounded-full text-xs font-semibold shadow-md shadow-primary/10 hover:shadow-lg hover:shadow-primary/20"
                   >
                     {mode === "create" ? "Create Staff Profile" : "Save Changes"}

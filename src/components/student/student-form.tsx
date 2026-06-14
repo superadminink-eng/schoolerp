@@ -971,7 +971,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
             </Button>
           )}
           {tabIndex === TABS.length - 1 && (
-            <Button type="submit" variant="filled" loading={loading} icon="save">
+            <Button type="submit" variant="filled" loading={loading} icon={mode === "create" ? "add" : "check"}>
               {mode === "create" ? "Admit Student" : "Save Changes"}
             </Button>
           )}

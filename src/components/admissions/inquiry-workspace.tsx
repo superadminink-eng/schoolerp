@@ -339,7 +339,7 @@ export default function InquiryWorkspace({
                       <Button
                         type="submit"
                         variant="filled"
-                        icon="save"
+                        icon="check"
                         loading={loading}
                         className="bg-primary text-white hover:bg-primary/95 rounded-xl h-10 px-5 text-xs font-bold"
                       >

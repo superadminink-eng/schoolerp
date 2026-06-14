@@ -1423,7 +1423,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                 type="button"
                 variant="filled"
                 loading={loading}
-                icon="save"
+                icon="check"
                 onClick={() => saveStep("finish")}
               >
                 Save Changes
@@ -1456,7 +1456,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                 type="button"
                 variant="filled"
                 loading={loading}
-                icon="save"
+                icon="check"
                 onClick={() => saveStep("finish")}
               >
                 Save Changes

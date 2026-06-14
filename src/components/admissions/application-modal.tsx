@@ -438,7 +438,7 @@ export default function ApplicationModal({
                 <Button
                   type="submit"
                   variant="filled"
-                  icon="save"
+                  icon="check"
                   loading={loading}
                   className="bg-primary text-white hover:bg-primary/95 rounded-2xl h-12 px-6 font-bold text-sm"
                 >

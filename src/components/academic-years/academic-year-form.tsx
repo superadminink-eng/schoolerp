@@ -179,7 +179,7 @@ export function AcademicYearForm({ mode, initialData }: AcademicYearFormProps) {
         >
           Cancel
         </Button>
-        <Button type="submit" variant="filled" loading={loading} icon="save">
+        <Button type="submit" variant="filled" loading={loading} icon={mode === "create" ? "add" : "check"}>
           {mode === "create" ? "Create Academic Year" : "Save Changes"}
         </Button>
       </div>

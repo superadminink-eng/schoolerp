@@ -461,7 +461,7 @@ export default function ProfilePage() {
                         type="submit"
                         variant="filled"
                         loading={saving}
-                        icon="save"
+                        icon="check"
                         className="hover:scale-[1.02] hover:shadow-lg transition-all"
                       >
                         Save Personal Details

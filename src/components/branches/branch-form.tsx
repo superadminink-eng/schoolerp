@@ -240,7 +240,7 @@ export function BranchForm({ mode, initialData }: BranchFormProps) {
         >
           Cancel
         </Button>
-        <Button type="submit" variant="filled" loading={loading} icon="save">
+        <Button type="submit" variant="filled" loading={loading} icon={mode === "create" ? "add" : "check"}>
           {mode === "create" ? "Create Branch" : "Save Changes"}
         </Button>
       </div>

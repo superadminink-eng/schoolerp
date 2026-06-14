@@ -752,7 +752,7 @@ export default function StudentProfilePage() {
                         <Button
                           type="submit"
                           variant="filled"
-                          icon="save"
+                          icon="check"
                           loading={uploadingDoc}
                           className="bg-primary text-white"
                         >
