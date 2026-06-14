@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { SelectField } from "@/components/ui/select-field";
 import {
   Select,
   SelectTrigger,
@@ -794,26 +795,15 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                     error={errors.dateOfBirth}
                     fullWidth
                   />
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-zinc-400 px-0.5">
-                      Gender
-                    </label>
-                    <Select value={gender} onValueChange={setGender}>
-                      <SelectTrigger fullWidth className="h-[48px] rounded-[8px] border-slate-200 dark:border-zinc-800 bg-transparent hover:border-slate-300 transition-colors">
-                        <SelectValue placeholder="Select gender" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {GENDERS.map((g) => (
-                          <SelectItem key={g.value} value={g.value}>
-                            {g.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.gender && (
-                      <p className="px-3 mt-1 text-[12px] text-error">{errors.gender}</p>
-                    )}
-                  </div>
+                  <SelectField
+                    label="Gender"
+                    value={gender}
+                    onValueChange={setGender}
+                    options={GENDERS.map((g) => ({ value: g.value, label: g.label }))}
+                    placeholder="Select gender"
+                    error={errors.gender}
+                    fullWidth
+                  />
                 </div>
 
                 <TextField
@@ -842,48 +832,28 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-zinc-400 px-0.5">
-                      Role <span className="text-error">*</span>
-                    </label>
-                    <Select value={roleId} onValueChange={setRoleId}>
-                      <SelectTrigger fullWidth className="h-[48px] rounded-[8px] border-slate-200 dark:border-zinc-800 bg-transparent hover:border-slate-300 transition-colors">
-                        <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select a role"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>
-                            {r.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.roleId && (
-                      <p className="px-3 mt-1 text-[12px] text-error">{errors.roleId}</p>
-                    )}
-                  </div>
+                  <SelectField
+                    label="Role"
+                    value={roleId}
+                    onValueChange={setRoleId}
+                    options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                    placeholder={rolesLoading ? "Loading roles..." : "Select a role"}
+                    error={errors.roleId}
+                    required
+                    fullWidth
+                  />
 
                   {isSuperAdmin ? (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-500 dark:text-zinc-400 px-0.5">
-                        Branch <span className="text-error">*</span>
-                      </label>
-                      <Select value={branchId} onValueChange={setBranchId}>
-                        <SelectTrigger fullWidth className="h-[48px] rounded-[8px] border-slate-200 dark:border-zinc-800 bg-transparent hover:border-slate-300 transition-colors">
-                          <SelectValue placeholder={branchesLoading ? "Loading..." : "Select a branch"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {branches.map((b) => (
-                            <SelectItem key={b.id} value={b.id}>
-                              {b.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {errors.branchId && (
-                        <p className="px-3 mt-1 text-[12px] text-error">{errors.branchId}</p>
-                      )}
-                    </div>
+                    <SelectField
+                      label="Branch"
+                      value={branchId}
+                      onValueChange={setBranchId}
+                      options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                      placeholder={branchesLoading ? "Loading..." : "Select a branch"}
+                      error={errors.branchId}
+                      required
+                      fullWidth
+                    />
                   ) : null}
                 </div>
 
@@ -899,23 +869,13 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                   />
 
                   {mode === "edit" && (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-500 dark:text-zinc-400 px-0.5">
-                        Status
-                      </label>
-                      <Select value={status} onValueChange={setStatus}>
-                        <SelectTrigger fullWidth className="h-[48px] rounded-[8px] border-slate-200 dark:border-zinc-800 bg-transparent hover:border-slate-300 transition-colors">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUSES.map((s) => (
-                            <SelectItem key={s.value} value={s.value}>
-                              {s.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <SelectField
+                      label="Status"
+                      value={status}
+                      onValueChange={setStatus}
+                      options={STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                      fullWidth
+                    />
                   )}
                 </div>
               </div>
