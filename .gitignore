@@ -77,3 +77,7 @@ test-perms.js
 
 # Prevent mobile folder from ever being tracked or pushed to Git
 mobile/
+
+# Ignore local test credentials file
+/test-credentials.md
+
