@@ -82,12 +82,12 @@ export async function POST(req: NextRequest) {
           "photo"
         );
         logoPath = uploadResult.filePath;
-      } catch (err) {
+      } catch (err: any) {
         if (err instanceof UploadError) {
           return apiError("BAD_REQUEST", err.message, 400);
         }
         console.error("Logo upload error:", err);
-        return apiError("INTERNAL_ERROR", "Failed to upload logo image", 500);
+        return apiError("INTERNAL_ERROR", `Failed to upload logo image: ${err.message || err}`, 500);
       }
     }
 
