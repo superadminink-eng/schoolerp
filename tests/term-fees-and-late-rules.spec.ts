@@ -35,7 +35,16 @@ test.describe("Term Fees and Smart Late Fee Rules E2E", () => {
     if (!branch) throw new Error("No branch found");
     branchId = branch.id;
 
-    const ay = await prisma.academicYear.findFirst({ where: { organizationId: orgId, isCurrent: true } });
+    let ay = await prisma.academicYear.findFirst({ where: { organizationId: orgId, isCurrent: true } });
+    if (!ay) {
+      ay = await prisma.academicYear.findFirst({ where: { organizationId: orgId } });
+      if (ay) {
+        await prisma.academicYear.update({
+          where: { id: ay.id },
+          data: { isCurrent: true },
+        });
+      }
+    }
     if (!ay) throw new Error("No current academic year found");
     academicYearId = ay.id;
 

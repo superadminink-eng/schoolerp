@@ -52,6 +52,9 @@ export const authConfig: NextAuthConfig = {
       return token;
     },
     async session({ session, token }) {
+      if (token.error === "SessionInvalid") {
+        return null as any;
+      }
       session.user.id = token.userId as string;
       session.user.roleId = token.roleId as string;
       session.user.roleName = token.roleName as string;
@@ -67,7 +70,7 @@ export const authConfig: NextAuthConfig = {
       return session;
     },
     authorized({ auth, request: { nextUrl } }) {
-      const isLoggedIn = !!auth?.user;
+      const isLoggedIn = !!auth?.user && (auth as any)?.error !== "SessionInvalid";
       const { pathname } = nextUrl;
 
       // Bypass auth checks for Next.js internal paths, APIs, assets, and public marketing pages

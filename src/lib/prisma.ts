@@ -183,6 +183,138 @@ const prismaClientSingleton = () => {
           });
         },
       },
+      class: {
+        async findMany({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async findFirst({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async findUnique({ args, query }) {
+          const findFirstArgs = {
+            ...args,
+            where: { ...args.where, deletedAt: null },
+          } as any;
+          return (basePrisma as any).class.findFirst(findFirstArgs);
+        },
+        async findUniqueOrThrow({ args, query }) {
+          const findFirstArgs = {
+            ...args,
+            where: { ...args.where, deletedAt: null },
+          } as any;
+          const result = await (basePrisma as any).class.findFirst(findFirstArgs);
+          if (!result) {
+            throw new Error("Class not found");
+          }
+          return result;
+        },
+        async count({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async delete({ args, query }) {
+          return (basePrisma as any).class.update({
+            where: args.where,
+            data: { deletedAt: new Date() },
+          });
+        },
+        async deleteMany({ args, query }) {
+          return (basePrisma as any).class.updateMany({
+            where: args.where,
+            data: { deletedAt: new Date() },
+          });
+        },
+      },
+      section: {
+        async findMany({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async findFirst({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async findUnique({ args, query }) {
+          const findFirstArgs = {
+            ...args,
+            where: { ...args.where, deletedAt: null },
+          } as any;
+          return (basePrisma as any).section.findFirst(findFirstArgs);
+        },
+        async findUniqueOrThrow({ args, query }) {
+          const findFirstArgs = {
+            ...args,
+            where: { ...args.where, deletedAt: null },
+          } as any;
+          const result = await (basePrisma as any).section.findFirst(findFirstArgs);
+          if (!result) {
+            throw new Error("Section not found");
+          }
+          return result;
+        },
+        async count({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async delete({ args, query }) {
+          return (basePrisma as any).section.update({
+            where: args.where,
+            data: { deletedAt: new Date() },
+          });
+        },
+        async deleteMany({ args, query }) {
+          return (basePrisma as any).section.updateMany({
+            where: args.where,
+            data: { deletedAt: new Date() },
+          });
+        },
+      },
+      academicYear: {
+        async findMany({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async findFirst({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async findUnique({ args, query }) {
+          const findFirstArgs = {
+            ...args,
+            where: { ...args.where, deletedAt: null },
+          } as any;
+          return (basePrisma as any).academicYear.findFirst(findFirstArgs);
+        },
+        async findUniqueOrThrow({ args, query }) {
+          const findFirstArgs = {
+            ...args,
+            where: { ...args.where, deletedAt: null },
+          } as any;
+          const result = await (basePrisma as any).academicYear.findFirst(findFirstArgs);
+          if (!result) {
+            throw new Error("Academic year not found");
+          }
+          return result;
+        },
+        async count({ args, query }) {
+          args.where = { ...args.where, deletedAt: null };
+          return query(args);
+        },
+        async delete({ args, query }) {
+          return (basePrisma as any).academicYear.update({
+            where: args.where,
+            data: { deletedAt: new Date() },
+          });
+        },
+        async deleteMany({ args, query }) {
+          return (basePrisma as any).academicYear.updateMany({
+            where: args.where,
+            data: { deletedAt: new Date() },
+          });
+        },
+      },
     },
   });
 };

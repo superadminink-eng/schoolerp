@@ -1,10 +1,6 @@
-"use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { updatePassword } from "firebase/auth";
-import { auth as firebaseAuth } from "@/lib/firebase";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { TextField } from "@/components/ui/text-field";
 import { Button } from "@/components/ui/button";
@@ -51,7 +47,7 @@ export default function ForcePasswordChangePage() {
     e.preventDefault();
     setError("");
 
-    if (!firebaseAuth.currentUser) {
+    if (!session?.user) {
       setError("Authentication session not found. Please log in again.");
       return;
     }
@@ -66,37 +62,31 @@ export default function ForcePasswordChangePage() {
 
     setLoading(true);
     try {
-      // 1. Update Firebase auth password
-      await updatePassword(firebaseAuth.currentUser, newPassword);
-
-      // 2. Sync database user record (forcePasswordChange = false, increment tokenVersion)
+      // Send newPassword to change-password API, which handles Firebase & MySQL update securely
       const res = await fetch("/api/v1/profile/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword }),
       });
       const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error?.message ?? "Failed to sync credentials.");
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message ?? "Failed to update credentials.");
       }
 
       snackbar.show("Password updated successfully!", "success");
 
-      // 3. Update local NextAuth session state
-      await update({ forcePasswordChange: false });
+      // 3. Update local NextAuth session state with new tokenVersion to avoid immediate logout
+      await update({
+        forcePasswordChange: false,
+        tokenVersion: data.data.tokenVersion,
+      });
 
       // 4. Redirect to dashboard
       router.push("/dashboard");
       router.refresh();
     } catch (err: any) {
       console.error("Force password change error:", err);
-      let errMsg = "Failed to update password. Please try again.";
-      if (err.code === "auth/requires-recent-login") {
-        errMsg = "Security timeout. Please sign out and sign back in to change your password.";
-      } else if (err.message) {
-        errMsg = err.message;
-      }
-      setError(errMsg);
+      setError(err.message || "Failed to update password. Please try again.");
     } finally {
       setLoading(false);
     }

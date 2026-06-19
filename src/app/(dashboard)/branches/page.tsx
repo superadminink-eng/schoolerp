@@ -11,6 +11,8 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+import { useApi } from "@/hooks/use-api";
+import { Pagination } from "@/components/ui/pagination";
 
 
 interface BranchRow {
@@ -27,28 +29,27 @@ interface BranchRow {
 export default function BranchesPage() {
   const router = useRouter();
 
-  const [branches, setBranches] = useState<BranchRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
-  const fetchBranches = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/v1/branches?limit=9999");
-      const data = await res.json();
-      if (data.success) {
-        setBranches(data.data);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Reset page when search changes
   useEffect(() => {
-    fetchBranches();
-  }, [fetchBranches]);
+    setPage(1);
+  }, [searchInput]);
+
+  const params = new URLSearchParams();
+  params.set("paginated", "true");
+  params.set("page", page.toString());
+  params.set("limit", limit.toString());
+  if (searchInput) params.set("search", searchInput);
+
+  const { data: apiResponse, isLoading: loading } = useApi<BranchRow[]>(
+    `/api/v1/branches?${params.toString()}`
+  );
+
+  const branches = apiResponse?.data ?? [];
+  const totalItems = apiResponse?.meta?.total ?? 0;
 
   const columns: Column<BranchRow>[] = [
     {
@@ -159,9 +160,16 @@ export default function BranchesPage() {
             loading={loading}
             emptyIcon="location_off"
             emptyMessage="No branches found"
-            quickFilter={searchInput}
           />
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={totalItems}
+          itemsPerPage={limit}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
 
       <PermissionGate module="branches" action="manage">

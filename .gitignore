@@ -81,3 +81,13 @@ mobile/
 # Ignore local test credentials file
 /test-credentials.md
 
+# IDE configurations
+.idea/
+
+# SQL dumps
+*.sql
+
+# Playwright reports
+playwright-report/
+
+

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -121,42 +123,50 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
 
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
 
-  // Personal Information
-  const [firstName, setFirstName] = useState(initialData?.firstName ?? "");
-  const [lastName, setLastName] = useState(initialData?.lastName ?? "");
-  const [dateOfBirth, setDateOfBirth] = useState(formatDateForInput(initialData?.dateOfBirth));
-  const [gender, setGender] = useState(initialData?.gender ?? "");
-  const [bloodGroup, setBloodGroup] = useState(initialData?.bloodGroup ?? "");
+  const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm({
+    resolver: zodResolver(mode === "create" ? createStudentSchema : updateStudentSchema),
+    defaultValues: {
+      firstName: initialData?.firstName ?? "",
+      lastName: initialData?.lastName ?? "",
+      dateOfBirth: formatDateForInput(initialData?.dateOfBirth),
+      gender: initialData?.gender ?? "",
+      bloodGroup: initialData?.bloodGroup ?? "",
+      fatherName: initialData?.fatherName ?? "",
+      fatherPhone: initialData?.fatherPhone ?? "",
+      fatherEmail: initialData?.fatherEmail ?? "",
+      fatherOccupation: initialData?.fatherOccupation ?? "",
+      motherName: initialData?.motherName ?? "",
+      motherPhone: initialData?.motherPhone ?? "",
+      motherEmail: initialData?.motherEmail ?? "",
+      motherOccupation: initialData?.motherOccupation ?? "",
+      address: initialData?.address ?? "",
+      pincode: initialData?.pincode ?? "",
+      previousSchool: initialData?.previousSchool ?? "",
+      emergencyContact1: initialData?.emergencyContact1 ?? "",
+      emergencyContact2: initialData?.emergencyContact2 ?? "",
+      idType: initialData?.idType ?? "",
+      idNumber: initialData?.idNumber ?? "",
+      guardianName: initialData?.guardianName ?? "",
+      admissionDate: formatDateForInput(initialData?.admissionDate) || new Date().toISOString().slice(0, 10),
+      branchId: initialData?.branch?.id ?? "",
+      classId: initialData?.enrollments?.[0]?.section?.class?.id ?? initialData?.classId ?? "",
+      sectionId: initialData?.enrollments?.[0]?.section?.id ?? "",
+      discountPercent: "",
+      amountPaid: "",
+      paymentMethod: "",
+      transactionId: "",
+    }
+  });
+
+  const branchId = watch("branchId");
+  const classId = watch("classId");
+  const paymentMethod = watch("paymentMethod");
+  const discountPercent = watch("discountPercent");
+  const amountPaid = watch("amountPaid");
+
+  // File states (handled manually since react-hook-form manages text inputs by default)
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-
-  // Family Information
-  const [fatherName, setFatherName] = useState(initialData?.fatherName ?? "");
-  const [fatherPhone, setFatherPhone] = useState(initialData?.fatherPhone ?? "");
-  const [fatherEmail, setFatherEmail] = useState(initialData?.fatherEmail ?? "");
-  const [fatherOccupation, setFatherOccupation] = useState(initialData?.fatherOccupation ?? "");
-  const [motherName, setMotherName] = useState(initialData?.motherName ?? "");
-  const [motherPhone, setMotherPhone] = useState(initialData?.motherPhone ?? "");
-  const [motherEmail, setMotherEmail] = useState(initialData?.motherEmail ?? "");
-  const [motherOccupation, setMotherOccupation] = useState(initialData?.motherOccupation ?? "");
-  const [address, setAddress] = useState(initialData?.address ?? "");
-  const [pincode, setPincode] = useState(initialData?.pincode ?? "");
-  const [previousSchool, setPreviousSchool] = useState(initialData?.previousSchool ?? "");
-  const [emergencyContact1, setEmergencyContact1] = useState(initialData?.emergencyContact1 ?? "");
-  const [emergencyContact2, setEmergencyContact2] = useState(initialData?.emergencyContact2 ?? "");
-  const [idType, setIdType] = useState(initialData?.idType ?? "");
-  const [idNumber, setIdNumber] = useState(initialData?.idNumber ?? "");
   const [idDocFile, setIdDocFile] = useState<File | null>(null);
-  const [guardianName, setGuardianName] = useState(initialData?.guardianName ?? "");
-
-  // Administration Information
-  const [admissionDate, setAdmissionDate] = useState(formatDateForInput(initialData?.admissionDate));
-  const [branchId, setBranchId] = useState(initialData?.branch?.id ?? "");
-  const [classId, setClassId] = useState(
-    initialData?.enrollments?.[0]?.section?.class?.id ?? initialData?.classId ?? ""
-  );
-  const [sectionId, setSectionId] = useState(
-    initialData?.enrollments?.[0]?.section?.id ?? ""
-  );
 
   // Dropdown data
   const [classes, setClasses] = useState<ClassOption[]>([]);
@@ -168,13 +178,6 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const [fees, setFees] = useState<FeeInfo[]>([]);
   const [feesLoading, setFeesLoading] = useState(false);
 
-  // Fee collection (create mode only)
-  const [discountPercent, setDiscountPercent] = useState("");
-  const [amountPaid, setAmountPaid] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
-  const [transactionId, setTransactionId] = useState("");
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("personal");
 
@@ -205,16 +208,16 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   // Auto-assign branch for non-SUPER_ADMIN users
   useEffect(() => {
     if (!isSuperAdmin && session?.user?.branchId && !branchId) {
-      setBranchId(session.user.branchId);
+      setValue("branchId", session.user.branchId);
     }
-  }, [isSuperAdmin, session?.user?.branchId, branchId]);
+  }, [isSuperAdmin, session?.user?.branchId, branchId, setValue]);
 
   // Fetch classes when branch changes
   useEffect(() => {
     if (!branchId) {
       setClasses([]);
-      setClassId("");
-      setSectionId("");
+      setValue("classId", "");
+      setValue("sectionId", "");
       return;
     }
 
@@ -228,13 +231,13 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       })
       .catch(console.error)
       .finally(() => setClassesLoading(false));
-  }, [branchId]);
+  }, [branchId, setValue]);
 
-  // Fetch sections when class changes
+  // Fetch sections and fees when class changes
   useEffect(() => {
     if (!classId) {
       setSections([]);
-      setSectionId("");
+      setValue("sectionId", "");
       return;
     }
 
@@ -248,14 +251,13 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       })
       .catch(console.error)
       .finally(() => setSectionsLoading(false));
-  }, [classId]);
+  }, [classId, setValue]);
 
-  // Fetch fees when class changes
   useEffect(() => {
-    setDiscountPercent("");
-    setAmountPaid("");
-    setPaymentMethod("");
-    setTransactionId("");
+    setValue("discountPercent", "");
+    setValue("amountPaid", "");
+    setValue("paymentMethod", "");
+    setValue("transactionId", "");
     if (!classId) {
       setFees([]);
       return;
@@ -271,142 +273,49 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       })
       .catch(console.error)
       .finally(() => setFeesLoading(false));
-  }, [classId]);
+  }, [classId, setValue]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrors({});
+  async function onSubmit(formDataFields: any) {
+    setLoading(true);
+    try {
+      const formData = new FormData();
 
-    const formFields = {
-      firstName,
-      lastName,
-      dateOfBirth,
-      gender: gender || undefined,
-      bloodGroup: bloodGroup || undefined,
-      address,
-      pincode,
-      previousSchool: previousSchool || undefined,
-      emergencyContact1,
-      emergencyContact2: emergencyContact2 || undefined,
-      idType,
-      idNumber,
-      guardianName: guardianName || undefined,
-      fatherName: fatherName || undefined,
-      fatherPhone: fatherPhone || undefined,
-      fatherEmail: fatherEmail || undefined,
-      fatherOccupation: fatherOccupation || undefined,
-      motherName: motherName || undefined,
-      motherPhone: motherPhone || undefined,
-      motherEmail: motherEmail || undefined,
-      motherOccupation: motherOccupation || undefined,
-      admissionDate: admissionDate || undefined,
-      branchId,
-      classId,
-      sectionId,
-      discountPercent: discountPercent || undefined,
-      amountPaid: amountPaid || undefined,
-      paymentMethod: paymentMethod || undefined,
-      transactionId: transactionId || undefined,
-    };
-
-    if (mode === "create") {
-      const result = createStudentSchema.safeParse(formFields);
-
-      if (!result.success) {
-        const fieldErrors: Record<string, string> = {};
-        for (const err of result.error.errors) {
-          const key = err.path[0] as string;
-          if (!fieldErrors[key]) fieldErrors[key] = err.message;
+      // Add all text fields
+      for (const [key, value] of Object.entries(formDataFields)) {
+        if (value !== undefined && value !== null && value !== "") {
+          formData.append(key, String(value));
         }
-        setErrors(fieldErrors);
+      }
+
+      // Add files
+      if (photoFile) {
+        formData.append("photo", photoFile);
+      }
+      if (idDocFile) {
+        formData.append("idDocument", idDocFile);
+      }
+
+      const url = mode === "create" ? "/api/v1/students" : `/api/v1/students/${initialData!.id}`;
+      const method = mode === "create" ? "POST" : "PATCH";
+
+      const res = await fetch(url, {
+        method,
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        snackbar.show(data.error?.message ?? `Failed to ${mode} student`, "error");
         return;
       }
 
-      setLoading(true);
-      try {
-        const formData = new FormData();
-
-        // Add all text fields
-        for (const [key, value] of Object.entries(result.data)) {
-          if (value !== undefined && value !== null) {
-            formData.append(key, String(value));
-          }
-        }
-
-        // Add files
-        if (photoFile) {
-          formData.append("photo", photoFile);
-        }
-        if (idDocFile) {
-          formData.append("idDocument", idDocFile);
-        }
-
-        const res = await fetch("/api/v1/students", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
-
-        if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create student", "error");
-          return;
-        }
-
-        snackbar.show("Student admitted successfully", "success");
-        router.push(`/students/${data.data.id}`);
-        router.refresh();
-      } catch {
-        snackbar.show("An error occurred", "error");
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      const result = updateStudentSchema.safeParse(formFields);
-
-      if (!result.success) {
-        const fieldErrors: Record<string, string> = {};
-        for (const err of result.error.errors) {
-          const key = err.path[0] as string;
-          if (!fieldErrors[key]) fieldErrors[key] = err.message;
-        }
-        setErrors(fieldErrors);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const formData = new FormData();
-        for (const [key, value] of Object.entries(result.data)) {
-          if (value !== undefined && value !== null) {
-            formData.append(key, String(value));
-          }
-        }
-        if (photoFile) {
-          formData.append("photo", photoFile);
-        }
-        if (idDocFile) {
-          formData.append("idDocument", idDocFile);
-        }
-
-        const res = await fetch(`/api/v1/students/${initialData!.id}`, {
-          method: "PATCH",
-          body: formData,
-        });
-        const data = await res.json();
-
-        if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update student", "error");
-          return;
-        }
-
-        snackbar.show("Student updated successfully", "success");
-        router.push(`/students/${initialData!.id}`);
-        router.refresh();
-      } catch {
-        snackbar.show("An error occurred", "error");
-      } finally {
-        setLoading(false);
-      }
+      snackbar.show(`Student ${mode === "create" ? "admitted" : "updated"} successfully`, "success");
+      router.push(`/students/${data.data.id}`);
+      router.refresh();
+    } catch {
+      snackbar.show("An error occurred", "error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -463,7 +372,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
+    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto max-w-3xl">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="personal">Personal</TabsTrigger>
@@ -478,17 +387,15 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <TextField
                   label="First name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  error={errors.firstName}
+                  {...register("firstName")}
+                  error={errors.firstName?.message}
                   required
                   fullWidth
                 />
                 <TextField
                   label="Last name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  error={errors.lastName}
+                  {...register("lastName")}
+                  error={errors.lastName?.message}
                   required
                   fullWidth
                 />
@@ -498,9 +405,8 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 <TextField
                   label="Date of birth"
                   type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  error={errors.dateOfBirth}
+                  {...register("dateOfBirth")}
+                  error={errors.dateOfBirth?.message}
                   required
                   fullWidth
                 />
@@ -508,20 +414,26 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                   <label className="text-label-md text-on-surface-variant px-1">
                     Gender *
                   </label>
-                  <Select value={gender} onValueChange={setGender}>
-                    <SelectTrigger fullWidth>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {GENDERS.map((g) => (
-                        <SelectItem key={g.value} value={g.value}>
-                          {g.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.gender && (
-                    <p className="px-4 text-[12px] leading-4 text-error">{errors.gender}</p>
+                  <Controller
+                    control={control}
+                    name="gender"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger fullWidth>
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GENDERS.map((g) => (
+                            <SelectItem key={g.value} value={g.value}>
+                              {g.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.gender?.message && (
+                    <p className="px-4 text-[12px] leading-4 text-error">{errors.gender.message}</p>
                   )}
                 </div>
               </div>
@@ -531,18 +443,24 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                   <label className="text-label-md text-on-surface-variant px-1">
                     Blood group
                   </label>
-                  <Select value={bloodGroup} onValueChange={setBloodGroup}>
-                    <SelectTrigger fullWidth>
-                      <SelectValue placeholder="Select blood group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BLOOD_GROUPS.map((bg) => (
-                        <SelectItem key={bg} value={bg}>
-                          {bg}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={control}
+                    name="bloodGroup"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger fullWidth>
+                          <SelectValue placeholder="Select blood group" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BLOOD_GROUPS.map((bg) => (
+                            <SelectItem key={bg} value={bg}>
+                              {bg}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </div>
                 <FileUpload
                   label="Photo"
@@ -564,17 +482,15 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <TextField
                   label="Father name"
-                  value={fatherName}
-                  onChange={(e) => setFatherName(e.target.value)}
-                  error={errors.fatherName}
+                  {...register("fatherName")}
+                  error={errors.fatherName?.message}
                   fullWidth
                 />
                 <TextField
                   label="Contact number"
                   type="tel"
-                  value={fatherPhone}
-                  onChange={(e) => setFatherPhone(e.target.value)}
-                  error={errors.fatherPhone}
+                  {...register("fatherPhone")}
+                  error={errors.fatherPhone?.message}
                   fullWidth
                 />
               </div>
@@ -582,16 +498,14 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 <TextField
                   label="Email address"
                   type="email"
-                  value={fatherEmail}
-                  onChange={(e) => setFatherEmail(e.target.value)}
-                  error={errors.fatherEmail}
+                  {...register("fatherEmail")}
+                  error={errors.fatherEmail?.message}
                   fullWidth
                 />
                 <TextField
                   label="Occupation"
-                  value={fatherOccupation}
-                  onChange={(e) => setFatherOccupation(e.target.value)}
-                  error={errors.fatherOccupation}
+                  {...register("fatherOccupation")}
+                  error={errors.fatherOccupation?.message}
                   fullWidth
                 />
               </div>
@@ -600,17 +514,15 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <TextField
                   label="Mother name"
-                  value={motherName}
-                  onChange={(e) => setMotherName(e.target.value)}
-                  error={errors.motherName}
+                  {...register("motherName")}
+                  error={errors.motherName?.message}
                   fullWidth
                 />
                 <TextField
                   label="Contact number"
                   type="tel"
-                  value={motherPhone}
-                  onChange={(e) => setMotherPhone(e.target.value)}
-                  error={errors.motherPhone}
+                  {...register("motherPhone")}
+                  error={errors.motherPhone?.message}
                   fullWidth
                 />
               </div>
@@ -618,16 +530,14 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 <TextField
                   label="Email address"
                   type="email"
-                  value={motherEmail}
-                  onChange={(e) => setMotherEmail(e.target.value)}
-                  error={errors.motherEmail}
+                  {...register("motherEmail")}
+                  error={errors.motherEmail?.message}
                   fullWidth
                 />
                 <TextField
                   label="Occupation"
-                  value={motherOccupation}
-                  onChange={(e) => setMotherOccupation(e.target.value)}
-                  error={errors.motherOccupation}
+                  {...register("motherOccupation")}
+                  error={errors.motherOccupation?.message}
                   fullWidth
                 />
               </div>
@@ -635,26 +545,23 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
               {/* Address & Other */}
               <TextField
                 label="Full address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                error={errors.address}
+                {...register("address")}
+                error={errors.address?.message}
                 required
                 fullWidth
               />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <TextField
                   label="Pincode"
-                  value={pincode}
-                  onChange={(e) => setPincode(e.target.value)}
-                  error={errors.pincode}
+                  {...register("pincode")}
+                  error={errors.pincode?.message}
                   required
                   fullWidth
                 />
                 <TextField
                   label="Previous school"
-                  value={previousSchool}
-                  onChange={(e) => setPreviousSchool(e.target.value)}
-                  error={errors.previousSchool}
+                  {...register("previousSchool")}
+                  error={errors.previousSchool?.message}
                   fullWidth
                 />
               </div>
@@ -662,18 +569,16 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 <TextField
                   label="Emergency number 1"
                   type="tel"
-                  value={emergencyContact1}
-                  onChange={(e) => setEmergencyContact1(e.target.value)}
-                  error={errors.emergencyContact1}
+                  {...register("emergencyContact1")}
+                  error={errors.emergencyContact1?.message}
                   required
                   fullWidth
                 />
                 <TextField
                   label="Emergency number 2"
                   type="tel"
-                  value={emergencyContact2}
-                  onChange={(e) => setEmergencyContact2(e.target.value)}
-                  error={errors.emergencyContact2}
+                  {...register("emergencyContact2")}
+                  error={errors.emergencyContact2?.message}
                   fullWidth
                 />
               </div>
@@ -682,20 +587,26 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                   <label className="text-label-md text-on-surface-variant px-1">
                     ID *
                   </label>
-                  <Select value={idType} onValueChange={setIdType}>
-                    <SelectTrigger fullWidth>
-                      <SelectValue placeholder="Select ID type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ID_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.idType && (
-                    <p className="px-4 text-[12px] leading-4 text-error">{errors.idType}</p>
+                  <Controller
+                    control={control}
+                    name="idType"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger fullWidth>
+                          <SelectValue placeholder="Select ID type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ID_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.idType?.message && (
+                    <p className="px-4 text-[12px] leading-4 text-error">{errors.idType.message}</p>
                   )}
                 </div>
                 <FileUpload
@@ -709,17 +620,15 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <TextField
                   label="ID number"
-                  value={idNumber}
-                  onChange={(e) => setIdNumber(e.target.value)}
-                  error={errors.idNumber}
+                  {...register("idNumber")}
+                  error={errors.idNumber?.message}
                   required
                   fullWidth
                 />
                 <TextField
                   label="Who looks after child at home"
-                  value={guardianName}
-                  onChange={(e) => setGuardianName(e.target.value)}
-                  error={errors.guardianName}
+                  {...register("guardianName")}
+                  error={errors.guardianName?.message}
                   fullWidth
                 />
               </div>
@@ -735,9 +644,8 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 <TextField
                   label="Admission date"
                   type="date"
-                  value={admissionDate}
-                  onChange={(e) => setAdmissionDate(e.target.value)}
-                  error={errors.admissionDate}
+                  {...register("admissionDate")}
+                  error={errors.admissionDate?.message}
                   fullWidth
                 />
                 {isSuperAdmin && (
@@ -745,20 +653,26 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                     <label className="text-label-md text-on-surface-variant px-1">
                       Branch *
                     </label>
-                    <Select value={branchId} onValueChange={(v) => { setBranchId(v); setClassId(""); setSectionId(""); }}>
-                      <SelectTrigger fullWidth>
-                        <SelectValue placeholder={branchesLoading ? "Loading..." : "Select branch"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.branchId && (
-                      <p className="px-4 text-[12px] leading-4 text-error">{errors.branchId}</p>
+                    <Controller
+                      control={control}
+                      name="branchId"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={(v) => { field.onChange(v); setValue("classId", ""); setValue("sectionId", ""); }}>
+                          <SelectTrigger fullWidth>
+                            <SelectValue placeholder={branchesLoading ? "Loading..." : "Select branch"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {branches.map((b) => (
+                              <SelectItem key={b.id} value={b.id}>
+                                {b.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {errors.branchId?.message && (
+                      <p className="px-4 text-[12px] leading-4 text-error">{errors.branchId.message}</p>
                     )}
                   </div>
                 )}
@@ -769,45 +683,57 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                   <label className="text-label-md text-on-surface-variant px-1">
                     Standard *
                   </label>
-                  <Select
-                    value={classId}
-                    onValueChange={(v) => { setClassId(v); setSectionId(""); }}
-                    disabled={!branchId}
-                  >
-                    <SelectTrigger fullWidth>
-                      <SelectValue placeholder={classesLoading ? "Loading..." : "Select standard"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classes.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={control}
+                    name="classId"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => { field.onChange(v); setValue("sectionId", ""); }}
+                        disabled={!branchId}
+                      >
+                        <SelectTrigger fullWidth>
+                          <SelectValue placeholder={classesLoading ? "Loading..." : "Select standard"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {classes.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-label-md text-on-surface-variant px-1">
                     Division
                   </label>
-                  <Select
-                    value={sectionId}
-                    onValueChange={setSectionId}
-                    disabled={!classId}
-                  >
-                    <SelectTrigger fullWidth>
-                      <SelectValue placeholder={sectionsLoading ? "Loading..." : "Select division"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sections.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.sectionId && (
-                    <p className="px-4 text-[12px] leading-4 text-error">{errors.sectionId}</p>
+                  <Controller
+                    control={control}
+                    name="sectionId"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={!classId}
+                      >
+                        <SelectTrigger fullWidth>
+                          <SelectValue placeholder={sectionsLoading ? "Loading..." : "Select division"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sections.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.sectionId?.message && (
+                    <p className="px-4 text-[12px] leading-4 text-error">{errors.sectionId.message}</p>
                   )}
                 </div>
               </div>
@@ -842,9 +768,8 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                         <TextField
                           label="Discount %"
                           type="number"
-                          value={discountPercent}
-                          onChange={(e) => setDiscountPercent(e.target.value)}
-                          error={errors.discountPercent}
+                          {...register("discountPercent")}
+                          error={errors.discountPercent?.message}
                           fullWidth
                         />
                         <div className="flex flex-col justify-end">
@@ -856,12 +781,18 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <CurrencyInput
-                          label="Amount Paid"
-                          value={amountPaid}
-                          onChange={(e) => setAmountPaid(e.target.value)}
-                          error={errors.amountPaid}
-                          fullWidth
+                        <Controller
+                          control={control}
+                          name="amountPaid"
+                          render={({ field }) => (
+                            <CurrencyInput
+                              label="Amount Paid"
+                              value={field.value}
+                              onChange={field.onChange}
+                              error={errors.amountPaid?.message}
+                              fullWidth
+                            />
+                          )}
                         />
                         <div className="flex flex-col justify-end">
                           <p className="text-body-sm text-on-surface-variant">Remaining</p>
@@ -876,28 +807,33 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                           <label className="text-label-md text-on-surface-variant px-1">
                             Payment Method
                           </label>
-                          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                            <SelectTrigger fullWidth>
-                              <SelectValue placeholder="Select method" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PAYMENT_MODES.map((m) => (
-                                <SelectItem key={m} value={m}>
-                                  {PAYMENT_METHOD_LABELS[m]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.paymentMethod && (
-                            <p className="px-4 text-[12px] leading-4 text-error">{errors.paymentMethod}</p>
+                          <Controller
+                            control={control}
+                            name="paymentMethod"
+                            render={({ field }) => (
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <SelectTrigger fullWidth>
+                                  <SelectValue placeholder="Select method" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {PAYMENT_MODES.map((m) => (
+                                    <SelectItem key={m} value={m}>
+                                      {PAYMENT_METHOD_LABELS[m]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                          {errors.paymentMethod?.message && (
+                            <p className="px-4 text-[12px] leading-4 text-error">{errors.paymentMethod.message}</p>
                           )}
                         </div>
                         {showTransactionId && (
                           <TextField
                             label="Transaction ID"
-                            value={transactionId}
-                            onChange={(e) => setTransactionId(e.target.value)}
-                            error={errors.transactionId}
+                            {...register("transactionId")}
+                            error={errors.transactionId?.message}
                             fullWidth
                           />
                         )}

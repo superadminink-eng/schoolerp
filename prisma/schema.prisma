@@ -194,6 +194,7 @@ model AcademicYear {
   endDate                 DateTime
   isCurrent               Boolean                  @default(false)
   createdAt               DateTime                 @default(now())
+  deletedAt               DateTime?
   organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   admissionApplications   AdmissionApplication[]
   admissionInquiries      AdmissionInquiry[]
@@ -205,6 +206,7 @@ model AcademicYear {
 
   @@unique([organizationId, name])
   @@index([organizationId])
+  @@index([deletedAt])
   @@map("academic_years")
 }
 
@@ -217,6 +219,7 @@ model Class {
   numericGrade            Int
   status                  ClassStatus              @default(DRAFT)
   createdAt               DateTime                 @default(now())
+  deletedAt               DateTime?
   admissionApplications   AdmissionApplication[]
   admissionInquiries      AdmissionInquiry[]
   academicYear            AcademicYear             @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
@@ -231,6 +234,7 @@ model Class {
   @@index([branchId])
   @@index([organizationId])
   @@index([academicYearId], map: "classes_academicYearId_fkey")
+  @@index([deletedAt])
   @@map("classes")
 }
 
@@ -245,9 +249,11 @@ model Section {
   studentAttendances     StudentAttendance[]
   studentEnrollments     StudentEnrollment[]
   timetableSlots         TimetableSlot[]
+  deletedAt              DateTime?
 
   @@unique([classId, name])
   @@index([classTeacherId])
+  @@index([deletedAt])
   @@map("sections")
 }
 

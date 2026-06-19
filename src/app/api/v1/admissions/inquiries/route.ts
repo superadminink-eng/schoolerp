@@ -7,6 +7,7 @@ import {
   parsePagination,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { buildTenantWhere, buildSearchWhere } from "@/lib/query-helpers";
 import { createInquirySchema } from "@/lib/validations/admission";
 import { logAction } from "@/lib/audit";
 
@@ -25,32 +26,11 @@ export async function GET(req: NextRequest) {
   const classId = url.searchParams.get("classAppliedId");
 
   const where: Record<string, any> = {
-    organizationId: ctx.organizationId,
+    ...buildTenantWhere(ctx as any, branchId),
+    ...(status && { status }),
+    ...(classId && { classAppliedId: classId }),
+    ...buildSearchWhere(search, ["studentName", "parentName", "parentEmail", "parentPhone"]),
   };
-
-  // Restrict branch-scoped roles to their home branch
-  if (ctx.branchId && branchId !== "__all__") {
-    where.branchId = ctx.branchId;
-  } else if (branchId && branchId !== "ALL" && branchId !== "__all__") {
-    where.branchId = branchId;
-  }
-
-  if (status) {
-    where.status = status;
-  }
-
-  if (classId) {
-    where.classAppliedId = classId;
-  }
-
-  if (search) {
-    where.OR = [
-      { studentName: { contains: search } },
-      { parentName: { contains: search } },
-      { parentEmail: { contains: search } },
-      { parentPhone: { contains: search } },
-    ];
-  }
 
   try {
     const [inquiries, total] = await Promise.all([

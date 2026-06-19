@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-helpers";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import crypto from "crypto";
+import * as jose from "jose";
 
 async function verifyFirebasePassword(email: string, password?: string): Promise<boolean> {
   if (!password) return false;
@@ -24,11 +25,16 @@ async function verifyFirebasePassword(email: string, password?: string): Promise
   }
 }
 
-function signToken(payload: any, secret: string): string {
-  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto.createHmac("sha256", secret).update(`${header}.${data}`).digest("base64url");
-  return `${header}.${data}.${signature}`;
+async function signToken(payload: any, secretString: string): Promise<string> {
+  const secret = new TextEncoder().encode(secretString);
+  return await new jose.SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuedAt()
+    .setExpirationTime("24h")
+    .setIssuer("school-erp-auth")
+    .setAudience("school-erp-parent-app")
+    .setJti(crypto.randomUUID())
+    .sign(secret);
 }
 
 export async function POST(req: NextRequest) {
@@ -298,7 +304,7 @@ export async function POST(req: NextRequest) {
     });
 
     const secret = process.env.AUTH_SECRET || "auth_secret_fallback";
-    const token = signToken({ userId: user.id, role: "PARENT", parentId: user.parent.id }, secret);
+    const token = await signToken({ userId: user.id, role: "PARENT", parentId: user.parent.id }, secret);
 
     return apiSuccess({
       token,

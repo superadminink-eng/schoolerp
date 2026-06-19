@@ -5,6 +5,7 @@ type ApiResponseMeta = {
   page?: number;
   limit?: number;
   total?: number;
+  stats?: any;
 };
 
 export function apiSuccess<T>(data: T, meta?: ApiResponseMeta, status = 200) {

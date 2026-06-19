@@ -7,6 +7,7 @@ import {
   parsePagination,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { buildTenantWhere, buildSearchWhere } from "@/lib/query-helpers";
 import { createNoticeSchema } from "@/lib/validations/notice";
 import { logAction } from "@/lib/audit";
 
@@ -23,25 +24,12 @@ export async function GET(req: NextRequest) {
   const branchId = url.searchParams.get("branchId");
 
   const where: Record<string, any> = {
-    organizationId: ctx.organizationId,
+    ...buildTenantWhere(ctx as any, branchId),
+    ...buildSearchWhere(search, ["title", "content"]),
   };
 
-  // Enforce branch scope isolation for non-global roles
-  if (ctx.branchId && branchId !== "__all__") {
-    where.branchId = ctx.branchId;
-  } else if (branchId && branchId !== "ALL" && branchId !== "__all__") {
-    where.branchId = branchId;
-  }
-
-  if (search) {
-    where.OR = [
-      { title: { contains: search } },
-      { content: { contains: search } },
-    ];
-  }
-
   try {
-    const [rows, total] = await Promise.all([
+    const [rows, total, publishedCount, draftCount, parentTargetCount] = await Promise.all([
       prisma.notice.findMany({
         where,
         include: {
@@ -52,6 +40,14 @@ export async function GET(req: NextRequest) {
         take: limit,
       }),
       prisma.notice.count({ where }),
+      prisma.notice.count({ where: { ...where, isPublished: true } }),
+      prisma.notice.count({ where: { ...where, isPublished: false } }),
+      prisma.notice.count({
+        where: {
+          ...where,
+          targetRoles: { contains: "PARENT" },
+        },
+      }),
     ]);
 
     const mappedRows = rows.map((row) => {
@@ -67,7 +63,16 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return apiSuccess(mappedRows, { page, limit, total });
+    return apiSuccess(mappedRows, {
+      page,
+      limit,
+      total,
+      stats: {
+        published: publishedCount,
+        draft: draftCount,
+        parentTarget: parentTargetCount,
+      } as any,
+    });
   } catch (error) {
     console.error("List notices error:", error);
     return apiError("INTERNAL_ERROR", "Failed to list notices", 500);

@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/authenticated-test";
+import { setupMockRoutes } from "./helpers/network-mocks";
 import { STORAGE_STATE_ADMIN } from "../playwright.config";
 import { PrismaClient } from "@prisma/client";
 
@@ -316,49 +317,42 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     page.on("requestfailed", (req) => console.log(`REQUEST FAILED [Admin]: ${req.url()} - ${req.failure()?.errorText}`));
   });
 
-  test("Admin can view students directory, use filters, and open 360-degree Student Profile Hub", async ({ page }) => {
+  test("Admin can view students directory, use filters, and open 360-degree Student Profile Hub", async ({ studentSisPage }) => {
+    // Setup network mock routes
+    await setupMockRoutes(studentSisPage.page);
+    const page = studentSisPage.page;
+
     // 1. Navigate to student directory page
-    await page.goto("/students");
-    await expect(page.locator("h1.text-headline-md")).toContainText("Students");
+    await studentSisPage.navigateToSIS();
 
     // 2. Verify Bento Stats Cards are visible and populated
-    await expect(page.getByText("Total Students")).toBeVisible();
-    await expect(page.getByText(/^Active$/)).toBeVisible();
-    await expect(page.getByText("RTE Category")).toBeVisible();
-    await expect(page.getByText("Inactive / Dropped")).toBeVisible();
+    await studentSisPage.verifyBentoStats();
 
     // 3. Open filters drawer, check options, and close it
-    await page.click("button:has-text('Filters')");
-    await expect(page.locator("label:has-text('Class')")).toBeVisible();
-    await expect(page.locator("label:has-text('Section')")).toBeVisible();
-    await expect(page.locator("label:has-text('House')")).toBeVisible();
-    await expect(page.locator("label:has-text('Category')")).toBeVisible();
-    await page.click("button:has-text('Filters')"); // toggle close
+    await studentSisPage.toggleFilters();
+    await studentSisPage.verifyFilterOptionsVisible();
+    await studentSisPage.toggleFilters();
 
     // 4. Wait for table data and click the student row to open profile
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(1500);
-    const studentRow = page.locator(".ag-row").first();
-    await expect(studentRow).toBeVisible();
-    await studentRow.click();
+    await studentSisPage.clickFirstStudentRow();
 
     // 5. Verify redirect to the 360-Degree Profile Hub
-    await expect(page).toHaveURL(/\/students\/[a-zA-Z0-9_-]+/, { timeout: 15000 });
+    await expect(studentSisPage.page).toHaveURL(/\/students\/[a-zA-Z0-9_-]+/, { timeout: 15000 });
     
     // 6. Verify Left Profile Card displays key details
-    await expect(page.locator("h2.text-headline-sm")).toBeVisible(); // Student Name
-    await expect(page.locator("text=Class / Grade")).toBeVisible();
-    await expect(page.locator("text=House")).toBeVisible();
-    await expect(page.locator("text=Category")).toBeVisible();
-    await expect(page.locator("button:has-text('Edit Profile')")).toBeVisible();
-    await expect(page.locator("button:has-text('Direct Intake Details')")).toBeVisible();
+    await expect(studentSisPage.studentNameHeading).toBeVisible(); // Student Name
+    await expect(studentSisPage.classGradeLabel).toBeVisible();
+    await expect(studentSisPage.page.locator("text=House")).toBeVisible();
+    await expect(studentSisPage.page.locator("text=Category")).toBeVisible();
+    await expect(studentSisPage.page.locator("button:has-text('Edit Profile')")).toBeVisible();
+    await expect(studentSisPage.page.locator("button:has-text('Direct Intake Details')")).toBeVisible();
 
     // 7. Click "Direct Intake Details" button and verify modal
-    await page.click("button:has-text('Direct Intake Details')");
-    await expect(page.locator("h2:has-text('Direct Intake Details')")).toBeVisible();
-    await expect(page.locator("text=This student was admitted via Direct Intake or legacy data migration.")).toBeVisible();
-    await page.click("button:has-text('Close')");
-    await expect(page.locator("h2:has-text('Direct Intake Details')")).not.toBeVisible();
+    await studentSisPage.page.click("button:has-text('Direct Intake Details')");
+    await expect(studentSisPage.page.locator("h2:has-text('Direct Intake Details')")).toBeVisible();
+    await expect(studentSisPage.page.locator("text=This student was admitted via Direct Intake or legacy data migration.")).toBeVisible();
+    await studentSisPage.page.click("button:has-text('Close')");
+    await expect(studentSisPage.page.locator("h2:has-text('Direct Intake Details')")).not.toBeVisible();
 
     // 8. Verify right-side Tabbed Area exists and navigation works
     const profileTabTrigger = page.locator("button[role='tab']:has-text('Profile Details')");
@@ -466,7 +460,16 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     if (!org) throw new Error("No organization found");
     const branch = await prisma.branch.findFirst({ where: { organizationId: org.id, code: "CSVKRD" } }) || await prisma.branch.findFirst({ where: { organizationId: org.id } });
     if (!branch) throw new Error("No branch found");
-    const academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, isCurrent: true } });
+    let academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, isCurrent: true } });
+    if (!academicYear) {
+      academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id } });
+      if (academicYear) {
+        await prisma.academicYear.update({
+          where: { id: academicYear.id },
+          data: { isCurrent: true },
+        });
+      }
+    }
     if (!academicYear) throw new Error("No academic year found");
     const classRecord = await prisma.class.findFirst({ where: { branchId: branch.id, academicYearId: academicYear.id } });
     const sourceClassName = classRecord?.name || "Class 1";

@@ -1,8 +1,9 @@
 import { prisma } from "./prisma";
+import { rbacCache, CACHE_TTLS } from "./rbac-cache";
 
 /**
  * Check if a user has a specific permission.
- * Resolution: user override → role default → deny
+ * Resolution: user override → role default → deny (with memory caching)
  */
 export async function hasPermission(
   userId: string,
@@ -13,6 +14,12 @@ export async function hasPermission(
 ): Promise<boolean> {
   if (roleName === "SUPER_ADMIN") return true;
 
+  const cacheKey = `perm:${userId}:${roleId}:${module}:${action}`;
+  const cachedVal = rbacCache.get<boolean>(cacheKey);
+  if (cachedVal !== null) {
+    return cachedVal;
+  }
+
   // Check user-level override
   const userPerm = await prisma.userPermission.findFirst({
     where: {
@@ -20,7 +27,10 @@ export async function hasPermission(
       permission: { module, action },
     },
   });
-  if (userPerm) return userPerm.granted;
+  if (userPerm) {
+    rbacCache.set(cacheKey, userPerm.granted, CACHE_TTLS.PERMISSION);
+    return userPerm.granted;
+  }
 
   // Check role default
   const rolePerm = await prisma.rolePermission.findFirst({
@@ -29,7 +39,9 @@ export async function hasPermission(
       permission: { module, action },
     },
   });
-  return !!rolePerm;
+  const allowed = !!rolePerm;
+  rbacCache.set(cacheKey, allowed, CACHE_TTLS.PERMISSION);
+  return allowed;
 }
 
 /**
@@ -93,15 +105,22 @@ export async function checkApiPermission(
     );
   }
 
-  // Check if user and organization are active (Instant Revocation Check)
-  const user = await prisma.user.findFirst({
-    where: { id: userId, isActive: true },
-    select: {
-      organization: { select: { isActive: true } }
-    }
-  });
+  // Check if user and organization are active (Instant Revocation Check with brief caching)
+  const statusCacheKey = `status:${userId}`;
+  let isUserActive = rbacCache.get<boolean>(statusCacheKey);
 
-  if (!user || !user.organization.isActive) {
+  if (isUserActive === null) {
+    const user = await prisma.user.findFirst({
+      where: { id: userId, isActive: true },
+      select: {
+        organization: { select: { isActive: true } }
+      }
+    });
+    isUserActive = !!(user && user.organization.isActive);
+    rbacCache.set(statusCacheKey, isUserActive, CACHE_TTLS.USER_STATUS);
+  }
+
+  if (!isUserActive) {
     return Response.json(
       { success: false, error: { code: "UNAUTHORIZED", message: "User or organization is suspended" } },
       { status: 401 }

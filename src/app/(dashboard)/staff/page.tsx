@@ -21,6 +21,8 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
+import { useApi } from "@/hooks/use-api";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Dialog,
   DialogTrigger,
@@ -88,12 +90,12 @@ export default function StaffPage() {
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches } = useBranches();
 
-  const [staff, setStaff] = useState<StaffRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [terminating, setTerminating] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [branchFilter, setBranchFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const limit = 20;
+  const [terminating, setTerminating] = useState(false);
 
   // Sync local branch filter with the global session branch
   useEffect(() => {
@@ -104,29 +106,24 @@ export default function StaffPage() {
     }
   }, [session?.user?.branchId, session?.user]);
 
-  const fetchStaff = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    params.set("limit", "9999");
-    if (roleFilter !== "ALL") params.set("role", roleFilter);
-    if (branchFilter !== "ALL") params.set("branchId", branchFilter);
-
-    try {
-      const res = await fetch(`/api/v1/staff?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setStaff(data.data);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [roleFilter, branchFilter]);
-
+  // Reset page when filters change
   useEffect(() => {
-    fetchStaff();
-  }, [fetchStaff]);
+    setPage(1);
+  }, [searchInput, roleFilter, branchFilter]);
+
+  const params = new URLSearchParams();
+  params.set("page", page.toString());
+  params.set("limit", limit.toString());
+  if (searchInput) params.set("search", searchInput);
+  if (roleFilter !== "ALL") params.set("role", roleFilter);
+  if (branchFilter !== "ALL") params.set("branchId", branchFilter);
+
+  const { data: apiResponse, isLoading: loading, mutate } = useApi<StaffRow[]>(
+    `/api/v1/staff?${params.toString()}`
+  );
+
+  const staff = apiResponse?.data ?? [];
+  const totalItems = apiResponse?.meta?.total ?? 0;
 
   async function handleTerminate(id: string) {
     setTerminating(true);
@@ -135,7 +132,7 @@ export default function StaffPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show("Staff member terminated", "success");
-        fetchStaff();
+        mutate();
       } else {
         snackbar.show(data.error?.message ?? "Failed to terminate staff member", "error");
       }
@@ -336,9 +333,16 @@ export default function StaffPage() {
             loading={loading}
             emptyIcon="group_off"
             emptyMessage="No staff members found"
-            quickFilter={searchInput}
           />
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={totalItems}
+          itemsPerPage={limit}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
 
       <PermissionGate module="staff" action="create">

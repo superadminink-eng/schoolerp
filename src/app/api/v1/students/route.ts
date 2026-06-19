@@ -9,10 +9,9 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { createStudentSchema } from "@/lib/validations/student";
-import { saveUploadedImage, UploadError } from "@/lib/upload";
-import crypto from "crypto";
-import { generateUniqueAdmissionNo, generateUniqueInvoiceNo, generateUniqueReceiptNo } from "@/lib/unique-id";
-import { logAction } from "@/lib/audit";
+import { UploadError } from "@/lib/upload";
+import { StudentService } from "@/services/student-service";
+import { buildTenantWhere, buildSearchWhere } from "@/lib/query-helpers";
 
 /**
  * GET /api/v1/students — list students with pagination, search, and filters
@@ -26,23 +25,10 @@ export async function GET(req: NextRequest) {
   const { page, limit, search } = parsePagination(url);
   const branchId = url.searchParams.get("branchId");
 
-  const where: Record<string, unknown> = {
-    organizationId: ctx.organizationId,
+  const where: Record<string, any> = {
+    ...buildTenantWhere(ctx as any, branchId),
+    ...buildSearchWhere(search, ["firstName", "lastName", "admissionNo"]),
   };
-
-  if (ctx.branchId && branchId !== "__all__") {
-    where.branchId = ctx.branchId;
-  } else if (branchId && branchId !== "ALL" && branchId !== "__all__") {
-    where.branchId = branchId;
-  }
-
-  if (search) {
-    where.OR = [
-      { firstName: { contains: search } },
-      { lastName: { contains: search } },
-      { admissionNo: { contains: search } },
-    ];
-  }
 
   const classId = url.searchParams.get("classId");
   const sectionId = url.searchParams.get("sectionId");
@@ -161,7 +147,22 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return apiSuccess(students, { page, limit, total });
+    const [activeCount, rteCount, inactiveCount] = await Promise.all([
+      prisma.student.count({ where: { ...where, status: "ACTIVE" } }),
+      prisma.student.count({ where: { ...where, category: "RTE" } }),
+      prisma.student.count({ where: { ...where, status: { in: ["DROPPED", "SUSPENDED", "TRANSFERRED"] } } }),
+    ]);
+
+    return apiSuccess(students, {
+      page,
+      limit,
+      total,
+      stats: {
+        active: activeCount,
+        rte: rteCount,
+        inactive: inactiveCount,
+      }
+    });
   } catch (error) {
     console.error("List students error:", error);
     return apiError("INTERNAL_ERROR", "Failed to list students", 500);
@@ -205,240 +206,42 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Verify branch belongs to this organization
-    const branch = await prisma.branch.findFirst({
-      where: { id: data.branchId, organizationId: ctx.organizationId, isActive: true },
-    });
-    if (!branch) {
-      return apiError("NOT_FOUND", "Branch not found", 404);
-    }
+    const photoFile = formData.get("photo") as File | null;
+    const idDocumentFile = formData.get("idDocument") as File | null;
 
-    // Verify section exists and get its class + academic year (if provided)
-    let section: { id: string; classId: string; class: { branchId: string; academicYearId: string } } | null = null;
-    if (data.sectionId) {
-      section = await prisma.section.findFirst({
-        where: { id: data.sectionId },
-        include: {
-          class: {
-            include: { academicYear: true },
-          },
-        },
-      });
-      if (!section || section.class.branchId !== data.branchId) {
-        return apiError("NOT_FOUND", "Section not found for this branch", 404);
-      }
-    }
+    const studentInput = {
+      ...data,
+      discountPercent: fields.discountPercent,
+      amountPaid: fields.amountPaid,
+      paymentMethod: fields.paymentMethod,
+      transactionId: fields.transactionId,
+    };
 
-    // Verify class exists and belongs to this branch/organization (if provided)
-    if (data.classId) {
-      const cls = await prisma.class.findFirst({
-        where: { id: data.classId, branchId: data.branchId, status: "ACTIVE" },
-      });
-      if (!cls) {
-        return apiError("NOT_FOUND", "Class not found for this branch", 404);
-      }
-    }
-    // Auto-generate admissionNo
-    const admissionNo = await generateUniqueAdmissionNo(prisma, ctx.organizationId);
-
-    // Handle photo upload
-    let photoPath: string | null = null;
-    const photoFile = formData.get("photo");
-    if (photoFile instanceof File && photoFile.size > 0) {
-      try {
-        const result = await saveUploadedImage(photoFile, "uploads/student-photos", admissionNo, "photo");
-        photoPath = result.filePath;
-      } catch (error) {
-        if (error instanceof UploadError) {
-          return apiError("VALIDATION_ERROR", `Photo: ${error.message}`, 422);
-        }
-        throw error;
-      }
-    }
-
-    // Handle ID document upload
-    let idDocumentPath: string | null = null;
-    const idDocFile = formData.get("idDocument");
-    if (idDocFile instanceof File && idDocFile.size > 0) {
-      try {
-        const result = await saveUploadedImage(idDocFile, "uploads/student-documents", admissionNo);
-        idDocumentPath = result.filePath;
-      } catch (error) {
-        if (error instanceof UploadError) {
-          return apiError("VALIDATION_ERROR", `ID Document: ${error.message}`, 422);
-        }
-        throw error;
-      }
-    }
-
-    // Create student + enrollment in a transaction
-    const student = await prisma.$transaction(async (tx) => {
-      const created = await tx.student.create({
-        data: {
-          branchId: data.branchId,
-          organizationId: ctx.organizationId,
-          admissionNo,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          dateOfBirth: new Date(data.dateOfBirth),
-          gender: data.gender,
-          bloodGroup: data.bloodGroup || null,
-          photo: photoPath,
-          address: data.address,
-          pincode: data.pincode,
-          previousSchool: data.previousSchool || null,
-          emergencyContact1: data.emergencyContact1,
-          emergencyContact2: data.emergencyContact2 || null,
-          idType: data.idType || null,
-          idNumber: data.idNumber || null,
-          idDocument: idDocumentPath,
-          guardianName: data.guardianName || null,
-          fatherName: data.fatherName || null,
-          fatherPhone: data.fatherPhone || null,
-          fatherEmail: data.fatherEmail || null,
-          fatherOccupation: data.fatherOccupation || null,
-          motherName: data.motherName || null,
-          motherPhone: data.motherPhone || null,
-          motherEmail: data.motherEmail || null,
-          motherOccupation: data.motherOccupation || null,
-          admissionDate: data.admissionDate ? new Date(data.admissionDate) : new Date(),
-          house: data.house || null,
-          category: data.category,
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          admissionNo: true,
-          gender: true,
-          status: true,
-          admissionDate: true,
-          branch: { select: { id: true, name: true } },
-        },
-      });
-
-      // Create enrollment for current academic year (if division was selected)
-      if (section && data.sectionId) {
-        await tx.studentEnrollment.create({
-          data: {
-            studentId: created.id,
-            academicYearId: section.class.academicYearId,
-            sectionId: data.sectionId,
-          },
-        });
-      }
-
-      // Create invoice + payment if fees exist for this class
-      if (data.classId) {
-        const feeStructures = await tx.feeStructure.findMany({
-          where: { classId: data.classId },
-          include: { feeCategory: { select: { name: true } } },
-        });
-
-        if (feeStructures.length > 0) {
-          // Compute annual amount per fee structure
-          const feeItems = feeStructures.map((fs) => {
-            const base = new Prisma.Decimal(fs.amount);
-            let annual: Prisma.Decimal;
-            switch (fs.frequency) {
-              case "MONTHLY":
-                annual = base.mul(12);
-                break;
-              case "QUARTERLY":
-                annual = base.mul(4);
-                break;
-              case "SEMI_ANNUAL":
-                annual = base.mul(2);
-                break;
-              default:
-                annual = base;
-            }
-            return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
-          });
-
-          const annualTotal = feeItems.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
-          const discountPct = new Prisma.Decimal(data.discountPercent ?? 0);
-          const discountedTotal = annualTotal.mul(new Prisma.Decimal(1).minus(discountPct.div(100)));
-
-          const amountPaid = Prisma.Decimal.min(new Prisma.Decimal(data.amountPaid ?? 0), discountedTotal);
-
-          // Validate amountPaid doesn't exceed discounted total
-          if (new Prisma.Decimal(data.amountPaid ?? 0).gt(discountedTotal)) {
-            throw new Error("AMOUNT_EXCEEDS_TOTAL");
-          }
-
-          let status: "PENDING" | "PARTIAL" | "PAID" = "PENDING";
-          if (amountPaid.gt(0) && amountPaid.gte(discountedTotal)) {
-            status = "PAID";
-          } else if (amountPaid.gt(0)) {
-            status = "PARTIAL";
-          }
-
-          const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
-          const dueDate = new Date();
-          dueDate.setDate(dueDate.getDate() + 30);
-
-          const invoice = await tx.invoice.create({
-            data: {
-              studentId: created.id,
-              organizationId: ctx.organizationId,
-              number: invoiceNo,
-              year: new Date().getFullYear(),
-              totalAmount: discountedTotal,
-              paidAmount: amountPaid,
-              status,
-              dueDate,
-              items: {
-                create: feeItems.map((fi) => {
-                  const itemDiscounted = fi.annual.mul(new Prisma.Decimal(1).minus(discountPct.div(100)));
-                  return {
-                    feeStructureId: fi.feeStructureId,
-                    amount: itemDiscounted,
-                    description: fi.name,
-                  };
-                }),
-              },
-            },
-          });
-
-          // Create fee payment record if amount was paid
-          const pm = data.paymentMethod;
-          if (amountPaid.gt(0) && pm) {
-            const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
-            await tx.feePayment.create({
-              data: {
-                invoiceId: invoice.id,
-                studentId: created.id,
-                organizationId: ctx.organizationId,
-                amount: amountPaid,
-                method: pm,
-                transactionId: data.transactionId || null,
-                receiptNo,
-              },
-            });
-          }
-        }
-      }
-
-      return created;
-    }, { timeout: 30000 });
-
-    await logAction({
-      organizationId: ctx.organizationId,
-      branchId: student.branch.id,
-      userId: ctx.userId,
-      action: "CREATE",
-      module: "students",
-      entityId: student.id,
-      details: { admissionNo: student.admissionNo, name: `${student.firstName} ${student.lastName}` },
-    });
+    const student = await StudentService.createStudent(
+      studentInput as any,
+      { photo: photoFile, idDocument: idDocumentFile },
+      ctx
+    );
 
     return apiSuccess(student, undefined, 201);
-  } catch (error) {
-    if (error instanceof Error && error.message === "AMOUNT_EXCEEDS_TOTAL") {
+  } catch (error: any) {
+    if (error.message === "BRANCH_NOT_FOUND") {
+      return apiError("NOT_FOUND", "Branch not found", 404);
+    }
+    if (error.message === "SECTION_NOT_FOUND") {
+      return apiError("NOT_FOUND", "Section not found for this branch", 404);
+    }
+    if (error.message === "CLASS_NOT_FOUND") {
+      return apiError("NOT_FOUND", "Class not found for this branch", 404);
+    }
+    if (error.message === "AMOUNT_EXCEEDS_TOTAL") {
       return apiError("VALIDATION_ERROR", "Amount paid cannot exceed the discounted total", 422);
+    }
+    if (error instanceof UploadError) {
+      return apiError("VALIDATION_ERROR", error.message, 422);
     }
     console.error("Create student error:", error);
     return apiError("INTERNAL_ERROR", "Failed to create student", 500);
   }
 }
+

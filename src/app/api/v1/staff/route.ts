@@ -7,6 +7,7 @@ import {
   parsePagination,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { buildTenantWhere, buildSearchWhere } from "@/lib/query-helpers";
 import { createStaffSchema } from "@/lib/validations/staff";
 import crypto from "crypto";
 import { getAdminAuth } from "@/lib/firebase-admin";
@@ -27,31 +28,12 @@ export async function GET(req: NextRequest) {
   const branchId = url.searchParams.get("branchId");
   const status = url.searchParams.get("status");
 
-  const where: Record<string, unknown> = {
-    organizationId: ctx.organizationId,
+  const where: Record<string, any> = {
+    ...buildTenantWhere(ctx as any, branchId),
+    ...(role && { role }),
+    ...(status && { status }),
+    ...buildSearchWhere(search, ["name", "email"]),
   };
-
-  // Restrict branch-scoped roles to their home branch
-  if (ctx.branchId && branchId !== "__all__") {
-    where.branchId = ctx.branchId;
-  } else if (branchId && branchId !== "ALL" && branchId !== "__all__") {
-    where.branchId = branchId;
-  }
-
-  if (role) {
-    where.role = role;
-  }
-
-  if (status) {
-    where.status = status;
-  }
-
-  if (search) {
-    where.OR = [
-      { name: { contains: search } },
-      { email: { contains: search } },
-    ];
-  }
 
   try {
     const [staff, total] = await Promise.all([

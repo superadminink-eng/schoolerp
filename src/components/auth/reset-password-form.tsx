@@ -2,8 +2,6 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { verifyPasswordResetCode, confirmPasswordReset } from "firebase/auth";
-import { auth as firebaseAuth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,7 +24,7 @@ function ResetPasswordFormContent() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Verify action token (oobCode) on mount
+  // Verify action token (oobCode) on mount securely on the server
   useEffect(() => {
     if (!oobCode) {
       setError("Reset token is missing. Please request a new password reset link.");
@@ -34,14 +32,18 @@ function ResetPasswordFormContent() {
       return;
     }
 
-    verifyPasswordResetCode(firebaseAuth, oobCode)
-      .then((verifiedEmail) => {
-        setEmail(verifiedEmail);
+    fetch(`/api/v1/auth/reset-password-verify?oobCode=${oobCode}`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error?.message || "Invalid token");
+        }
+        setEmail(data.data.email);
         setVerifying(false);
       })
       .catch((err) => {
-        console.error("Firebase verifyPasswordResetCode error:", err);
-        setError("The reset link is invalid or has expired. Please request a new one.");
+        console.error("Token verification error:", err);
+        setError(err.message || "The reset link is invalid or has expired. Please request a new one.");
         setVerifying(false);
       });
   }, [oobCode]);
@@ -86,24 +88,21 @@ function ResetPasswordFormContent() {
 
     setLoading(true);
     try {
-      // 1. Confirm client password change in Firebase
-      await confirmPasswordReset(firebaseAuth, oobCode, newPassword);
-
-      // 2. Safely sync database user record (forcePasswordChange = false, increment tokenVersion)
-      await fetch("/api/v1/auth/reset-password-sync", {
+      // Send oobCode and newPassword to the secure reset password confirm API
+      const res = await fetch("/api/v1/auth/reset-password-confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oobCode }),
+        body: JSON.stringify({ oobCode, newPassword }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to reset password.");
+      }
 
       setSuccess(true);
     } catch (err: any) {
       console.error("ConfirmPasswordReset/Sync error:", err);
-      let errMsg = "Failed to reset password. The reset link may have expired.";
-      if (err.code === "auth/weak-password") {
-        errMsg = "Password is too weak. Choose a stronger password.";
-      }
-      setError(errMsg);
+      setError(err.message || "Failed to reset password. The reset link may have expired.");
     } finally {
       setLoading(false);
     }

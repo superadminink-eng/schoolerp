@@ -30,8 +30,14 @@ async function globalSetup(config: FullConfig) {
   console.log("Global Setup: Synchronizing seed users in Firebase and database...");
 
   // 1. Fetch organization, branch, and roles
-  const org = await prisma.organization.findFirst();
+  const org = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
   if (!org) throw new Error("No organization found in database. Run database seeder first.");
+
+  // Mark organization setup as complete to bypass onboarding redirections in E2E tests
+  await prisma.organization.update({
+    where: { id: org.id },
+    data: { isSetupComplete: true }
+  });
 
   const branch = await prisma.branch.findFirst({ where: { organizationId: org.id, code: "CSVKRD" } }) || await prisma.branch.findFirst({ where: { organizationId: org.id } });
   if (!branch) throw new Error("No branch found for organization.");
@@ -362,7 +368,11 @@ async function globalSetup(config: FullConfig) {
     await page.fill('input[type="email"]', "test.admin@school.com");
     await page.fill('input[type="password"]', "password123");
     await page.click('button[type="submit"]');
-    await page.waitForURL(`${baseURL}/dashboard`);
+    await page.waitForURL((url) =>
+      url.pathname === "/dashboard" ||
+      url.pathname === "/onboarding" ||
+      url.pathname === "/onboarding/pending"
+    );
     await context.storageState({ path: path.join(authDir, "admin.json") });
     await context.close();
     console.log("Cached Admin Session successfully.");
@@ -376,7 +386,11 @@ async function globalSetup(config: FullConfig) {
     await page.fill('input[type="email"]', "test.counselor@school.com");
     await page.fill('input[type="password"]', "password123");
     await page.click('button[type="submit"]');
-    await page.waitForURL(`${baseURL}/dashboard`);
+    await page.waitForURL((url) =>
+      url.pathname === "/dashboard" ||
+      url.pathname === "/onboarding" ||
+      url.pathname === "/onboarding/pending"
+    );
     await context.storageState({ path: path.join(authDir, "counselor.json") });
     await context.close();
     console.log("Cached Counselor Session successfully.");

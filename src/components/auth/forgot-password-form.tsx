@@ -1,43 +1,86 @@
 "use client";
 
-import { useState } from "react";
-import { sendPasswordResetEmail } from "firebase/auth";
-import { auth as firebaseAuth } from "@/lib/firebase";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Card, CardContent } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import Link from "next/link";
 import { AuthErrorAlert } from "./auth-error-alert";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const recoverySchema = z.object({
+  email: z
+    .string()
+    .min(1, "Please enter your email address.")
+    .email("Please enter a valid email address."),
+});
+
+type RecoverySchema = z.infer<typeof recoverySchema>;
 
 export function ForgotPasswordForm() {
-  const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Handle active countdown for resending (spam protection)
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setTimeout(() => {
+      setCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const {
+    register,
+    handleSubmit: handleFormSubmit,
+    getValues,
+    formState: { errors },
+  } = useForm<RecoverySchema>({
+    resolver: zodResolver(recoverySchema),
+    defaultValues: {
+      email: "",
+    },
+  });
+
+  async function performRecoveryRequest(emailAddress: string) {
     setError("");
     setLoading(true);
 
     try {
-      await sendPasswordResetEmail(firebaseAuth, email);
-      setSent(true);
-    } catch (err: any) {
-      console.error("Firebase sendPasswordResetEmail error:", err);
-      let errMsg = "Failed to send reset email. Please try again.";
-      if (err.code === "auth/invalid-email") {
-        errMsg = "Please enter a valid email address.";
-      } else if (err.code === "auth/user-not-found") {
-        errMsg = "No account found with this email address.";
-      } else if (err.code === "auth/too-many-requests") {
-        errMsg = "Too many requests. Please try again later.";
+      const res = await fetch("/api/v1/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailAddress }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to send reset email.");
       }
-      setError(errMsg);
+      
+      setSent(true);
+      setCountdown(60); // lock resend for 60s
+    } catch (err: any) {
+      console.error("Forgot password error:", err);
+      setError(err.message || "Failed to send reset email. Please try again later.");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function onSubmit(data: RecoverySchema) {
+    await performRecoveryRequest(data.email);
+  }
+
+  async function handleResend() {
+    if (countdown > 0) return;
+    const currentEmail = getValues("email");
+    await performRecoveryRequest(currentEmail);
   }
 
   return (
@@ -56,34 +99,42 @@ export function ForgotPasswordForm() {
               <div className="space-y-1">
                 <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-50">Check your email</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-xs mx-auto">
-                  We sent a secure password reset link to <strong className="text-slate-800 dark:text-slate-200">{email}</strong>
+                  If an account is associated with <strong className="text-slate-800 dark:text-slate-200">{getValues("email")}</strong>, we have sent a secure password reset link. Please check your inbox.
                 </p>
               </div>
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-2 items-center">
                 <Button 
                   variant="text" 
-                  onClick={() => setSent(false)}
-                  className="text-xs font-bold text-primary hover:bg-slate-50 dark:hover:bg-slate-800/40 border-none bg-transparent"
+                  onClick={handleResend}
+                  disabled={countdown > 0 || loading}
+                  className="text-xs font-bold text-primary hover:bg-slate-50 dark:hover:bg-slate-800/40 border-none bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Send again
+                  {countdown > 0 ? `Send again in ${countdown}s` : "Send again"}
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => setSent(false)}
+                  className="text-[11px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 underline cursor-pointer bg-transparent border-none"
+                >
+                  Change email address
+                </button>
               </div>
             </div>
           ) : (
             <div className="space-y-5">
               {error && <AuthErrorAlert message={error} />}
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleFormSubmit(onSubmit)} className="space-y-5">
                 <TextField
                   label="Email Address"
                   type="email"
                   variant="compact"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   leadingIcon="mail"
                   required
                   fullWidth
                   autoComplete="email"
+                  error={errors.email?.message}
+                  {...register("email")}
                 />
 
                 <Button
@@ -102,7 +153,7 @@ export function ForgotPasswordForm() {
         </CardContent>
       </Card>
 
-      <p className="text-center mt-6 text-xs text-slate-500 dark:text-slate-400 font-medium">
+      <p className="text-center mt-6 text-xs text-slate-550 dark:text-slate-400 font-medium">
         Remember your password?{" "}
         <Link
           href="/login"

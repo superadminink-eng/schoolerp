@@ -21,6 +21,8 @@ import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
 import { Card, CardContent } from "@/components/ui/card";
+import { useApi } from "@/hooks/use-api";
+import { Pagination } from "@/components/ui/pagination";
 
 
 interface StudentRow {
@@ -76,8 +78,6 @@ export default function StudentsPage() {
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches } = useBranches();
 
-  const [students, setStudents] = useState<StudentRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [branchFilter, setBranchFilter] = useState("ALL");
 
@@ -91,6 +91,10 @@ export default function StudentsPage() {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [showFilters, setShowFilters] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
   // Sync local branch filter with the global session branch
   useEffect(() => {
     if (session?.user?.branchId) {
@@ -99,6 +103,11 @@ export default function StudentsPage() {
       setBranchFilter("ALL");
     }
   }, [session?.user?.branchId, session?.user]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchInput, branchFilter, classFilter, sectionFilter, statusFilter, houseFilter, categoryFilter]);
 
   // Derive active branch ID
   const activeBranchId = branchFilter !== "ALL" 
@@ -141,33 +150,24 @@ export default function StudentsPage() {
     setSectionFilter("ALL");
   }, [classFilter]);
 
-  const fetchStudents = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    params.set("limit", "9999");
-    if (branchFilter !== "ALL") params.set("branchId", branchFilter);
-    if (classFilter !== "ALL") params.set("classId", classFilter);
-    if (sectionFilter !== "ALL") params.set("sectionId", sectionFilter);
-    if (statusFilter !== "ALL") params.set("status", statusFilter);
-    if (houseFilter !== "ALL") params.set("house", houseFilter);
-    if (categoryFilter !== "ALL") params.set("category", categoryFilter);
+  const params = new URLSearchParams();
+  params.set("page", page.toString());
+  params.set("limit", limit.toString());
+  if (searchInput) params.set("search", searchInput);
+  if (branchFilter !== "ALL") params.set("branchId", branchFilter);
+  if (classFilter !== "ALL") params.set("classId", classFilter);
+  if (sectionFilter !== "ALL") params.set("sectionId", sectionFilter);
+  if (statusFilter !== "ALL") params.set("status", statusFilter);
+  if (houseFilter !== "ALL") params.set("house", houseFilter);
+  if (categoryFilter !== "ALL") params.set("category", categoryFilter);
 
-    try {
-      const res = await fetch(`/api/v1/students?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setStudents(data.data);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [branchFilter, classFilter, sectionFilter, statusFilter, houseFilter, categoryFilter]);
+  const { data: apiResponse, isLoading: loading } = useApi<StudentRow[]>(
+    `/api/v1/students?${params.toString()}`
+  );
 
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
+  const students = apiResponse?.data ?? [];
+  const totalItems = apiResponse?.meta?.total ?? 0;
+  const stats = apiResponse?.meta?.stats ?? { active: 0, rte: 0, inactive: 0 };
 
   const formatCurrency = (amount: number) =>
     `₹${amount.toLocaleString("en-IN")}`;
@@ -325,7 +325,7 @@ export default function StudentsPage() {
           </div>
           <div>
             <div className="text-body-sm text-on-surface-variant font-semibold">Total Students</div>
-            <div className="text-headline-md font-black text-on-surface">{students.length}</div>
+            <div className="text-headline-md font-black text-on-surface">{totalItems}</div>
           </div>
         </div>
 
@@ -335,9 +335,7 @@ export default function StudentsPage() {
           </div>
           <div>
             <div className="text-body-sm text-on-surface-variant font-semibold">Active</div>
-            <div className="text-headline-md font-black text-on-surface">
-              {students.filter((s) => s.status === "ACTIVE").length}
-            </div>
+            <div className="text-headline-md font-black text-on-surface">{stats.active}</div>
           </div>
         </div>
 
@@ -347,9 +345,7 @@ export default function StudentsPage() {
           </div>
           <div>
             <div className="text-body-sm text-on-surface-variant font-semibold">RTE Category</div>
-            <div className="text-headline-md font-black text-on-surface">
-              {students.filter((s) => s.category === "RTE").length}
-            </div>
+            <div className="text-headline-md font-black text-on-surface">{stats.rte}</div>
           </div>
         </div>
 
@@ -359,9 +355,7 @@ export default function StudentsPage() {
           </div>
           <div>
             <div className="text-body-sm text-on-surface-variant font-semibold">Inactive / Dropped</div>
-            <div className="text-headline-md font-black text-on-surface">
-              {students.filter((s) => ["DROPPED", "SUSPENDED", "TRANSFERRED"].includes(s.status)).length}
-            </div>
+            <div className="text-headline-md font-black text-on-surface">{stats.inactive}</div>
           </div>
         </div>
       </div>
@@ -376,9 +370,10 @@ export default function StudentsPage() {
               placeholder="Search students"
               className="sm:max-w-xs"
             />
-            <Button
+             <Button
               variant="outlined"
               icon="tune"
+              data-testid="filter-button"
               onClick={() => setShowFilters(!showFilters)}
               className={showFilters ? "bg-primary/5 text-primary border-primary/30" : "bg-white"}
             >
@@ -520,9 +515,16 @@ export default function StudentsPage() {
             loading={loading}
             emptyIcon="school"
             emptyMessage="No students found"
-            quickFilter={searchInput}
           />
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={totalItems}
+          itemsPerPage={limit}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
 
       <PermissionGate module="admissions" action="registrar_desk">

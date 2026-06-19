@@ -22,7 +22,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
 
   test.beforeAll(async () => {
     // 1. Fetch organization & branch
-    const org = await prisma.organization.findFirst();
+    const org = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
     if (!org) throw new Error("No organization found");
     orgId = org.id;
 
@@ -31,7 +31,16 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
     if (!branch) throw new Error("No branch found");
     branchId = branch.id;
 
-    const ay = await prisma.academicYear.findFirst({ where: { organizationId: orgId, isCurrent: true } });
+    let ay = await prisma.academicYear.findFirst({ where: { organizationId: orgId, isCurrent: true } });
+    if (!ay) {
+      ay = await prisma.academicYear.findFirst({ where: { organizationId: orgId } });
+      if (ay) {
+        await prisma.academicYear.update({
+          where: { id: ay.id },
+          data: { isCurrent: true },
+        });
+      }
+    }
     if (!ay) throw new Error("No current academic year found");
     academicYearId = ay.id;
 
@@ -255,7 +264,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
     const inst2 = await prisma.feeInstallmentTemplate.findFirst({ where: { classId, name: "Installment 2" } });
     if (!inst2) throw new Error("Installment 2 template not found");
     const container = page.locator(`#inst-check-${inst2.id}`).locator('xpath=ancestor::div[2]');
-    const inputLocator = container.locator(`input[type='number']`);
+    const inputLocator = container.locator("input[type='text'], input[type='number']");
     await inputLocator.fill("10000");
 
     // Click Confirm Promotion

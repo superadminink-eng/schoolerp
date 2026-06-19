@@ -5,8 +5,10 @@ import {
   apiSuccess,
   apiError,
   apiValidationError,
+  parsePagination,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
+import { buildTenantWhere, buildSearchWhere } from "@/lib/query-helpers";
 import { createClassSchema } from "@/lib/validations/class";
 
 /**
@@ -22,54 +24,55 @@ export async function GET(req: NextRequest) {
     const denied = await checkApiPermission(req, "classes", "read");
     if (denied) return denied;
 
+    const { page, limit, search } = parsePagination(url);
     const branchId = url.searchParams.get("branchId") || undefined;
 
     try {
-      const where: Record<string, unknown> = {
-        organizationId: ctx.organizationId,
+      const where: Record<string, any> = {
+        ...buildTenantWhere(ctx, branchId),
+        ...buildSearchWhere(search, ["name"]),
       };
-      
-      if (ctx.branchId && branchId !== "__all__") {
-        where.branchId = ctx.branchId;
-      } else if (branchId && branchId !== "__all__") {
-        where.branchId = branchId;
-      }
 
-      const classes = await prisma.class.findMany({
-        where,
-        include: {
-          branch: { select: { id: true, name: true } },
-          academicYear: { select: { id: true, name: true } },
-          feeStructures: {
-            select: {
-              amount: true,
-              termType: true,
-              feeCategory: { select: { name: true } },
+      const [classes, total] = await Promise.all([
+        prisma.class.findMany({
+          where,
+          include: {
+            branch: { select: { id: true, name: true } },
+            academicYear: { select: { id: true, name: true } },
+            feeStructures: {
+              select: {
+                amount: true,
+                termType: true,
+                feeCategory: { select: { name: true } },
+              },
             },
-          },
-          sections: {
-            select: {
-              id: true,
-              name: true,
-              classTeacher: { select: { id: true, name: true } },
-              _count: {
-                select: {
-                  studentEnrollments: {
-                    where: {
-                      student: {
-                        status: "ACTIVE"
+            sections: {
+              select: {
+                id: true,
+                name: true,
+                classTeacher: { select: { id: true, name: true } },
+                _count: {
+                  select: {
+                    studentEnrollments: {
+                      where: {
+                        student: {
+                          status: "ACTIVE"
+                        }
                       }
                     }
                   }
-                }
+                },
               },
+              orderBy: { name: "asc" },
             },
-            orderBy: { name: "asc" },
+            _count: { select: { sections: true, subjects: true } },
           },
-          _count: { select: { sections: true, subjects: true } },
-        },
-        orderBy: [{ numericGrade: "asc" }, { name: "asc" }],
-      });
+          orderBy: [{ numericGrade: "asc" }, { name: "asc" }],
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.class.count({ where }),
+      ]);
 
       const result = classes.map(({ sections: secs, ...rest }) => ({
         ...rest,
@@ -84,7 +87,7 @@ export async function GET(req: NextRequest) {
         ),
       }));
 
-      return apiSuccess(result);
+      return apiSuccess(result, { page, limit, total });
     } catch (error) {
       console.error("List classes (paginated) error:", error);
       return apiError("INTERNAL_ERROR", "Failed to list classes", 500);

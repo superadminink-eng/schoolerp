@@ -12,6 +12,8 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { cn } from "@/lib/utils";
+import { useApi } from "@/hooks/use-api";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Menu,
   MenuTrigger,
@@ -115,10 +117,10 @@ export default function NoticesPage() {
   const { data: session } = useSession();
   const { branches } = useBranches();
 
-  const [notices, setNotices] = useState<NoticeRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -140,24 +142,23 @@ export default function NoticesPage() {
     session?.user?.roleName === "SUPER_ADMIN" ||
     session?.user?.roleName === "SCHOOL_ADMIN";
 
-  const fetchNotices = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/v1/notices?limit=9999");
-      const data = await res.json();
-      if (data.success) {
-        setNotices(data.data);
-      }
-    } catch {
-      /* silently fail */
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Reset page when search changes
   useEffect(() => {
-    fetchNotices();
-  }, [fetchNotices]);
+    setPage(1);
+  }, [searchInput]);
+
+  const params = new URLSearchParams();
+  params.set("page", page.toString());
+  params.set("limit", limit.toString());
+  if (searchInput) params.set("search", searchInput);
+
+  const { data: apiResponse, isLoading: loading, mutate } = useApi<NoticeRow[]>(
+    `/api/v1/notices?${params.toString()}`
+  );
+
+  const notices = apiResponse?.data ?? [];
+  const totalItems = apiResponse?.meta?.total ?? 0;
+  const stats = apiResponse?.meta?.stats ?? { published: 0, draft: 0, parentTarget: 0 };
 
   useEffect(() => {
     if (dialogOpen) {
@@ -205,7 +206,7 @@ export default function NoticesPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show("Notice deleted successfully", "success");
-        fetchNotices();
+        mutate();
       } else {
         snackbar.show(data.error?.message ?? "Failed to delete notice", "error");
       }
@@ -258,7 +259,7 @@ export default function NoticesPage() {
 
         snackbar.show("Notice created successfully", "success");
         setDialogOpen(false);
-        fetchNotices();
+        mutate();
       } catch {
         snackbar.show("An error occurred", "error");
       } finally {
@@ -292,7 +293,7 @@ export default function NoticesPage() {
 
         snackbar.show("Notice updated successfully", "success");
         setDialogOpen(false);
-        fetchNotices();
+        mutate();
       } catch {
         snackbar.show("An error occurred", "error");
       } finally {
@@ -453,12 +454,10 @@ export default function NoticesPage() {
   ];
 
   // Stats calculation
-  const totalCount = notices.length;
-  const publishedCount = notices.filter((n) => n.isPublished).length;
-  const draftCount = notices.filter((n) => !n.isPublished).length;
-  const parentTargetCount = notices.filter((n) =>
-    Array.isArray(n.targetRoles) && n.targetRoles.includes("PARENT")
-  ).length;
+  const totalCount = totalItems;
+  const publishedCount = stats.published;
+  const draftCount = stats.draft;
+  const parentTargetCount = stats.parentTarget;
 
   return (
     <div>
@@ -539,9 +538,16 @@ export default function NoticesPage() {
             loading={loading}
             emptyIcon="campaign"
             emptyMessage="No notices found"
-            quickFilter={searchInput}
           />
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={totalItems}
+          itemsPerPage={limit}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
 
       <PermissionGate module="notices" action="create">

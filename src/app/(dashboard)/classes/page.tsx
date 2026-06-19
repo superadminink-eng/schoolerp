@@ -12,6 +12,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { useApi } from "@/hooks/use-api";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Select,
   SelectTrigger,
@@ -67,10 +69,10 @@ export default function ClassesPage() {
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches, isLoading: branchesLoading } = useBranches();
 
-  const [classes, setClasses] = useState<ClassRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [branchFilter, setBranchFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
   const [deleting, setDeleting] = useState(false);
 
   // Sync local branch filter with the global session branch
@@ -82,28 +84,27 @@ export default function ClassesPage() {
     }
   }, [session?.user?.branchId, session?.user]);
 
-  const fetchClasses = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ paginated: "true" });
-      if (branchFilter && branchFilter !== "__all__")
-        params.set("branchId", branchFilter);
-
-      const res = await fetch(`/api/v1/classes?${params}`);
-      const data = await res.json();
-      if (data.success) setClasses(data.data);
-    } catch {
-      /* silently fail */
-    } finally {
-      setLoading(false);
-    }
-  }, [branchFilter]);
-
+  // Reset page when filters change
   useEffect(() => {
-    if (branchFilter !== "") {
-      fetchClasses();
-    }
-  }, [branchFilter, fetchClasses]);
+    setPage(1);
+  }, [searchInput, branchFilter]);
+
+  const shouldFetch = branchFilter !== "";
+  const params = new URLSearchParams();
+  params.set("paginated", "true");
+  params.set("page", page.toString());
+  params.set("limit", limit.toString());
+  if (searchInput) params.set("search", searchInput);
+  if (branchFilter && branchFilter !== "__all__") {
+    params.set("branchId", branchFilter);
+  }
+
+  const { data: apiResponse, isLoading: loading, mutate } = useApi<ClassRow[]>(
+    shouldFetch ? `/api/v1/classes?${params.toString()}` : null
+  );
+
+  const classes = apiResponse?.data ?? [];
+  const totalItems = apiResponse?.meta?.total ?? 0;
 
   async function handleDelete(id: string) {
     setDeleting(true);
@@ -112,7 +113,7 @@ export default function ClassesPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show("Class deleted", "success");
-        fetchClasses();
+        mutate();
       } else {
         snackbar.show(data.error?.message ?? "Failed to delete class", "error");
       }
@@ -353,9 +354,16 @@ export default function ClassesPage() {
             loading={loading}
             emptyIcon="class"
             emptyMessage="No classes found"
-            quickFilter={searchInput}
           />
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={totalItems}
+          itemsPerPage={limit}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
 
       <PermissionGate module="classes" action="create">

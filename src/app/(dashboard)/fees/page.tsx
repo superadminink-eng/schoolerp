@@ -17,6 +17,8 @@ import { useBranches } from "@/hooks/use-branches";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Icon } from "@/components/ui/icon";
+import { useApi } from "@/hooks/use-api";
+import { Pagination } from "@/components/ui/pagination";
 
 interface FeeRow {
   studentId: string;
@@ -54,10 +56,10 @@ export default function FeesPage() {
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches } = useBranches();
 
-  const [fees, setFees] = useState<FeeRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [branchFilter, setBranchFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   // Sync local branch filter with the global session branch
   useEffect(() => {
@@ -66,29 +68,24 @@ export default function FeesPage() {
     }
   }, [session?.user?.branchId]);
 
-  const fetchFees = useCallback(async () => {
-    if (permissionsLoading || !can("fees", "read")) return;
-    setLoading(true);
-    const params = new URLSearchParams();
-    params.set("limit", "9999");
-    if (branchFilter !== "ALL") params.set("branchId", branchFilter);
-
-    try {
-      const res = await fetch(`/api/v1/fees?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setFees(data.data);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [branchFilter, permissionsLoading, can]);
-
+  // Reset page when filters change
   useEffect(() => {
-    fetchFees();
-  }, [fetchFees]);
+    setPage(1);
+  }, [searchInput, branchFilter]);
+
+  const shouldFetch = !permissionsLoading && can("fees", "read");
+  const params = new URLSearchParams();
+  params.set("page", page.toString());
+  params.set("limit", limit.toString());
+  if (searchInput) params.set("search", searchInput);
+  if (branchFilter !== "ALL") params.set("branchId", branchFilter);
+
+  const { data: apiResponse, isLoading: loading } = useApi<FeeRow[]>(
+    shouldFetch ? `/api/v1/fees?${params.toString()}` : null
+  );
+
+  const fees = apiResponse?.data ?? [];
+  const totalItems = apiResponse?.meta?.total ?? 0;
 
   if (permissionsLoading) {
     return (
@@ -224,9 +221,16 @@ export default function FeesPage() {
             loading={loading}
             emptyIcon="payments"
             emptyMessage="No pending fees found"
-            quickFilter={searchInput}
           />
         </div>
+
+        <Pagination
+          currentPage={page}
+          totalItems={totalItems}
+          itemsPerPage={limit}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
     </div>
   );

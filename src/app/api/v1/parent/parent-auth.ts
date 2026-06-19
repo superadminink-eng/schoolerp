@@ -1,16 +1,18 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import * as jose from "jose";
 
-function verifyToken(token: string, secret: string): any | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [header, data, signature] = parts;
-  const expectedSignature = crypto.createHmac("sha256", secret).update(`${header}.${data}`).digest("base64url");
-  if (signature !== expectedSignature) return null;
+async function verifyToken(token: string, secretString: string): Promise<any | null> {
   try {
-    return JSON.parse(Buffer.from(data, "base64url").toString("utf8"));
-  } catch {
+    const secret = new TextEncoder().encode(secretString);
+    const { payload } = await jose.jwtVerify(token, secret, {
+      issuer: "school-erp-auth",
+      audience: "school-erp-parent-app",
+      algorithms: ["HS256"],
+    });
+    return payload;
+  } catch (error) {
+    console.error("JWT verification failed:", error);
     return null;
   }
 }
@@ -32,9 +34,9 @@ export async function getParentUser(req: NextRequest) {
   } else {
     // Production / Secure Mode: decode and verify JWT
     const secret = process.env.AUTH_SECRET || "auth_secret_fallback";
-    const payload = verifyToken(rawToken, secret);
+    const payload = await verifyToken(rawToken, secret);
     if (payload && payload.role === "PARENT") {
-      userId = payload.userId;
+      userId = payload.userId as string;
     }
   }
 

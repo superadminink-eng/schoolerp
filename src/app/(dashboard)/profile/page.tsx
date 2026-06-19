@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { signOut } from "next-auth/react";
-import { auth as firebaseAuth } from "@/lib/firebase";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { TextField } from "@/components/ui/text-field";
 import { Button } from "@/components/ui/button";
@@ -180,7 +178,15 @@ export default function ProfilePage() {
     if (!user?.email) return;
     setResetting(true);
     try {
-      await sendPasswordResetEmail(firebaseAuth, user.email);
+      const res = await fetch("/api/v1/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message ?? "Failed to send reset link");
+      }
       snackbar.show(`Secure password reset link sent to ${user.email}`, "success");
     } catch (error: any) {
       console.error("Password reset error:", error);
@@ -193,7 +199,7 @@ export default function ProfilePage() {
   // Handle Direct Password Change (Google/Meta style re-auth)
   async function handleDirectPasswordChange(e: React.FormEvent) {
     e.preventDefault();
-    if (!user?.email || !firebaseAuth.currentUser) return;
+    if (!user?.email) return;
 
     if (newPassword.length < 8) {
       snackbar.show("New password must be at least 8 characters", "error");
@@ -210,41 +216,26 @@ export default function ProfilePage() {
 
     setChangingDirect(true);
     try {
-      // 1. Re-authenticate user
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(firebaseAuth.currentUser, credential);
-
-      // 2. Change password in Firebase
-      await updatePassword(firebaseAuth.currentUser, newPassword);
-
-      // 3. Update database: increment tokenVersion and forcePasswordChange = false
+      // Send currentPassword and newPassword to the change-password API, which handles re-auth and password updates securely
       const res = await fetch("/api/v1/profile/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ currentPassword, newPassword }),
       });
       const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error?.message ?? "Database update failed");
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message ?? "Failed to update credentials.");
       }
 
       snackbar.show("Password changed successfully! Logging out...", "success");
 
-      // 4. Force global logout by signing out current session
+      // Force global logout by signing out current session
       setTimeout(() => {
         signOut({ callbackUrl: "/login?message=password-changed" });
       }, 1500);
     } catch (error: any) {
       console.error("Direct password change error:", error);
-      let errMsg = "Failed to change password. Please check your credentials.";
-      if (error.code === "auth/wrong-password" || error.message?.includes("auth/wrong-password")) {
-        errMsg = "Incorrect current password.";
-      } else if (error.code === "auth/requires-recent-login") {
-        errMsg = "Session timeout. Please sign out and sign back in to change password.";
-      } else if (error.message) {
-        errMsg = error.message;
-      }
-      snackbar.show(errMsg, "error");
+      snackbar.show(error.message || "Failed to change password. Please check your credentials.", "error");
     } finally {
       setChangingDirect(false);
     }
