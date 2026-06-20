@@ -82,10 +82,18 @@ export default auth((req) => {
     return NextResponse.next({ request: { headers } });
   }
 
+  const publicApiPaths = [
+    "/api/v1/parent/auth/login",
+    "/api/v1/auth/forgot-password",
+    "/api/v1/auth/reset-password-verify",
+    "/api/v1/auth/reset-password-confirm",
+    "/api/v1/organizations/register",
+  ];
+
   // If no session exists, return 401 for private API routes (except parent login and bearer-token authenticated endpoints)
   if (
     pathname.startsWith("/api/v1/") &&
-    pathname !== "/api/v1/parent/auth/login" &&
+    !publicApiPaths.includes(pathname) &&
     !req.headers.get("authorization")?.trim().startsWith("Bearer ")
   ) {
     return new NextResponse(
