@@ -54,7 +54,7 @@ export const SelectContent = forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "z-50 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-xl shadow-slate-200/50",
+        "z-50 overflow-hidden max-h-72 rounded-xl border border-slate-100 bg-white shadow-xl shadow-slate-200/50",
         "animate-in fade-in-80 zoom-in-95 duration-200",
         "min-w-[var(--radix-select-trigger-width)]",
         className

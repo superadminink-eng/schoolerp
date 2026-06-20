@@ -38,7 +38,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 isActive: true,
                 forcePasswordChange: true,
                 roleId: true,
-                role: { select: { name: true } },
+                role: { select: { name: true, type: true } },
                 branchId: true,
                 branch: { select: { name: true } },
                 organization: { select: { isActive: true } }
@@ -68,6 +68,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               if (dbUser.roleId !== baseToken.roleId) {
                 baseToken.roleId = dbUser.roleId;
                 baseToken.roleName = dbUser.role.name;
+                baseToken.roleType = dbUser.role.type;
               }
               if (dbUser.branchId !== baseToken.branchId) {
                 baseToken.branchId = dbUser.branchId;
@@ -118,7 +119,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             include: {
               organization: { select: { id: true, slug: true, name: true, logo: true, isActive: true, isSetupComplete: true } },
               branch: { select: { id: true, name: true, code: true } },
-              role: { select: { id: true, name: true } },
+              role: { select: { id: true, name: true, type: true } },
             },
           });
 
@@ -133,6 +134,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             image: user.avatar,
             roleId: user.role.id,
             roleName: user.role.name,
+            roleType: user.role.type,
             organizationId: user.organizationId,
             organizationSlug: user.organization.slug,
             organizationName: user.organization.name,

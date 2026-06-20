@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     try {
       const where: Record<string, any> = {
-        ...buildTenantWhere(ctx, branchId),
+        ...(await buildTenantWhere(ctx, branchId)),
         ...buildSearchWhere(search, ["name"]),
       };
 

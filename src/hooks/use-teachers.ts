@@ -24,7 +24,7 @@ export function useTeachers(branchId: string): UseTeachersReturn {
 
     setIsLoading(true);
     const params = new URLSearchParams({
-      role: "TEACHER",
+      staffType: "TEACHING",
       status: "ACTIVE",
       branchId,
       limit: "100",

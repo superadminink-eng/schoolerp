@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const branchId = url.searchParams.get("branchId");
 
   const where: Record<string, any> = {
-    ...buildTenantWhere(ctx as any, branchId),
+    ...(await buildTenantWhere(ctx as any, branchId)),
     ...buildSearchWhere(search, ["title", "content"]),
   };
 

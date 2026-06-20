@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const classId = url.searchParams.get("classId");
 
   const where: Record<string, any> = {
-    ...buildTenantWhere(ctx as any, branchId),
+    ...(await buildTenantWhere(ctx as any, branchId)),
     ...(status && { status }),
     ...(classId && { classId }),
     ...buildSearchWhere(search, ["firstName", "lastName", "applicationNo", "fatherName", "motherName"]),

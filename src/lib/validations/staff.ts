@@ -11,6 +11,7 @@ export const createStaffSchema = z.object({
     .string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters"),
+  staffType: z.enum(["TEACHING", "NON_TEACHING"]).default("TEACHING"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: optionalPhoneSchema,
   roleId: z.string().min(1, "Role is required"),
@@ -24,6 +25,7 @@ export const createStaffSchema = z.object({
   joinDate: z.string().optional().or(z.literal("")),
   branchId: z.string().min(1, "Branch is required"),
   createAccount: z.boolean().optional(),
+  existingUserId: z.string().optional().or(z.literal("")),
   password: z.string().optional().or(z.literal("")),
   customPermissions: z.array(z.object({
     permissionId: z.string(),
@@ -53,6 +55,7 @@ export const updateStaffSchema = z.object({
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
     .optional(),
+  staffType: z.enum(["TEACHING", "NON_TEACHING"]).optional(),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: optionalPhoneSchema,
   roleId: z.string().optional(),

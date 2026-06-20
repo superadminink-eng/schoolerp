@@ -27,11 +27,13 @@ export async function GET(req: NextRequest) {
   const role = url.searchParams.get("role");
   const branchId = url.searchParams.get("branchId");
   const status = url.searchParams.get("status");
+  const staffType = url.searchParams.get("staffType");
 
   const where: Record<string, any> = {
-    ...buildTenantWhere(ctx as any, branchId),
+    ...(await buildTenantWhere(ctx as any, branchId)),
     ...(role && { role }),
     ...(status && { status }),
+    ...(staffType && { staffType }),
     ...buildSearchWhere(search, ["name", "email"]),
   };
 
@@ -45,6 +47,7 @@ export async function GET(req: NextRequest) {
           email: true,
           phone: true,
           role: true,
+          staffType: true,
           gender: true,
           joinDate: true,
           status: true,
@@ -86,7 +89,22 @@ export async function POST(req: NextRequest) {
       return apiValidationError(parsed.error);
     }
 
-    const { name, email, phone, roleId, dateOfBirth, gender, qualification, joinDate, branchId, createAccount, password, customPermissions } = parsed.data;
+    const {
+      name,
+      email,
+      phone,
+      roleId,
+      dateOfBirth,
+      gender,
+      qualification,
+      joinDate,
+      branchId,
+      createAccount,
+      existingUserId,
+      password,
+      customPermissions,
+      staffType,
+    } = parsed.data;
 
     // Restrict branch-scoped roles from creating staff in another branch
     if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
@@ -115,8 +133,36 @@ export async function POST(req: NextRequest) {
 
       let userId: string | undefined;
 
-      // Create User Login Account if requested
-      if (createAccount && email && password) {
+      // Link Existing User Account
+      if (existingUserId) {
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            id: existingUserId,
+            organizationId: ctx.organizationId,
+            isActive: true,
+            staff: null,
+            parent: null,
+            student: null,
+          }
+        });
+        
+        if (!existingUser) {
+          return apiError("NOT_FOUND", "User not found or already linked", 404);
+        }
+        
+        userId = existingUser.id;
+        
+        // Update user's role and branch if needed to match staff placement
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            roleId,
+            branchId,
+          }
+        });
+
+      } else if (createAccount && email && password) {
+        // Create User Login Account if requested
         const existing = await prisma.user.findFirst({
           where: { organizationId: ctx.organizationId, email },
         });
@@ -201,6 +247,7 @@ export async function POST(req: NextRequest) {
           email: email || null,
           phone: phone || null,
           role: targetRole.name, // Store string name for legacy compatibility
+          staffType,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
           gender: gender || null,
           qualification: qualification || null,

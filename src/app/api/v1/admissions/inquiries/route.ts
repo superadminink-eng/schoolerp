@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const classId = url.searchParams.get("classAppliedId");
 
   const where: Record<string, any> = {
-    ...buildTenantWhere(ctx as any, branchId),
+    ...(await buildTenantWhere(ctx as any, branchId)),
     ...(status && { status }),
     ...(classId && { classAppliedId: classId }),
     ...buildSearchWhere(search, ["studentName", "parentName", "parentEmail", "parentPhone"]),

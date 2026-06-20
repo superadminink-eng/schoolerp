@@ -81,7 +81,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   }, [userId, status]); // Run effect only if userId or status changes, NOT on every route change
 
   const can = useCallback((module: string, action: string): boolean => {
-    if (session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN") {
+    if (session?.user?.roleName === "SUPER_ADMIN") {
       return true;
     }
     return permissions.has(`${module}:${action}`);

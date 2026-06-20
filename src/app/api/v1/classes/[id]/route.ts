@@ -559,6 +559,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (error instanceof Error && error.message.startsWith("CONFLICT:")) {
       return apiError("CONFLICT", error.message.slice(9), 409);
     }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const target = (error.meta?.target as string[])?.join(", ");
+      return apiError("CONFLICT", `A division or configuration with these details already exists.`, 409);
+    }
     console.error("Update class error:", error);
     return apiError("INTERNAL_ERROR", "Failed to update class", 500);
   }

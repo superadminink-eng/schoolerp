@@ -54,6 +54,7 @@ interface StaffRow {
   gender: string | null;
   joinDate: string;
   status: string;
+  staffType: "TEACHING" | "NON_TEACHING";
   branch: { id: string; name: string };
 }
 
@@ -92,6 +93,7 @@ export default function StaffPage() {
 
   const [searchInput, setSearchInput] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
+  const [staffTypeFilter, setStaffTypeFilter] = useState("ALL");
   const [branchFilter, setBranchFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const limit = 20;
@@ -109,13 +111,14 @@ export default function StaffPage() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [searchInput, roleFilter, branchFilter]);
+  }, [searchInput, roleFilter, staffTypeFilter, branchFilter]);
 
   const params = new URLSearchParams();
   params.set("page", page.toString());
   params.set("limit", limit.toString());
   if (searchInput) params.set("search", searchInput);
   if (roleFilter !== "ALL") params.set("role", roleFilter);
+  if (staffTypeFilter !== "ALL") params.set("staffType", staffTypeFilter);
   if (branchFilter !== "ALL") params.set("branchId", branchFilter);
 
   const { data: apiResponse, isLoading: loading, mutate } = useApi<StaffRow[]>(
@@ -178,6 +181,22 @@ export default function StaffPage() {
             <Icon name={iconName} size={15} className="text-slate-400 shrink-0" />
             <span className="text-sm font-medium text-slate-700">{label}</span>
           </div>
+        );
+      },
+    },
+    {
+      key: "staffType",
+      header: "Category",
+      render: (row) => {
+        if (!row.staffType) return "—";
+        const isTeaching = row.staffType === "TEACHING";
+        return (
+          <span className={cn(
+            "px-2.5 py-1 text-xs font-semibold rounded-full",
+            isTeaching ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-300" : "bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300"
+          )}>
+            {isTeaching ? "Teaching" : "Non-Teaching"}
+          </span>
         );
       },
     },
@@ -308,6 +327,20 @@ export default function StaffPage() {
                     {opt.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={staffTypeFilter}
+              onValueChange={setStaffTypeFilter}
+            >
+              <SelectTrigger className="min-w-[160px]">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Categories</SelectItem>
+                <SelectItem value="TEACHING">Teaching</SelectItem>
+                <SelectItem value="NON_TEACHING">Non-Teaching</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -97,8 +97,9 @@ export async function checkApiPermission(
   const userId = req.headers.get("x-user-id");
   const roleId = req.headers.get("x-user-role-id");
   const roleName = req.headers.get("x-user-role-name");
+  const tokenVersionStr = req.headers.get("x-token-version");
 
-  if (!userId || !roleId || !roleName) {
+  if (!userId || !roleId || !roleName || !tokenVersionStr) {
     return Response.json(
       { success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
       { status: 401 }
@@ -113,10 +114,11 @@ export async function checkApiPermission(
     const user = await prisma.user.findFirst({
       where: { id: userId, isActive: true },
       select: {
+        tokenVersion: true,
         organization: { select: { isActive: true } }
       }
     });
-    isUserActive = !!(user && user.organization.isActive);
+    isUserActive = !!(user && user.organization.isActive && user.tokenVersion === parseInt(tokenVersionStr, 10));
     rbacCache.set(statusCacheKey, isUserActive, CACHE_TTLS.USER_STATUS);
   }
 
@@ -148,5 +150,6 @@ export function getTenantContext(req: Request) {
     roleName: req.headers.get("x-user-role-name")!,
     organizationId: req.headers.get("x-organization-id")!,
     branchId: req.headers.get("x-branch-id") || null,
+    tokenVersion: parseInt(req.headers.get("x-token-version") || "0", 10),
   };
 }

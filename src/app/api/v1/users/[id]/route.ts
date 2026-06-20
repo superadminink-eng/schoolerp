@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { apiSuccess, apiError, apiValidationError, apiNotFound } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
 import { updateUserSchema } from "@/lib/validations/user";
 import { logAction } from "@/lib/audit";
 
@@ -23,7 +23,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
     organizationId: ctx.organizationId,
   };
 
-  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+  const canViewAllBranches = await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "branches", "view_all");
+  if (!canViewAllBranches && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
 
@@ -104,7 +105,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     // Restrict branch-scoped roles from modifying users in another branch
-    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
+    const canManageAllBranches = await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "branches", "manage");
+    if (!canManageAllBranches && ctx.branchId && existing.branchId !== ctx.branchId) {
       return apiError("FORBIDDEN", "Cannot modify users in another branch", 403);
     }
 
@@ -201,6 +203,21 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       },
     });
 
+    // Phase 6: Sync Data Drift
+    if (name !== undefined || phone !== undefined || isActive !== undefined) {
+      const syncData: any = {};
+      if (name !== undefined) syncData.name = name;
+      if (phone !== undefined) syncData.phone = phone || null;
+      if (isActive !== undefined && !isActive) syncData.status = "TERMINATED"; // Optional: sync deactivation to termination
+
+      if (Object.keys(syncData).length > 0) {
+        await prisma.staff.updateMany({
+          where: { userId: user.id },
+          data: syncData,
+        });
+      }
+    }
+
     await logAction({
       organizationId: ctx.organizationId,
       branchId: user.branch?.id || null,
@@ -247,7 +264,8 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     }
 
     // Restrict branch-scoped roles from deactivating users in another branch
-    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
+    const canManageAllBranches = await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "branches", "manage");
+    if (!canManageAllBranches && ctx.branchId && existing.branchId !== ctx.branchId) {
       return apiError("FORBIDDEN", "Cannot deactivate users in another branch", 403);
     }
 

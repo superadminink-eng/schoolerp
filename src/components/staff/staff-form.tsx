@@ -19,6 +19,7 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { useBranches } from "@/hooks/use-branches";
 import { useRoles } from "@/hooks/use-roles";
 import { useAllPermissions } from "@/hooks/use-all-permissions";
+import { useUnlinkedUsers } from "@/hooks/use-unlinked-users";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { createStaffSchema, updateStaffSchema } from "@/lib/validations/staff";
@@ -63,10 +64,11 @@ interface StaffData {
   id: string;
   name: string;
   email: string | null;
-  phone: string | null;
-  role: string | null;
+  phone?: string | null;
+  role: string;
   userId?: string | null;
-  dateOfBirth: string | null;
+  staffType: "TEACHING" | "NON_TEACHING";
+  dateOfBirth?: string | Date | null;
   gender: string | null;
   qualification: string | null;
   joinDate: string;
@@ -130,12 +132,47 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
     }
   }, [initialData?.role, roles, roleId]);
 
-  const [dateOfBirth, setDateOfBirth] = useState(formatDateForInput(initialData?.dateOfBirth));
+  // Auto-toggle StaffType to TEACHING if role name contains teacher/faculty
+  useEffect(() => {
+    if (roleId && roles.length > 0) {
+      const selectedRole = roles.find((r) => r.id === roleId);
+      if (selectedRole) {
+        const roleNameUpper = selectedRole.name.toUpperCase();
+        if (roleNameUpper.includes("TEACHER") || roleNameUpper.includes("FACULTY")) {
+          setStaffType("TEACHING");
+        }
+      }
+    }
+  }, [roleId, roles]);
+
+  const [dateOfBirth, setDateOfBirth] = useState(formatDateForInput(initialData?.dateOfBirth as string | undefined));
   const [gender, setGender] = useState(initialData?.gender ?? "");
   const [qualification, setQualification] = useState(initialData?.qualification ?? "");
   const [joinDate, setJoinDate] = useState(formatDateForInput(initialData?.joinDate));
   const [branchId, setBranchId] = useState(initialData?.branch?.id ?? "");
   const [status, setStatus] = useState(initialData?.status ?? "ACTIVE");
+  const [staffType, setStaffType] = useState(initialData?.staffType ?? "TEACHING");
+
+  const [linkExistingUser, setLinkExistingUser] = useState(false);
+  const [existingUserId, setExistingUserId] = useState("");
+  const { users: unlinkedUsers, loading: unlinkedLoading } = useUnlinkedUsers();
+
+  // Phase 6 Auto-fill Magic
+  useEffect(() => {
+    if (linkExistingUser && existingUserId) {
+      const selectedUser = unlinkedUsers.find(u => u.id === existingUserId);
+      if (selectedUser) {
+        setName(selectedUser.name);
+        setEmail(selectedUser.email);
+        if ((selectedUser as any).phone) setPhone((selectedUser as any).phone);
+        // Pre-fill role if the user already has one
+        if (selectedUser.role && roles.length > 0) {
+           const found = roles.find(r => r.name === selectedUser.role!.name);
+           if (found) setRoleId(found.id);
+        }
+      }
+    }
+  }, [existingUserId, linkExistingUser, unlinkedUsers, roles]);
 
   const [createAccount, setCreateAccount] = useState(false);
   const [password, setPassword] = useState("");
@@ -221,11 +258,13 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
 
   const validateStep3 = () => {
     const stepErrors: Record<string, string> = {};
-    if (createAccount && !email) {
-      stepErrors.email = "Email is required when creating an account";
-    }
-    if (createAccount && (!password || password.length < 6)) {
-      stepErrors.password = "Password must be at least 6 characters";
+    if (!linkExistingUser) {
+      if (createAccount && !email) {
+        stepErrors.email = "Email is required when creating an account";
+      }
+      if (createAccount && (!password || password.length < 6)) {
+        stepErrors.password = "Password must be at least 6 characters";
+      }
     }
     setErrors(stepErrors);
     return Object.keys(stepErrors).length === 0;
@@ -264,8 +303,8 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
     e.preventDefault();
     if (loading) return;
 
-    // Guard: Prevent submission if the user is not on the final step (Security & Access)
-    if (activeStep < 3) {
+    // Guard: Prevent submission if the user is not on the final step (Security & Access) in Create mode
+    if (mode === "create" && activeStep < 3) {
       handleContinue();
       return;
     }
@@ -300,8 +339,10 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
         qualification: qualification || undefined,
         joinDate: joinDate || undefined,
         branchId,
-        createAccount,
-        password: password || undefined,
+        staffType,
+        createAccount: linkExistingUser ? false : createAccount,
+        existingUserId: linkExistingUser ? existingUserId : undefined,
+        password: linkExistingUser ? undefined : password || undefined,
         customPermissions: Object.entries(customPermissions).map(([permissionId, granted]) => ({
           permissionId,
           granted
@@ -371,6 +412,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
         joinDate: joinDate || undefined,
         branchId: branchId || undefined,
         status,
+        staffType,
         createAccount,
         password: password || undefined,
         customPermissions: Object.entries(customPermissions).map(([permissionId, granted]) => ({
@@ -798,6 +840,82 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                   </p>
                 </div>
 
+                {!initialData?.id && (
+                  <div className="bg-slate-50/80 dark:bg-zinc-900/50 border border-slate-200/60 dark:border-zinc-800/60 rounded-xl p-4 space-y-4">
+                    <div className="flex gap-4 items-center">
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-zinc-300 cursor-pointer">
+                        <input type="radio" checked={!linkExistingUser} onChange={() => { setLinkExistingUser(false); setExistingUserId(""); }} className="w-4 h-4 text-primary" />
+                        Create New Staff
+                      </label>
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-zinc-300 cursor-pointer">
+                        <input type="radio" checked={linkExistingUser} onChange={() => setLinkExistingUser(true)} className="w-4 h-4 text-primary" />
+                        Link Existing User
+                      </label>
+                    </div>
+
+                    {linkExistingUser && (
+                      <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                        <SelectField
+                          label="Select User Account"
+                          value={existingUserId}
+                          onValueChange={setExistingUserId}
+                          placeholder="Select a user to link..."
+                          options={unlinkedUsers.map(u => ({
+                            value: u.id,
+                            label: `${u.name} (${u.email}) ${u.role ? ` - ${u.role.name}` : ''}`
+                          }))}
+                          fullWidth
+                          helperText="The profile details below will be auto-filled from the selected user."
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Staff Type Segmented Control */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-zinc-300">Staff Category</label>
+                  <div className="flex bg-slate-100/50 dark:bg-zinc-900/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-zinc-800/50 w-full sm:w-max overflow-x-auto custom-scrollbar">
+                    <button
+                      type="button"
+                      onClick={() => setStaffType("TEACHING")}
+                      className={cn(
+                        "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
+                        staffType === "TEACHING" 
+                          ? "bg-white dark:bg-zinc-800 text-primary shadow-sm ring-1 ring-slate-200/50 dark:ring-zinc-700/50" 
+                          : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 hover:bg-slate-200/30 dark:hover:bg-zinc-800/50"
+                      )}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">school</span>
+                      Teaching Staff
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStaffType("NON_TEACHING")}
+                      className={cn(
+                        "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
+                        staffType === "NON_TEACHING" 
+                          ? "bg-white dark:bg-zinc-800 text-primary shadow-sm ring-1 ring-slate-200/50 dark:ring-zinc-700/50" 
+                          : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 hover:bg-slate-200/30 dark:hover:bg-zinc-800/50"
+                      )}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">engineering</span>
+                      Non-Teaching Staff
+                    </button>
+                  </div>
+                  {staffType === "TEACHING" ? (
+                    <p className="text-xs text-primary/80 flex items-center gap-1.5 animate-in fade-in duration-300">
+                      <span className="material-symbols-outlined text-[14px]">info</span>
+                      This staff member will appear in Class Teacher and Subject Teacher dropdowns.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-600/80 dark:text-amber-500/80 flex items-center gap-1.5 animate-in fade-in duration-300">
+                      <span className="material-symbols-outlined text-[14px]">visibility_off</span>
+                      This staff member will NOT appear in teacher assignment dropdowns.
+                    </p>
+                  )}
+                </div>
+
                 <TextField
                   label="Full Name"
                   value={name}
@@ -940,7 +1058,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                       Manage system access, initial password, and custom permission overrides.
                     </p>
                   </div>
-                  {!initialData?.userId && (
+                  {!initialData?.userId && !linkExistingUser && (
                     <div className="flex items-center gap-3 bg-slate-50/80 dark:bg-zinc-900/80 border border-slate-200/50 dark:border-zinc-800 px-4 py-2 rounded-xl">
                       <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">Enable Login</span>
                       <Switch checked={createAccount} onCheckedChange={setCreateAccount} />
@@ -948,7 +1066,16 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                   )}
                 </div>
 
-                {createAccount && !initialData?.userId && (
+                {linkExistingUser && !initialData?.userId && (
+                  <div className="space-y-4 p-5 rounded-xl bg-emerald-50/40 dark:bg-emerald-950/10 border border-emerald-100/50 dark:border-emerald-900/10 animate-in fade-in duration-300">
+                    <div className="flex gap-3 text-emerald-700 dark:text-emerald-300 text-sm font-medium">
+                      <span className="material-symbols-outlined text-[20px] shrink-0 text-emerald-500">verified_user</span>
+                      <span>This staff profile is linked to an existing identity ({email}). The user will continue to use their current password to log in.</span>
+                    </div>
+                  </div>
+                )}
+
+                {createAccount && !initialData?.userId && !linkExistingUser && (
                   <div className="space-y-4 p-5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/10 border border-indigo-100/50 dark:border-indigo-900/10 animate-in fade-in duration-300">
                     <div className="flex gap-3 text-indigo-700 dark:text-indigo-300 text-xs font-medium">
                       <span className="material-symbols-outlined text-[20px] shrink-0 text-indigo-500">info</span>
@@ -1347,9 +1474,9 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                   Cancel
                 </Button>
 
-                {activeStep < 3 ? (
+                {activeStep < 3 && mode === "create" && (
                   <Button
-                    key="btn-continue"
+                    key="btn-continue-create"
                     type="button"
                     variant="filled"
                     onClick={handleContinue}
@@ -1359,7 +1486,23 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                   >
                     Continue
                   </Button>
-                ) : (
+                )}
+
+                {activeStep < 3 && mode === "edit" && (
+                  <Button
+                    key="btn-continue-edit"
+                    type="button"
+                    variant="outlined"
+                    onClick={handleContinue}
+                    icon="chevron_right"
+                    iconPosition="trailing"
+                    className="px-6 rounded-full text-xs font-semibold border border-slate-200 dark:border-zinc-800"
+                  >
+                    Next Step
+                  </Button>
+                )}
+
+                {(activeStep === 3 || mode === "edit") && (
                   <Button
                     key="btn-submit"
                     type="submit"

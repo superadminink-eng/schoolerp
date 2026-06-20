@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, hasPermission, getUserPermissions } from "@/lib/rbac";
 import { z } from "zod";
 
 const createRoleSchema = z.object({
@@ -69,7 +69,11 @@ export async function GET(req: NextRequest) {
       orderBy: { name: 'asc' }
     });
 
-    return apiSuccess(roles);
+    // Phase 5: The "Shadow Override" Filtering Logic
+    const overriddenIds = new Set(roles.map(r => r.overridesRoleId).filter(Boolean));
+    const finalRoles = roles.filter(r => !(r.organizationId === null && overriddenIds.has(r.id)));
+
+    return apiSuccess(finalRoles);
   } catch (error) {
     console.error("List roles error:", error);
     return apiError("INTERNAL_ERROR", "Failed to fetch roles", 500);
@@ -126,6 +130,16 @@ export async function POST(req: NextRequest) {
 
     if (permRecords.length !== permissions.length) {
       return apiError("BAD_REQUEST", "One or more permissions are invalid", 400);
+    }
+
+    // ZERO-TRUST PRIVILEGE ESCALATION CHECK
+    if (ctx.roleName !== "SUPER_ADMIN") {
+      const callerPerms = await getUserPermissions(ctx.userId, ctx.roleId, ctx.roleName);
+      for (const p of permRecords) {
+        if (!callerPerms.has(`${p.module}:${p.action}`)) {
+          return apiError("FORBIDDEN", `Cannot delegate unauthorized permission: ${p.module}:${p.action}`, 403);
+        }
+      }
     }
 
     const role = await prisma.role.create({

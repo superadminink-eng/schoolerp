@@ -42,6 +42,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         email: true,
         phone: true,
         role: true,
+        staffType: true,
         employeeId: true,
         department: true,
         designation: true,
@@ -103,7 +104,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const existing = await prisma.staff.findFirst({ where: existingWhere });
     if (!existing) return apiNotFound("Staff member");
 
-    const { name, email, phone, roleId, dateOfBirth, gender, qualification, joinDate, branchId, status, createAccount, password, customPermissions } = parsed.data;
+    const { name, email, phone, roleId, dateOfBirth, gender, qualification, joinDate, branchId, status, createAccount,      password,
+      customPermissions,
+      staffType,
+    } = parsed.data;
 
     // If changing branch, verify it belongs to org
     if (branchId && branchId !== existing.branchId) {
@@ -244,6 +248,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (joinDate !== undefined) data.joinDate = joinDate ? new Date(joinDate) : null;
     if (branchId !== undefined) data.branchId = branchId;
     if (status !== undefined) data.status = status;
+    if (staffType !== undefined) data.staffType = staffType;
     const targetUserId = newUserId || existing.userId;
     if (newUserId) data.userId = newUserId;
 
@@ -301,6 +306,33 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       },
     });
 
+    // Phase 6: Sync Data Drift
+    if (staff.userId && (name !== undefined || email !== undefined)) {
+      const syncData: Record<string, string> = {};
+      if (name !== undefined) syncData.name = name;
+      if (email !== undefined) syncData.email = email || "";
+
+      await prisma.user.update({
+        where: { id: staff.userId },
+        data: syncData,
+      });
+
+      const linkedUser = await prisma.user.findFirst({ where: { id: staff.userId } });
+      if (linkedUser && linkedUser.firebaseUid) {
+        try {
+          const fbUpdate: any = {};
+          if (name !== undefined) fbUpdate.displayName = name;
+          if (email !== undefined && email !== "") fbUpdate.email = email;
+          
+          if (Object.keys(fbUpdate).length > 0) {
+            await getAdminAuth().updateUser(linkedUser.firebaseUid, fbUpdate);
+          }
+        } catch (err) {
+          console.error("Firebase staff sync error:", err);
+        }
+      }
+    }
+
     await logAction({
       organizationId: ctx.organizationId,
       branchId: staff.branch.id,
@@ -346,6 +378,23 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       where: { id },
       data: { status: "TERMINATED", deletedAt: new Date() },
     });
+
+    // Phase 6: Lifecycle Deactivation (Sync Security)
+    if (existing.userId) {
+      await prisma.user.update({
+        where: { id: existing.userId },
+        data: { isActive: false },
+      });
+
+      const user = await prisma.user.findFirst({ where: { id: existing.userId } });
+      if (user && user.firebaseUid) {
+        try {
+          await getAdminAuth().updateUser(user.firebaseUid, { disabled: true });
+        } catch (err) {
+          console.error("Firebase disable user error during staff termination:", err);
+        }
+      }
+    }
 
     await logAction({
       organizationId: ctx.organizationId,

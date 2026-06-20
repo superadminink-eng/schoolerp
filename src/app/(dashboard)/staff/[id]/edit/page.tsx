@@ -14,7 +14,9 @@ interface StaffData {
   name: string;
   email: string | null;
   phone: string | null;
-  role: string | null;
+  role: string;
+  staffType: "TEACHING" | "NON_TEACHING";
+  userId?: string | null;
   dateOfBirth: string | null;
   gender: string | null;
   qualification: string | null;

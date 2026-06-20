@@ -78,6 +78,7 @@ export default auth((req) => {
     headers.set("x-user-role-name", session.user.roleName);
     headers.set("x-organization-id", session.user.organizationId);
     headers.set("x-branch-id", session.user.branchId ?? "");
+    headers.set("x-token-version", String(session.user.tokenVersion));
 
     return NextResponse.next({ request: { headers } });
   }

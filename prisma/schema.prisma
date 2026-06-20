@@ -125,6 +125,11 @@ model Role {
   organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users           User[]
 
+  // Shadow Override Fields
+  overridesRoleId String?          @map("overrides_role_id")
+  overridesRole   Role?            @relation("RoleOverride", fields: [overridesRoleId], references: [id])
+  overriddenBy    Role[]           @relation("RoleOverride")
+
   @@unique([organizationId, name])
   @@index([organizationId])
   @@map("roles")
@@ -415,6 +420,7 @@ model Staff {
   joinDate                DateTime                   @default(now())
   salary                  Decimal?                   @db.Decimal(10, 2)
   status                  StaffStatus                @default(ACTIVE)
+  staffType               StaffType                  @default(TEACHING)
   createdAt               DateTime                   @default(now())
   updatedAt               DateTime                   @updatedAt
   deletedAt               DateTime?
@@ -1080,6 +1086,11 @@ enum StaffStatus {
   ON_LEAVE
   RESIGNED
   TERMINATED
+}
+
+enum StaffType {
+  TEACHING
+  NON_TEACHING
 }
 
 enum AttendanceStatus {

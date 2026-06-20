@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, apiValidationError, apiNotFound } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, getUserPermissions } from "@/lib/rbac";
 import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -76,7 +76,49 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       const systemRole = await prisma.role.findFirst({ where: { id, organizationId: null } });
       if (systemRole) {
         if (ctx.roleName !== "SUPER_ADMIN") {
-          return apiError("FORBIDDEN", "Only platform SUPER_ADMIN can modify global system roles", 403);
+          // Phase 5: Shadow Override (Copy-on-Write)
+          if (!permissions) {
+             return apiError("BAD_REQUEST", "You must provide permissions when customizing a system role", 400);
+          }
+          const permRecords = await prisma.permission.findMany({
+            where: { id: { in: permissions } }
+          });
+          if (permRecords.length !== permissions.length) {
+            return apiError("BAD_REQUEST", "One or more permissions are invalid", 400);
+          }
+
+          // Privilege escalation check
+          const callerPerms = await getUserPermissions(ctx.userId, ctx.roleId, ctx.roleName);
+          for (const p of permRecords) {
+            if (!callerPerms.has(`${p.module}:${p.action}`)) {
+              return apiError("FORBIDDEN", `Cannot delegate unauthorized permission: ${p.module}:${p.action}`, 403);
+            }
+          }
+
+          const newRole = await prisma.$transaction(async (tx) => {
+             const custom = await tx.role.create({
+                data: {
+                   organizationId: ctx.organizationId,
+                   name: systemRole.name,
+                   description: systemRole.description,
+                   type: systemRole.type,
+                   isSystem: false,
+                   overridesRoleId: systemRole.id,
+                   rolePermissions: {
+                      create: permRecords.map(p => ({ permissionId: p.id }))
+                   }
+                }
+             });
+
+             await tx.user.updateMany({
+                where: { organizationId: ctx.organizationId, roleId: systemRole.id },
+                data: { roleId: custom.id }
+             });
+
+             return custom;
+          });
+
+          return apiSuccess(newRole);
         }
         if (name !== undefined || description !== undefined || type !== undefined) {
           return apiError("BAD_REQUEST", "Cannot modify system role metadata (name, description, or type)", 400);
@@ -94,7 +136,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           OR: [{ organizationId: ctx.organizationId }, { organizationId: null }]
         }
       });
-      if (nameCheck) return apiError("CONFLICT", "A role with this name already exists", 409);
+      if (nameCheck) {
+        // Phase 5: Allow conflict if the name matches the exact system role being overridden
+        const isSelfOverride = existing && existing.overridesRoleId === nameCheck.id;
+        if (!isSelfOverride) {
+          return apiError("CONFLICT", "A role with this name already exists", 409);
+        }
+      }
     }
 
     const updateData: any = {};
@@ -108,6 +156,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       });
       if (permRecords.length !== permissions.length) {
         return apiError("BAD_REQUEST", "One or more permissions are invalid", 400);
+      }
+
+      // ZERO-TRUST PRIVILEGE ESCALATION CHECK
+      if (ctx.roleName !== "SUPER_ADMIN") {
+        const callerPerms = await getUserPermissions(ctx.userId, ctx.roleId, ctx.roleName);
+        for (const p of permRecords) {
+          if (!callerPerms.has(`${p.module}:${p.action}`)) {
+            return apiError("FORBIDDEN", `Cannot delegate unauthorized permission: ${p.module}:${p.action}`, 403);
+          }
+        }
       }
 
       // Delete old permissions and set new ones
@@ -155,7 +213,13 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       return apiNotFound("Role");
     }
 
-    if (existing._count.users > 0) {
+    if (existing.overridesRoleId) {
+      // Phase 5: Restore-to-Default Migration
+      await prisma.user.updateMany({
+        where: { roleId: existing.id },
+        data: { roleId: existing.overridesRoleId }
+      });
+    } else if (existing._count.users > 0) {
       return apiError("CONFLICT", "Cannot delete role because it is assigned to users", 409);
     }
 

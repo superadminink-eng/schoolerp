@@ -7,7 +7,7 @@ import {
   apiValidationError,
   parsePagination,
 } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
 import { createUserSchema } from "@/lib/validations/user";
 import { logAction } from "@/lib/audit";
 
@@ -28,8 +28,11 @@ export async function GET(req: NextRequest) {
     organizationId: ctx.organizationId,
   };
 
+  // Check dynamic cross-branch view permission
+  const canViewAllBranches = await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "branches", "view_all");
+
   // Restrict branch-scoped roles to their home branch
-  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+  if (!canViewAllBranches && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -121,8 +124,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Check dynamic cross-branch manage permission
+  const canManageAllBranches = await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "branches", "manage");
+
   // Restrict branch-scoped roles from creating users in another branch
-  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
+  if (!canManageAllBranches && ctx.branchId && branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create users in another branch", 403);
   }
 

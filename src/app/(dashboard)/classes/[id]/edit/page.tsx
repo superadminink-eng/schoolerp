@@ -109,7 +109,7 @@ export default function EditClassPage() {
       </Breadcrumb>
 
       <h1 className="text-headline-md font-semibold text-on-surface mb-6">
-        Edit Class
+        {classData.status === "DRAFT" ? "Resume Class Draft" : "Edit Class"}
       </h1>
 
       <ClassForm mode="edit" initialData={classData} />

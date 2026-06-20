@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { hasPermission } from "./rbac";
 
 export interface TenantContext {
   userId: string;
@@ -12,13 +13,15 @@ export interface TenantContext {
  * Builds the standard multi-tenancy and branch-scoping filter conditions.
  * Unconditionally enforces branch-scoping for branch-level roles.
  */
-export function buildTenantWhere(ctx: TenantContext, clientBranchId?: string | null): Record<string, any> {
+export async function buildTenantWhere(ctx: TenantContext, clientBranchId?: string | null): Promise<Record<string, any>> {
   const where: Record<string, any> = {
     organizationId: ctx.organizationId,
   };
 
-  // Enforce branch isolation for branch-level roles
-  if (ctx.branchId) {
+  // Enforce branch isolation for branch-level roles dynamically
+  const canViewAllBranches = await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "branches", "view_all");
+  
+  if (!canViewAllBranches && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (clientBranchId && clientBranchId !== "ALL" && clientBranchId !== "__all__") {
     where.branchId = clientBranchId;

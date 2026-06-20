@@ -30,6 +30,28 @@ import {
   updateClassSchema,
 } from "@/lib/validations/class";
 
+const CLASS_LEVEL_OPTIONS = [
+  { value: "-3", label: "Playgroup (Level -3)" },
+  { value: "-2", label: "Nursery (Level -2)" },
+  { value: "-1", label: "LKG / Junior KG (Level -1)" },
+  { value: "0", label: "UKG / Senior KG (Level 0)" },
+  { value: "1", label: "Class 1 (Level 1)" },
+  { value: "2", label: "Class 2 (Level 2)" },
+  { value: "3", label: "Class 3 (Level 3)" },
+  { value: "4", label: "Class 4 (Level 4)" },
+  { value: "5", label: "Class 5 (Level 5)" },
+  { value: "6", label: "Class 6 (Level 6)" },
+  { value: "7", label: "Class 7 (Level 7)" },
+  { value: "8", label: "Class 8 (Level 8)" },
+  { value: "9", label: "Class 9 (Level 9)" },
+  { value: "10", label: "Class 10 (Level 10)" },
+  { value: "11", label: "Class 11 / FYJC (Level 11)" },
+  { value: "12", label: "Class 12 / SYJC (Level 12)" },
+  { value: "13", label: "First Year Degree (Level 13)" },
+  { value: "14", label: "Second Year Degree (Level 14)" },
+  { value: "15", label: "Third Year Degree (Level 15)" },
+];
+
 interface AcademicYearOption {
   id: string;
   name: string;
@@ -565,18 +587,27 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       }
     }
 
+    const parseNumOrUndef = (val: any) => {
+      const n = typeof val === "string" ? parseFloat(val) : val;
+      return !isNaN(n) ? n : undefined;
+    };
+    const parseIntOrUndef = (val: any) => {
+      const n = typeof val === "string" ? parseInt(val, 10) : val;
+      return !isNaN(n) ? n : undefined;
+    };
+
     // 2. Prepare payload
     const formattedInstallments = installments.map((inst) => ({
       ...(inst.id ? { id: inst.id } : {}),
       name: inst.name,
-      amount: typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount,
-      dueDate: inst.dueDate,
+      amount: parseNumOrUndef(inst.amount),
+      dueDate: inst.dueDate || undefined,
       termType: inst.termType,
       lateFeeActive: inst.lateFeeActive,
       lateFeeType: inst.lateFeeType,
-      lateFeeValue: typeof inst.lateFeeValue === "string" ? parseFloat(inst.lateFeeValue) : (inst.lateFeeValue ?? 0),
-      lateFeePerDay: typeof inst.lateFeePerDay === "string" ? parseFloat(inst.lateFeePerDay) : inst.lateFeePerDay,
-      lateFeeGrace: typeof inst.lateFeeGrace === "string" ? parseInt(inst.lateFeeGrace, 10) : inst.lateFeeGrace,
+      lateFeeValue: parseNumOrUndef(inst.lateFeeValue),
+      lateFeePerDay: parseNumOrUndef(inst.lateFeePerDay),
+      lateFeeGrace: parseIntOrUndef(inst.lateFeeGrace),
     }));
 
     const subjectsPayload: Array<{ id: string } | { subjectMasterId: string }> = [];
@@ -608,7 +639,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           })),
           fees: fees.map((f) => ({
             name: f.name,
-            amount: typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
+            amount: parseNumOrUndef(f.amount),
             termType: f.termType,
           })),
           installments: formattedInstallments,
@@ -627,7 +658,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           fees: fees.map((f) => ({
             ...(f.id ? { id: f.id } : {}),
             name: f.name,
-            amount: typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
+            amount: parseNumOrUndef(f.amount),
             termType: f.termType,
           })),
           installments: formattedInstallments,
@@ -642,8 +673,28 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       return;
     }
 
-    // Sum verification on final submit
+    // Pre-flight validation and Sum verification on final submit
     if (targetTab === "finish") {
+      let hasError = false;
+      const newErrors: Record<string, string> = {};
+
+      fees.forEach((f, idx) => {
+        if (!f.name.trim()) { newErrors[`fees.${idx}.name`] = "Required"; hasError = true; }
+        if (!f.amount || isNaN(parseFloat(f.amount as string))) { newErrors[`fees.${idx}.amount`] = "Required"; hasError = true; }
+      });
+
+      installments.forEach((inst, idx) => {
+        if (!inst.name.trim()) { newErrors[`installments.${idx}.name`] = "Required"; hasError = true; }
+        if (!inst.amount || isNaN(parseFloat(inst.amount as string))) { newErrors[`installments.${idx}.amount`] = "Required"; hasError = true; }
+        if (!inst.dueDate) { newErrors[`installments.${idx}.dueDate`] = "Required"; hasError = true; }
+      });
+
+      if (hasError) {
+        setErrors(prev => ({ ...prev, ...newErrors }));
+        snackbar.show("Please complete all required fields in Fees & Installments.", "error");
+        return;
+      }
+
       const termTypesList = ["FULL_TERM", "HALF_TERM", "SHORT_TERM"] as const;
       for (const t of termTypesList) {
         const termFees = fees.filter(f => f.termType === t);
@@ -681,13 +732,65 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       });
       const data = await res.json();
       if (!data.success) {
-        snackbar.show(data.error?.message ?? "Operation failed", "error");
+        if (data.error?.code === "VALIDATION_ERROR" && Array.isArray(data.error.details)) {
+          const apiErrors: Record<string, string> = {};
+          data.error.details.forEach((err: { field: string; message: string }) => {
+            apiErrors[err.field] = err.message;
+          });
+          setErrors((prev) => ({ ...prev, ...apiErrors }));
+          snackbar.show("Please correct the highlighted errors.", "error");
+        } else {
+          snackbar.show(data.error?.message ?? "Operation failed", "error");
+        }
         return;
       }
 
       if (isNew) {
         setClassId(data.data.id);
         setFormMode("edit");
+      }
+      
+      // Update local state with generated IDs from backend to prevent duplicate creation on next PATCH
+      if (data.data) {
+        if (data.data.sections) {
+          setSections(data.data.sections.map((sec: any) => {
+            const subjectTeachers = sec.sectionSubjectTeachers?.map((sst: any) => {
+              const subjectIndex = data.data.subjects?.findIndex((s: any) => s.id === sst.subject.id);
+              return { subjectIndex: subjectIndex >= 0 ? subjectIndex : 0, staffId: sst.staff.id };
+            }) || [];
+            return {
+              id: sec.id,
+              name: sec.name,
+              classTeacherId: sec.classTeacher?.id ?? null,
+              subjectTeachers,
+              studentCount: sec._count?.studentEnrollments ?? 0,
+            };
+          }));
+        }
+
+        if (data.data.feeStructures) {
+          setFees(data.data.feeStructures.map((f: any) => ({
+            id: f.id,
+            name: f.feeCategory?.name || "",
+            amount: Number(f.amount),
+            termType: f.termType as any,
+          })));
+        }
+
+        if (data.data.feeInstallmentTemplates) {
+          setInstallments(data.data.feeInstallmentTemplates.map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            amount: Number(t.amount),
+            dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split("T")[0] : "",
+            termType: t.termType as any,
+            lateFeeActive: t.lateFeeActive,
+            lateFeeType: t.lateFeeType as any,
+            lateFeeValue: t.lateFeeValue !== undefined ? Number(t.lateFeeValue) : Number(t.lateFeePerDay),
+            lateFeePerDay: Number(t.lateFeePerDay),
+            lateFeeGrace: Number(t.lateFeeGrace),
+          })));
+        }
       }
       
       setStatus(nextStatus);
@@ -858,16 +961,17 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   disabled={false}
                   fullWidth
                 />
-                <TextField
-                  label="Numeric grade"
-                  type="number"
+                <SelectField
+                  label="Class Level (Sequence)"
                   value={numericGrade}
-                  onChange={(e) => setNumericGrade(e.target.value)}
+                  onValueChange={setNumericGrade}
+                  options={CLASS_LEVEL_OPTIONS}
                   error={errors.numericGrade}
-                  placeholder="e.g. 1"
+                  placeholder="Select level"
                   required
                   disabled={hasEnrolledStudents}
                   fullWidth
+                  helperText="Used to arrange classes logically and automate promotions."
                 />
               </div>
 
