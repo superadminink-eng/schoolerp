@@ -19,6 +19,7 @@ import { useRoles } from "@/hooks/use-roles";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 
 
@@ -51,11 +52,18 @@ export function UserListClient() {
   const [searchInput, setSearchInput] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [branchFilter, setBranchFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    setPage(1);
+  }, [roleFilter, branchFilter]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    params.set("limit", "9999");
+    params.set("limit", "100");
+    params.set("page", String(page));
     if (roleFilter !== "ALL") params.set("roleId", roleFilter);
     if (branchFilter !== "ALL") params.set("branchId", branchFilter);
 
@@ -64,13 +72,14 @@ export function UserListClient() {
       const data = await res.json();
       if (data.success) {
         setUsers(data.data);
+        setTotal(data.meta?.total ?? 0);
       }
     } catch {
       // silently fail; loading state will clear
     } finally {
       setLoading(false);
     }
-  }, [roleFilter, branchFilter]);
+  }, [roleFilter, branchFilter, page]);
 
   useEffect(() => {
     fetchUsers();
@@ -223,6 +232,7 @@ export function UserListClient() {
           emptyMessage="No users found"
           quickFilter={searchInput}
         />
+        <Pagination page={page} limit={100} total={total} onPageChange={setPage} />
       </div>
 
       <PermissionGate module="users" action="create">

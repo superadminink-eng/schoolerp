@@ -30,6 +30,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
+import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 
 
@@ -94,6 +95,8 @@ export default function StaffPage() {
   const [searchInput, setSearchInput] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [branchFilter, setBranchFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   // Sync local branch filter with the global session branch
   useEffect(() => {
@@ -104,10 +107,15 @@ export default function StaffPage() {
     }
   }, [session?.user?.branchId, session?.user]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [roleFilter, branchFilter]);
+
   const fetchStaff = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    params.set("limit", "9999");
+    params.set("limit", "100");
+    params.set("page", String(page));
     if (roleFilter !== "ALL") params.set("role", roleFilter);
     if (branchFilter !== "ALL") params.set("branchId", branchFilter);
 
@@ -116,13 +124,14 @@ export default function StaffPage() {
       const data = await res.json();
       if (data.success) {
         setStaff(data.data);
+        setTotal(data.meta?.total ?? 0);
       }
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
-  }, [roleFilter, branchFilter]);
+  }, [roleFilter, branchFilter, page]);
 
   useEffect(() => {
     fetchStaff();
@@ -338,6 +347,7 @@ export default function StaffPage() {
             emptyMessage="No staff members found"
             quickFilter={searchInput}
           />
+          <Pagination page={page} limit={100} total={total} onPageChange={setPage} />
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+import { Pagination } from "@/components/ui/pagination";
 
 
 interface BranchRow {
@@ -30,21 +31,27 @@ export default function BranchesPage() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const fetchBranches = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/branches?limit=9999");
+      const params = new URLSearchParams();
+      params.set("limit", "100");
+      params.set("page", String(page));
+      const res = await fetch(`/api/v1/branches?${params}`);
       const data = await res.json();
       if (data.success) {
         setBranches(data.data);
+        setTotal(data.meta?.total ?? 0);
       }
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchBranches();
@@ -161,6 +168,7 @@ export default function BranchesPage() {
             emptyMessage="No branches found"
             quickFilter={searchInput}
           />
+          <Pagination page={page} limit={100} total={total} onPageChange={setPage} />
         </div>
       </div>
 

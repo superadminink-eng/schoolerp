@@ -20,6 +20,7 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { Icon } from "@/components/ui/icon";
+import { Pagination } from "@/components/ui/pagination";
 import { Card, CardContent } from "@/components/ui/card";
 
 
@@ -90,6 +91,8 @@ export default function StudentsPage() {
   const [houseFilter, setHouseFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   // Sync local branch filter with the global session branch
   useEffect(() => {
@@ -141,10 +144,15 @@ export default function StudentsPage() {
     setSectionFilter("ALL");
   }, [classFilter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [branchFilter, classFilter, sectionFilter, statusFilter, houseFilter, categoryFilter]);
+
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    params.set("limit", "9999");
+    params.set("limit", "100");
+    params.set("page", String(page));
     if (branchFilter !== "ALL") params.set("branchId", branchFilter);
     if (classFilter !== "ALL") params.set("classId", classFilter);
     if (sectionFilter !== "ALL") params.set("sectionId", sectionFilter);
@@ -157,13 +165,14 @@ export default function StudentsPage() {
       const data = await res.json();
       if (data.success) {
         setStudents(data.data);
+        setTotal(data.meta?.total ?? 0);
       }
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, classFilter, sectionFilter, statusFilter, houseFilter, categoryFilter]);
+  }, [branchFilter, classFilter, sectionFilter, statusFilter, houseFilter, categoryFilter, page]);
 
   useEffect(() => {
     fetchStudents();
@@ -522,6 +531,7 @@ export default function StudentsPage() {
             emptyMessage="No students found"
             quickFilter={searchInput}
           />
+          <Pagination page={page} limit={100} total={total} onPageChange={setPage} />
         </div>
       </div>
 

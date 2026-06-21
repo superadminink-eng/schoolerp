@@ -9,7 +9,12 @@ function verifyToken(token: string, secret: string): any | null {
   const expectedSignature = crypto.createHmac("sha256", secret).update(`${header}.${data}`).digest("base64url");
   if (signature !== expectedSignature) return null;
   try {
-    return JSON.parse(Buffer.from(data, "base64url").toString("utf8"));
+    const payload = JSON.parse(Buffer.from(data, "base64url").toString("utf8"));
+    // Reject expired tokens
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+    return payload;
   } catch {
     return null;
   }

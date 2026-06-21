@@ -61,54 +61,54 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       ? { branchId: ctx.branchId }
       : {};
 
-    // 1. Verify application exists and belongs to organization/branch scope
-    const application = await prisma.admissionApplication.findFirst({
-      where: {
-        id,
-        organizationId: ctx.organizationId,
-        ...branchScope,
-      },
-      include: {
-        documents: true,
-      },
-    });
-
-    if (!application) {
-      return apiError("NOT_FOUND", "Application not found in current scope", 404);
-    }
-
-    if (application.status === "ADMITTED") {
-      return apiError("CONFLICT", "Candidate has already been admitted", 409);
-    }
-
-    // Verify age validation: student must be at least 3 years old on admission date
-    const dob = new Date(application.dateOfBirth);
-    const admDate = admissionDate ? new Date(admissionDate) : new Date();
-    const ageAtAdmission = (admDate.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-    if (ageAtAdmission < 3.0) {
-      return apiError("BAD_REQUEST", "Student must be at least 3 years old on the admission date", 400);
-    }
-
-    // 2. Verify section exists and links to the correct class/branch
-    const section = await prisma.section.findFirst({
-      where: {
-        id: sectionId,
-        class: {
-          id: application.classId,
-          branchId: application.branchId,
+    // Promote candidate in a database transaction (all validation inside to prevent TOCTOU race)
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Verify application exists and belongs to organization/branch scope
+      const application = await tx.admissionApplication.findFirst({
+        where: {
+          id,
+          organizationId: ctx.organizationId,
+          ...branchScope,
         },
-      },
-      include: {
-        class: true,
-      },
-    });
+        include: {
+          documents: true,
+        },
+      });
 
-    if (!section) {
-      return apiError("NOT_FOUND", "Selected class section not found", 404);
-    }
+      if (!application) {
+        throw new Error("APPLICATION_NOT_FOUND: Application not found in current scope");
+      }
 
-    // 3. Promote candidate in a database transaction
-    const student = await prisma.$transaction(async (tx) => {
+      if (application.status === "ADMITTED") {
+        throw new Error("ALREADY_ADMITTED: Candidate has already been admitted");
+      }
+
+      // Verify age validation: student must be at least 3 years old on admission date
+      const dob = new Date(application.dateOfBirth);
+      const admDate = admissionDate ? new Date(admissionDate) : new Date();
+      const ageAtAdmission = (admDate.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      if (ageAtAdmission < 3.0) {
+        throw new Error("AGE_VALIDATION: Student must be at least 3 years old on the admission date");
+      }
+
+      // 2. Verify section exists and links to the correct class/branch
+      const section = await tx.section.findFirst({
+        where: {
+          id: sectionId,
+          class: {
+            id: application.classId,
+            branchId: application.branchId,
+          },
+        },
+        include: {
+          class: true,
+        },
+      });
+
+      if (!section) {
+        throw new Error("SECTION_NOT_FOUND: Selected class section not found");
+      }
+
       // Create student admission number
       const admissionNo = await generateUniqueAdmissionNo(tx, ctx.organizationId);
 
@@ -382,45 +382,56 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         }
       }
 
-      // Update application status to ADMITTED
-      await tx.admissionApplication.update({
-        where: { id },
+      // Atomic status update — prevents race if another request admitted concurrently
+      const statusUpdate = await tx.admissionApplication.updateMany({
+        where: { id, status: { not: "ADMITTED" } },
         data: { status: "ADMITTED" },
       });
+      if (statusUpdate.count === 0) {
+        throw new Error("ALREADY_ADMITTED: Candidate has already been admitted");
+      }
 
-      return studentRecord;
+      return { student: studentRecord, applicationNo: application.applicationNo };
     }, { timeout: 30000 });
 
     await logAction({
       organizationId: ctx.organizationId,
-      branchId: student.branchId,
+      branchId: result.student.branchId,
       userId: ctx.userId,
       action: "CREATE",
       module: "STUDENTS",
-      entityId: student.id,
-      details: { admissionNo: student.admissionNo, name: `${student.firstName} ${student.lastName}`, promotedFrom: id }
+      entityId: result.student.id,
+      details: { admissionNo: result.student.admissionNo, name: `${result.student.firstName} ${result.student.lastName}`, promotedFrom: id }
     });
 
     await logAction({
       organizationId: ctx.organizationId,
-      branchId: student.branchId,
+      branchId: result.student.branchId,
       userId: ctx.userId,
       action: "PROMOTE",
       module: "ADMISSIONS",
       entityId: id,
-      details: { applicationNo: application.applicationNo, studentId: student.id }
+      details: { applicationNo: result.applicationNo, studentId: result.student.id }
     });
 
-    return apiSuccess(student, undefined, 201);
+    return apiSuccess(result.student, undefined, 201);
   } catch (error: any) {
     console.error("Promote candidate error:", error);
+    const msg = error?.message || "";
+    if (msg.startsWith("APPLICATION_NOT_FOUND:") || msg.startsWith("SECTION_NOT_FOUND:")) {
+      return apiError("NOT_FOUND", msg.split(": ")[1], 404);
+    }
+    if (msg.startsWith("ALREADY_ADMITTED:")) {
+      return apiError("CONFLICT", msg.split(": ")[1], 409);
+    }
     if (
-      error?.message?.startsWith("FEE_STRUCTURE_UNCONFIGURED:") ||
-      error?.message?.startsWith("INSTALLMENT_AMOUNT_MISMATCH:") ||
-      error?.message?.startsWith("OVERPAYMENT:") ||
-      error?.message?.startsWith("MISSING_PAYMENT_METHOD:")
+      msg.startsWith("AGE_VALIDATION:") ||
+      msg.startsWith("FEE_STRUCTURE_UNCONFIGURED:") ||
+      msg.startsWith("INSTALLMENT_AMOUNT_MISMATCH:") ||
+      msg.startsWith("OVERPAYMENT:") ||
+      msg.startsWith("MISSING_PAYMENT_METHOD:")
     ) {
-      return apiError("BAD_REQUEST", error.message.split(": ")[1], 400);
+      return apiError("BAD_REQUEST", msg.split(": ")[1], 400);
     }
     return apiError("INTERNAL_ERROR", "Failed to promote candidate to student", 500);
   }

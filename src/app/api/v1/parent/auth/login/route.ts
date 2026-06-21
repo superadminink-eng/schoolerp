@@ -298,7 +298,12 @@ export async function POST(req: NextRequest) {
     });
 
     const secret = process.env.AUTH_SECRET || "auth_secret_fallback";
-    const token = signToken({ userId: user.id, role: "PARENT", parentId: user.parent.id }, secret);
+    const token = signToken({
+      userId: user.id,
+      role: "PARENT",
+      parentId: user.parent.id,
+      exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
+    }, secret);
 
     return apiSuccess({
       token,

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Icon } from "@/components/ui/icon";
+import { Pagination } from "@/components/ui/pagination";
 import { useSession } from "next-auth/react";
 
 interface AcademicYear {
@@ -68,6 +69,9 @@ export default function BulkPromotionPage() {
   const [students, setStudents] = useState<StudentInList[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [studentPage, setStudentPage] = useState(1);
+  const [studentTotal, setStudentTotal] = useState(0);
+  const [hasLoadedStudents, setHasLoadedStudents] = useState(false);
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -179,21 +183,37 @@ export default function BulkPromotionPage() {
     fetchSections();
   }, [targetClassId]);
 
+  // Reset page when source section changes
+  useEffect(() => {
+    setStudentPage(1);
+    setHasLoadedStudents(false);
+  }, [sourceSectionId]);
+
   // Fetch students for Step 3
-  const fetchSourceStudents = async () => {
+  const fetchStudentsPage = useCallback(async (pageNum: number, isInitialLoad: boolean) => {
     if (!sourceSectionId || !sourceAcademicYearId) {
-      snackbar.show("Please select source class, section and academic year", "warning");
+      if (isInitialLoad) {
+        snackbar.show("Please select source class, section and academic year", "warning");
+      }
       return;
     }
     setLoadingStudents(true);
     try {
-      const res = await fetch(`/api/v1/students?sectionId=${sourceSectionId}&limit=9999`);
+      const params = new URLSearchParams();
+      params.set("sectionId", sourceSectionId);
+      params.set("limit", "100");
+      params.set("page", String(pageNum));
+      const res = await fetch(`/api/v1/students?${params}`);
       const data = await res.json();
       if (data.success) {
         setStudents(data.data);
-        // Pre-select all students by default
-        setSelectedStudentIds(data.data.map((s: StudentInList) => s.id));
-        setStep(3);
+        setStudentTotal(data.meta?.total ?? 0);
+        if (isInitialLoad) {
+          // Pre-select all students by default on initial load
+          setSelectedStudentIds(data.data.map((s: StudentInList) => s.id));
+          setHasLoadedStudents(true);
+          setStep(3);
+        }
       } else {
         snackbar.show(data.error?.message ?? "Failed to load students", "error");
       }
@@ -202,7 +222,19 @@ export default function BulkPromotionPage() {
     } finally {
       setLoadingStudents(false);
     }
+  }, [sourceSectionId, sourceAcademicYearId, snackbar]);
+
+  const fetchSourceStudents = () => {
+    setStudentPage(1);
+    fetchStudentsPage(1, true);
   };
+
+  // Re-fetch on page change (after initial load)
+  useEffect(() => {
+    if (hasLoadedStudents && studentPage > 1) {
+      fetchStudentsPage(studentPage, false);
+    }
+  }, [studentPage, hasLoadedStudents, fetchStudentsPage]);
 
   const calculateDues = (student: StudentInList) => {
     if (!student.invoices) return 0;
@@ -516,6 +548,7 @@ export default function BulkPromotionPage() {
                         );
                       })}
                     </div>
+                    <Pagination page={studentPage} limit={100} total={studentTotal} onPageChange={setStudentPage} />
                   </div>
                 )}
 

@@ -29,38 +29,41 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    const application = await prisma.admissionApplication.findFirst({
-      where: {
-        id,
-        organizationId: ctx.organizationId,
-        ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
-      },
-    });
+    // Wrap in transaction to prevent TOCTOU race on status check
+    const updated = await prisma.$transaction(async (tx) => {
+      const application = await tx.admissionApplication.findFirst({
+        where: {
+          id,
+          organizationId: ctx.organizationId,
+          ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
+        },
+      });
 
-    if (!application) {
-      return apiError("NOT_FOUND", "Application not found in current scope", 404);
-    }
+      if (!application) {
+        throw new Error("NOT_FOUND: Application not found in current scope");
+      }
 
-    if (application.status === "ADMITTED" || application.status === "REJECTED" || application.status === "WITHDRAWN") {
-      return apiError("BAD_REQUEST", `Cannot withdraw application with status ${application.status}`, 400);
-    }
+      if (application.status === "ADMITTED" || application.status === "REJECTED" || application.status === "WITHDRAWN") {
+        throw new Error(`BAD_STATUS: Cannot withdraw application with status ${application.status}`);
+      }
 
-    const updated = await prisma.admissionApplication.update({
-      where: { id },
-      data: {
-        status: "WITHDRAWN",
-        statusBeforeArchive: application.status,
-        archiveReason: reason,
-        verifiedAt: new Date(),
-        verifiedById: ctx.userId || "system",
-      },
-      include: {
-        documents: true,
-        examResult: true,
-        class: { select: { id: true, name: true } },
-        branch: { select: { id: true, name: true } },
-        academicYear: { select: { id: true, name: true } },
-      },
+      return await tx.admissionApplication.update({
+        where: { id },
+        data: {
+          status: "WITHDRAWN",
+          statusBeforeArchive: application.status,
+          archiveReason: reason,
+          verifiedAt: new Date(),
+          verifiedById: ctx.userId || "system",
+        },
+        include: {
+          documents: true,
+          examResult: true,
+          class: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, name: true } },
+        },
+      });
     });
 
     await logAction({
@@ -74,8 +77,15 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     });
 
     return apiSuccess(updated);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Withdraw applicant error:", error);
+    const msg = error?.message || "";
+    if (msg.startsWith("NOT_FOUND:")) {
+      return apiError("NOT_FOUND", msg.split(": ")[1], 404);
+    }
+    if (msg.startsWith("BAD_STATUS:")) {
+      return apiError("BAD_REQUEST", msg.split(": ")[1], 400);
+    }
     return apiError("INTERNAL_ERROR", "Failed to withdraw applicant", 500);
   }
 }

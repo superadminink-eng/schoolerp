@@ -1,8 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 
+function buildDatasourceUrl(): string | undefined {
+  const url = process.env.DATABASE_URL;
+  if (!url) return undefined;
+  // Append connection pool settings if not already present
+  if (url.includes("connection_limit")) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}connection_limit=10&pool_timeout=20`;
+}
+
 const prismaClientSingleton = () => {
   const basePrisma = new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+    datasourceUrl: buildDatasourceUrl(),
   });
 
   return basePrisma.$extends({

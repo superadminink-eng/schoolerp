@@ -37,6 +37,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useBranches } from "@/hooks/use-branches";
+import { Pagination } from "@/components/ui/pagination";
 import { createNoticeSchema, updateNoticeSchema } from "@/lib/validations/notice";
 
 interface NoticeRow {
@@ -118,6 +119,8 @@ export default function NoticesPage() {
   const [notices, setNotices] = useState<NoticeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Dialog state
@@ -143,17 +146,21 @@ export default function NoticesPage() {
   const fetchNotices = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/notices?limit=9999");
+      const params = new URLSearchParams();
+      params.set("limit", "100");
+      params.set("page", String(page));
+      const res = await fetch(`/api/v1/notices?${params}`);
       const data = await res.json();
       if (data.success) {
         setNotices(data.data);
+        setTotal(data.meta?.total ?? 0);
       }
     } catch {
       /* silently fail */
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchNotices();
@@ -541,6 +548,7 @@ export default function NoticesPage() {
             emptyMessage="No notices found"
             quickFilter={searchInput}
           />
+          <Pagination page={page} limit={100} total={total} onPageChange={setPage} />
         </div>
       </div>
 

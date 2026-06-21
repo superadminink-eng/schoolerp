@@ -54,14 +54,20 @@ export async function GET(req: NextRequest) {
     ]),
     // Attendance rates (latest recorded date metadata)
     prisma.studentAttendance.findFirst({
-      where: branchId ? { branchId } : {},
+      where: {
+        branch: {
+          organizationId: orgId,
+          ...(branchId ? { id: branchId } : {}),
+        },
+      },
       orderBy: { date: "desc" },
       select: { date: true },
     }),
     // Financial Health aggregate
     prisma.invoice.aggregate({
       where: {
-        student: branchId ? { branchId } : {},
+        organizationId: orgId,
+        ...(branchId ? { student: { branchId } } : {}),
         status: { not: "CANCELLED" },
       },
       _sum: {
@@ -72,7 +78,8 @@ export async function GET(req: NextRequest) {
     // Recent payments log
     prisma.feePayment.findMany({
       where: {
-        student: branchId ? { branchId } : {},
+        organizationId: orgId,
+        ...(branchId ? { student: { branchId } } : {}),
       },
       orderBy: { paidAt: "desc" },
       take: 5,
@@ -93,7 +100,7 @@ export async function GET(req: NextRequest) {
         isPublished: true,
         OR: [
           { branchId: null },
-          { branchId: branchId || undefined },
+          ...(branchId ? [{ branchId }] : []),
         ],
       },
       orderBy: { publishedAt: "desc" },
@@ -102,7 +109,10 @@ export async function GET(req: NextRequest) {
     // Academic Events
     prisma.event.findMany({
       where: {
-        branchId: branchId || undefined,
+        branch: {
+          organizationId: orgId,
+          ...(branchId ? { id: branchId } : {}),
+        },
         startDate: {
           gte: new Date(),
         },
@@ -113,16 +123,16 @@ export async function GET(req: NextRequest) {
     // Operational Status Counts
     Promise.all([
       prisma.class.count({
-        where: { branchId: branchId || undefined },
+        where: { organizationId: orgId, ...(branchId ? { branchId } : {}) },
       }),
       prisma.section.count({
-        where: { class: { branchId: branchId || undefined } },
+        where: { class: { organizationId: orgId, ...(branchId ? { branchId } : {}) } },
       }),
       prisma.vehicle.count({
-        where: { branchId: branchId || undefined },
+        where: { branch: { organizationId: orgId, ...(branchId ? { id: branchId } : {}) } },
       }),
       prisma.book.count({
-        where: { branchId: branchId || undefined },
+        where: { branch: { organizationId: orgId, ...(branchId ? { id: branchId } : {}) } },
       }),
     ]),
     // Onboarding Telemetry Status
@@ -145,20 +155,24 @@ export async function GET(req: NextRequest) {
   // 2. Attendance rate details (dependent query block)
   let attendanceSummary = { present: 0, absent: 0, late: 0, total: 0, rate: 0 };
   if (latestAttendance) {
-    const logs = await prisma.studentAttendance.findMany({
+    const grouped = await prisma.studentAttendance.groupBy({
+      by: ["status"],
       where: {
-        branchId: branchId || undefined,
+        branch: {
+          organizationId: orgId,
+          ...(branchId ? { id: branchId } : {}),
+        },
         date: latestAttendance.date,
       },
-      select: { status: true },
+      _count: true,
     });
 
-    logs.forEach(log => {
-      attendanceSummary.total++;
-      if (log.status === "PRESENT") attendanceSummary.present++;
-      else if (log.status === "ABSENT") attendanceSummary.absent++;
-      else if (log.status === "LATE") attendanceSummary.late++;
-    });
+    for (const g of grouped) {
+      attendanceSummary.total += g._count;
+      if (g.status === "PRESENT") attendanceSummary.present = g._count;
+      else if (g.status === "ABSENT") attendanceSummary.absent = g._count;
+      else if (g.status === "LATE") attendanceSummary.late = g._count;
+    }
 
     if (attendanceSummary.total > 0) {
       attendanceSummary.rate = Math.round(

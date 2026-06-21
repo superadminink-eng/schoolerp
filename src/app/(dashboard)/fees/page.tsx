@@ -17,6 +17,7 @@ import { useBranches } from "@/hooks/use-branches";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Icon } from "@/components/ui/icon";
+import { Pagination } from "@/components/ui/pagination";
 
 interface FeeRow {
   studentId: string;
@@ -58,6 +59,8 @@ export default function FeesPage() {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [branchFilter, setBranchFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   // Sync local branch filter with the global session branch
   useEffect(() => {
@@ -66,11 +69,16 @@ export default function FeesPage() {
     }
   }, [session?.user?.branchId]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [branchFilter]);
+
   const fetchFees = useCallback(async () => {
     if (permissionsLoading || !can("fees", "read")) return;
     setLoading(true);
     const params = new URLSearchParams();
-    params.set("limit", "9999");
+    params.set("limit", "100");
+    params.set("page", String(page));
     if (branchFilter !== "ALL") params.set("branchId", branchFilter);
 
     try {
@@ -78,13 +86,14 @@ export default function FeesPage() {
       const data = await res.json();
       if (data.success) {
         setFees(data.data);
+        setTotal(data.meta?.total ?? 0);
       }
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, permissionsLoading, can]);
+  }, [branchFilter, page, permissionsLoading, can]);
 
   useEffect(() => {
     fetchFees();
@@ -226,6 +235,7 @@ export default function FeesPage() {
             emptyMessage="No pending fees found"
             quickFilter={searchInput}
           />
+          <Pagination page={page} limit={100} total={total} onPageChange={setPage} />
         </div>
       </div>
     </div>
