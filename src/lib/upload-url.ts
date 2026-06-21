@@ -27,6 +27,6 @@ export function getUploadUrl(relativePath: string | null | undefined): string {
     return `${base}/${rel}`;
   }
 
-  // 4. Fallback to local server path (safely prefixing slash)
-  return cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+  // 4. Fallback to API proxy (which correctly routes to cPanel or local)
+  return `/api/v1/uploads?path=${encodeURIComponent(cleanPath)}`;
 }
