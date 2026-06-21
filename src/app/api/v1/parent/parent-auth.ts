@@ -26,14 +26,19 @@ export async function getParentUser(req: NextRequest) {
   const rawToken = authHeader.substring(7).trim();
   if (!rawToken) return null;
 
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) {
+    throw new Error("AUTH_SECRET environment variable is not configured.");
+  }
+
   let userId: string | null = null;
 
-  // Fallback for Playwright E2E tests in dev/test environment
-  if (process.env.NODE_ENV !== "production" && rawToken.startsWith("parent-mock-token-")) {
+  // Hardened Playwright E2E mock token bypass (explicit opt-in only)
+  const allowMock = process.env.ALLOW_MOCK_AUTH === "true";
+  if (allowMock && rawToken.startsWith("parent-mock-token-")) {
     userId = rawToken.replace("parent-mock-token-", "").trim();
   } else {
-    // Production / Secure Mode: decode and verify JWT
-    const secret = process.env.AUTH_SECRET || "auth_secret_fallback";
+    // Secure JWT Verification
     const payload = await verifyToken(rawToken, secret);
     if (payload && payload.role === "PARENT") {
       userId = payload.userId as string;
@@ -50,6 +55,9 @@ export async function getParentUser(req: NextRequest) {
         parent: {
           include: {
             children: {
+              where: {
+                student: { deletedAt: null },
+              },
               select: {
                 studentId: true,
               },

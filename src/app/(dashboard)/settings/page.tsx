@@ -7,6 +7,7 @@ import { TextField } from "@/components/ui/text-field";
 import { Card, CardContent } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { getUploadUrl } from "@/lib/upload-url";
 
 interface OrganizationData {
   id: string;
@@ -97,7 +98,7 @@ export default function SettingsPage() {
           const branch = data.data.mainBranch as BranchData;
           const academicYear = data.data.academicYear as AcademicYearData;
 
-          const logoPath = organization?.logo ? `/${organization.logo.replace(/\\/g, "/")}` : null;
+          const logoPath = organization?.logo ? getUploadUrl(organization.logo) : null;
 
           // Save backup for dirty state comparisons
           setOriginalData({
@@ -314,7 +315,7 @@ export default function SettingsPage() {
         setRemoveLogo(false);
         setConfirmDelete(false);
 
-        const logoPath = organization?.logo ? `/${organization.logo.replace(/\\/g, "/")}` : null;
+        const logoPath = organization?.logo ? getUploadUrl(organization.logo) : null;
 
         // Update backup
         setOriginalData({

@@ -6,6 +6,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Avatar from "@radix-ui/react-avatar";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { getUploadUrl } from "@/lib/upload-url";
 
 import { useState, useEffect } from "react";
 
@@ -49,7 +50,7 @@ export function UserMenu({ name, email, image, roleName }: UserMenuProps) {
       >
         <Avatar.Root className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary">
           <Avatar.Image
-            src={image ?? undefined}
+            src={image ? getUploadUrl(image) : undefined}
             alt={name}
             className="h-full w-full object-cover"
           />

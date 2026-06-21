@@ -58,12 +58,33 @@ export class UploadError extends Error {
 /**
  * Construct a full URL for a relative upload path (server-side).
  */
-export function getUploadUrl(relativePath: string): string {
+export function getUploadUrl(relativePath: string | null | undefined): string {
+  if (!relativePath) return "";
+  const trimmed = relativePath.trim();
+  if (trimmed === "") return "";
+
+  // 1. Prevent double-prefixing of absolute URLs or Data URLs
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:")
+  ) {
+    return trimmed;
+  }
+
+  // 2. Normalize Windows-style backslashes to unix-style forward slashes
+  const cleanPath = trimmed.replace(/\\/g, "/");
+
+  // 3. Resolve base upload URL if set
   const baseUrl = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL;
   if (baseUrl && baseUrl.trim() !== "") {
-    return `${baseUrl.trim().replace(/\/$/, "")}/${relativePath}`;
+    const base = baseUrl.trim().replace(/\/$/, "");
+    const rel = cleanPath.replace(/^\//, "");
+    return `${base}/${rel}`;
   }
-  return `/${relativePath}`;
+
+  // 4. Fallback to local server path (safely prefixing slash)
+  return cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
 }
 
 /**

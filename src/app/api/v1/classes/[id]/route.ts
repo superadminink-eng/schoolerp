@@ -24,10 +24,12 @@ const classIncludes = {
     },
   },
   sections: {
+    where: { deletedAt: null },
     orderBy: { name: "asc" as const },
     include: {
-      classTeacher: { select: { id: true, name: true } },
+      classTeacher: { select: { id: true, name: true, deletedAt: true } },
       sectionSubjectTeachers: {
+        where: { staff: { deletedAt: null } },
         include: {
           subject: { select: { id: true, name: true, code: true } },
           staff: { select: { id: true, name: true } },
@@ -123,7 +125,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       include: {
         subjects: true,
         sections: {
-          include: { sectionSubjectTeachers: true },
+          where: { deletedAt: null },
+          include: {
+            sectionSubjectTeachers: {
+              where: { staff: { deletedAt: null } },
+            },
+          },
         },
         feeStructures: {
           include: { feeCategory: { select: { name: true } } },

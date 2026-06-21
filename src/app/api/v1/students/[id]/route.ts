@@ -94,7 +94,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     // Compute fee totals for this student
     const invoiceAgg = await prisma.invoice.aggregate({
-      where: { studentId: student.id, status: { not: "CANCELLED" } },
+      where: { studentId: student.id, status: { not: "CANCELLED" }, deletedAt: null },
       _sum: { totalAmount: true, paidAmount: true },
     });
 

@@ -60,6 +60,9 @@ export async function POST(req: NextRequest) {
         parent: {
           include: {
             children: {
+              where: {
+                student: { deletedAt: null },
+              },
               include: {
                 student: {
                   include: {
@@ -303,7 +306,11 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    const secret = process.env.AUTH_SECRET || "auth_secret_fallback";
+    const secret = process.env.AUTH_SECRET;
+    if (!secret) {
+      console.error("[ParentLogin] AUTH_SECRET environment variable is not configured.");
+      return apiError("INTERNAL_ERROR", "Authentication service configuration error", 500);
+    }
     const token = await signToken({ userId: user.id, role: "PARENT", parentId: user.parent.id }, secret);
 
     return apiSuccess({

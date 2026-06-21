@@ -91,10 +91,11 @@ export async function GET(req: NextRequest) {
             },
           },
           feePayments: {
+            where: { deletedAt: null },
             select: { amount: true },
           },
           invoices: {
-            where: { status: { not: "CANCELLED" } },
+            where: { status: { not: "CANCELLED" }, deletedAt: null },
             select: { totalAmount: true, paidAmount: true },
           },
         },
@@ -114,6 +115,7 @@ export async function GET(req: NextRequest) {
             where: {
               studentId: { in: studentIds },
               status: { not: "CANCELLED" },
+              deletedAt: null,
             },
             _sum: { totalAmount: true, paidAmount: true },
           })

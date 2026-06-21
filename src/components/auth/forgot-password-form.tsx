@@ -6,6 +6,7 @@ import { TextField } from "@/components/ui/text-field";
 import { Card, CardContent } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import Link from "next/link";
+import Script from "next/script";
 import { AuthErrorAlert } from "./auth-error-alert";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,6 +36,56 @@ export function ForgotPasswordForm() {
     return () => clearTimeout(timer);
   }, [countdown]);
 
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+
+  useEffect(() => {
+    if (sent) return;
+
+    let mounted = true;
+    const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || "1x00000000000000000000AA";
+
+    const renderTurnstile = () => {
+      const container = document.getElementById("turnstile-container");
+      if (container) {
+        container.innerHTML = "";
+      }
+
+      if (mounted && (window as any).turnstile) {
+        try {
+          (window as any).turnstile.render("#turnstile-container", {
+            sitekey: siteKey,
+            appearance: "interaction-only",
+            callback: (token: string) => {
+              if (mounted) setTurnstileToken(token);
+            },
+            "expired-callback": () => {
+              if (mounted) setTurnstileToken(null);
+            },
+            "error-callback": () => {
+              if (mounted) setTurnstileToken(null);
+            }
+          });
+        } catch (e) {
+          console.error("Turnstile render error:", e);
+        }
+      }
+    };
+
+    if ((window as any).turnstile) {
+      setTimeout(renderTurnstile, 100);
+    }
+
+    return () => {
+      mounted = false;
+      if ((window as any).turnstile) {
+        try {
+          (window as any).turnstile.remove();
+        } catch (e) {}
+      }
+    };
+  }, [sent, turnstileLoaded]);
+
   const {
     register,
     handleSubmit: handleFormSubmit,
@@ -55,7 +106,7 @@ export function ForgotPasswordForm() {
       const res = await fetch("/api/v1/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailAddress }),
+        body: JSON.stringify({ email: emailAddress, turnstileToken }),
       });
       const data = await res.json();
       
@@ -68,6 +119,12 @@ export function ForgotPasswordForm() {
     } catch (err: any) {
       console.error("Forgot password error:", err);
       setError(err.message || "Failed to send reset email. Please try again later.");
+      // Reset Turnstile on error so user can attempt again
+      if ((window as any).turnstile) {
+        try {
+          (window as any).turnstile.reset();
+        } catch (e) {}
+      }
     } finally {
       setLoading(false);
     }
@@ -85,6 +142,11 @@ export function ForgotPasswordForm() {
 
   return (
     <>
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        strategy="afterInteractive"
+        onReady={() => setTurnstileLoaded(true)}
+      />
       <Card className="border border-slate-200/40 dark:border-slate-800/40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xl shadow-slate-100/30 dark:shadow-none rounded-2xl overflow-hidden">
         <CardContent className="p-6 md:p-8">
           {sent ? (
@@ -137,13 +199,17 @@ export function ForgotPasswordForm() {
                   {...register("email")}
                 />
 
+                {/* Cloudflare Turnstile Container (Collapses to 0px when invisible) */}
+                <div id="turnstile-container" className="my-2 flex justify-center"></div>
+
                 <Button
                   type="submit"
                   variant="filled"
                   fullWidth
                   loading={loading}
+                  disabled={loading || (!!process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY && !turnstileToken)}
                   icon="send"
-                  className="h-10 text-xs font-bold uppercase tracking-wider bg-primary text-white rounded-lg transition-transform active:scale-98 shadow-sm cursor-pointer border-none"
+                  className="h-10 text-xs font-bold uppercase tracking-wider bg-primary text-white rounded-lg transition-transform active:scale-98 shadow-sm cursor-pointer border-none disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Send Reset Link
                 </Button>

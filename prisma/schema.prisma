@@ -19,6 +19,7 @@ model Organization {
   plan                  PlanType               @default(FREE)
   isActive              Boolean                @default(true)
   isSetupComplete       Boolean                @default(false)
+  timezone              String                 @default("Asia/Kolkata")
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   academicYears         AcademicYear[]
@@ -1227,5 +1228,18 @@ model IdempotencyKey {
   @@index([organizationId])
   @@map("idempotency_keys")
 }
+
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  count     Int      @default(1)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("rate_limits")
+}
+
 
 

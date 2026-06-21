@@ -144,6 +144,7 @@ export class FeeService {
       invoices: {
         some: {
           status: { in: ["PENDING", "PARTIAL", "OVERDUE"] as InvoiceStatus[] },
+          deletedAt: null,
         },
       },
       ...buildSearchWhere(search, ["firstName", "lastName", "admissionNo"]),
@@ -172,7 +173,7 @@ export class FeeService {
             },
           },
           invoices: {
-            where: { status: { not: "CANCELLED" } },
+            where: { status: { not: "CANCELLED" }, deletedAt: null },
             select: {
               id: true,
               totalAmount: true,

@@ -5,6 +5,16 @@ const prismaClientSingleton = () => {
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
   });
 
+  /**
+   * WARNING: Prisma Client Extensions query filters (like setting deletedAt: null)
+   * ONLY apply to top-level model actions (findMany, findFirst, count, etc.).
+   * They do NOT automatically apply to:
+   * 1. Relation loads via "include" or "select" (e.g., student.findFirst({ include: { invoices: true } }))
+   * 2. Database aggregates (e.g. invoice.groupBy, invoice.aggregate)
+   * 3. Nested filtering inside "where" (e.g., student.findMany({ where: { invoices: { some: { ... } } } }))
+   *
+   * You MUST explicitly pass `deletedAt: null` in these relation array and aggregate queries.
+   */
   return basePrisma.$extends({
     query: {
       student: {

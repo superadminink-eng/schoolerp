@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { NavItem } from "./nav-item";
 import type { NavItemData } from "./nav-item";
 import { cn } from "@/lib/utils";
+import { getUploadUrl } from "@/lib/upload-url";
 
 interface DrawerContentProps {
   items: NavItemData[];
@@ -22,7 +23,7 @@ function DrawerContent({
   onItemClick,
   className,
 }: DrawerContentProps) {
-  const logoUrl = orgLogo ? `/${orgLogo.replace(/\\/g, "/")}` : null;
+  const logoUrl = orgLogo ? getUploadUrl(orgLogo) : null;
 
   return (
     <div

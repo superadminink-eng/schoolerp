@@ -47,10 +47,11 @@ export async function GET(req: NextRequest) {
               },
             },
             sections: {
+              where: { deletedAt: null },
               select: {
                 id: true,
                 name: true,
-                classTeacher: { select: { id: true, name: true } },
+                classTeacher: { select: { id: true, name: true, deletedAt: true } },
                 _count: {
                   select: {
                     studentEnrollments: {
@@ -65,7 +66,12 @@ export async function GET(req: NextRequest) {
               },
               orderBy: { name: "asc" },
             },
-            _count: { select: { sections: true, subjects: true } },
+            _count: {
+              select: {
+                sections: { where: { deletedAt: null } },
+                subjects: true,
+              },
+            },
           },
           orderBy: [{ numericGrade: "asc" }, { name: "asc" }],
           skip: (page - 1) * limit,
@@ -79,7 +85,7 @@ export async function GET(req: NextRequest) {
         sections: secs.map((s) => ({
           id: s.id,
           name: s.name,
-          classTeacher: s.classTeacher,
+          classTeacher: s.classTeacher?.deletedAt ? null : s.classTeacher,
         })),
         totalStudents: secs.reduce(
           (sum, s) => sum + s._count.studentEnrollments,
@@ -399,10 +405,12 @@ export async function POST(req: NextRequest) {
       include: {
         subjects: { orderBy: { name: "asc" } },
         sections: {
+          where: { deletedAt: null },
           orderBy: { name: "asc" },
           include: {
-            classTeacher: { select: { id: true, name: true } },
+            classTeacher: { select: { id: true, name: true, deletedAt: true } },
             sectionSubjectTeachers: {
+              where: { staff: { deletedAt: null } },
               include: {
                 subject: { select: { id: true, name: true, code: true } },
                 staff: { select: { id: true, name: true } },
@@ -421,7 +429,17 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return apiSuccess(full, undefined, 201);
+    const fullFormatted = full
+      ? {
+          ...full,
+          sections: full.sections.map((s: any) => ({
+            ...s,
+            classTeacher: s.classTeacher?.deletedAt ? null : s.classTeacher,
+          })),
+        }
+      : null;
+
+    return apiSuccess(fullFormatted, undefined, 201);
   } catch (error) {
     console.error("Create class error:", error);
     return apiError("INTERNAL_ERROR", "Failed to create class", 500);

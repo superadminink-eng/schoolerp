@@ -14,10 +14,12 @@ const classIncludes = {
     },
   },
   sections: {
+    where: { deletedAt: null },
     orderBy: { name: "asc" as const },
     include: {
-      classTeacher: { select: { id: true, name: true } },
+      classTeacher: { select: { id: true, name: true, deletedAt: true } },
       sectionSubjectTeachers: {
+        where: { staff: { deletedAt: null } },
         include: {
           subject: { select: { id: true, name: true, code: true } },
           staff: { select: { id: true, name: true } },
@@ -70,8 +72,14 @@ export class AcademicService {
       throw new Error(`CONFLICT:Cannot delete: ${enrollmentCount} student(s) enrolled in this class`);
     }
 
-    // Cascade deletes sections + subjects + fee structures via Prisma onDelete: Cascade
-    await prisma.class.delete({ where: { id } });
+    // Cascade soft-deletes sections via explicit update transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.section.updateMany({
+        where: { classId: id },
+        data: { deletedAt: new Date() },
+      });
+      await tx.class.delete({ where: { id } });
+    });
 
     return { id, deleted: true };
   }
@@ -88,7 +96,12 @@ export class AcademicService {
       include: {
         subjects: true,
         sections: {
-          include: { sectionSubjectTeachers: true },
+          where: { deletedAt: null },
+          include: {
+            sectionSubjectTeachers: {
+              where: { staff: { deletedAt: null } },
+            },
+          },
         },
         feeStructures: {
           include: { feeCategory: { select: { name: true } } },

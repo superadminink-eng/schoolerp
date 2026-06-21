@@ -12,6 +12,7 @@ import { PermissionGate } from "@/components/shared/permission-gate";
 import { FormSkeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { getUploadUrl } from "@/lib/upload-url";
 
 interface StudentData {
   id: string;
@@ -370,7 +371,7 @@ export default function StudentProfilePage() {
                 <div className="relative w-28 h-28 rounded-full border-2 border-outline-variant/50 overflow-hidden bg-slate-100 flex items-center justify-center shrink-0">
                   {student.photo ? (
                     <img
-                      src={`/${student.photo}`}
+                      src={getUploadUrl(student.photo)}
                       alt={`${student.firstName} ${student.lastName}`}
                       className="w-full h-full object-cover"
                     />
@@ -678,7 +679,7 @@ export default function StudentProfilePage() {
                       {/* Download link */}
                       {student.idDocument ? (
                         <a
-                          href={`/${student.idDocument}`}
+                          href={getUploadUrl(student.idDocument)}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1.5 px-4.5 py-2.5 rounded-xl text-xs font-bold text-primary bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-all cursor-pointer self-start md:self-auto"

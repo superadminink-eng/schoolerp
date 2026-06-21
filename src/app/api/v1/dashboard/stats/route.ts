@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
       where: {
         student: branchId ? { branchId } : {},
         status: { not: "CANCELLED" },
+        deletedAt: null,
       },
       _sum: {
         totalAmount: true,
@@ -116,7 +117,12 @@ export async function GET(req: NextRequest) {
         where: { branchId: branchId || undefined },
       }),
       prisma.section.count({
-        where: { class: { branchId: branchId || undefined } },
+        where: {
+          class: {
+            branchId: branchId || undefined,
+            deletedAt: null,
+          }
+        },
       }),
       prisma.vehicle.count({
         where: { branchId: branchId || undefined },
@@ -137,7 +143,12 @@ export async function GET(req: NextRequest) {
         where: { organizationId: orgId },
       }),
       prisma.section.count({
-        where: { class: { organizationId: orgId } },
+        where: {
+          class: {
+            organizationId: orgId,
+            deletedAt: null,
+          }
+        },
       }),
     ]),
   ]);
