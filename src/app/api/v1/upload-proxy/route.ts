@@ -13,12 +13,27 @@ export async function GET(req: NextRequest) {
   try {
     // If we have an upload proxy configured, proxy the image from the cPanel server
     if (process.env.UPLOAD_PROXY_URL) {
-      const proxyUrl = new URL(process.env.UPLOAD_PROXY_URL);
-      const targetUrl = `${proxyUrl.origin}/${filePath}`;
+      // Determine the base URL for fetching the image
+      let targetUrl = "";
+      if (process.env.NEXT_PUBLIC_UPLOAD_BASE_URL && process.env.NEXT_PUBLIC_UPLOAD_BASE_URL.trim() !== "") {
+        const base = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL.trim().replace(/\/$/, "");
+        targetUrl = `${base}/${filePath}`;
+      } else {
+        const proxyUrl = new URL(process.env.UPLOAD_PROXY_URL);
+        const lastSlashIndex = proxyUrl.pathname.lastIndexOf("/");
+        const basePath = lastSlashIndex !== -1 ? proxyUrl.pathname.substring(0, lastSlashIndex) : "";
+        targetUrl = `${proxyUrl.origin}${basePath}/${filePath}`;
+      }
       
-      const response = await fetch(targetUrl);
+      const response = await fetch(targetUrl, {
+        headers: {
+          "User-Agent": "Vercel/UploadProxy",
+          "Accept": "image/*,*/*"
+        }
+      });
+      
       if (!response.ok) {
-        return new NextResponse("File not found on remote server", { status: 404 });
+        return new NextResponse(`File not found on remote server (${targetUrl})`, { status: 404 });
       }
 
       const contentType = response.headers.get("content-type") || "image/webp";
