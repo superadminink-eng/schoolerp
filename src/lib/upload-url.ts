@@ -28,5 +28,5 @@ export function getUploadUrl(relativePath: string | null | undefined): string {
   }
 
   // 4. Fallback to API proxy (which correctly routes to cPanel or local)
-  return `/api/v1/uploads?path=${encodeURIComponent(cleanPath)}`;
+  return `/api/v1/upload-proxy?path=${encodeURIComponent(cleanPath)}`;
 }
