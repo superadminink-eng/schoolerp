@@ -45,6 +45,9 @@ export const authConfig: NextAuthConfig = {
         if (session.organizationIsSetupComplete !== undefined) {
           token.organizationIsSetupComplete = session.organizationIsSetupComplete;
         }
+        if (session.organizationName !== undefined) {
+          token.organizationName = session.organizationName;
+        }
         if (session.organizationLogo !== undefined) {
           token.organizationLogo = session.organizationLogo;
         }
