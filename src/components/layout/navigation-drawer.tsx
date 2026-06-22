@@ -4,12 +4,12 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { Icon } from "@/components/ui/icon";
 import { NavItem } from "./nav-item";
-import type { NavItemData } from "./nav-item";
 import { cn } from "@/lib/utils";
 import { getUploadUrl } from "@/lib/upload-url";
+import type { NavItemType } from "@/config/permissions";
 
 interface DrawerContentProps {
-  items: NavItemData[];
+  items: NavItemType[];
   orgName: string;
   orgLogo?: string | null;
   onItemClick?: () => void;
@@ -64,7 +64,7 @@ function DrawerContent({
         <div className="text-xs font-bold text-on-surface-variant/50 uppercase tracking-widest px-2 mb-3">Main Menu</div>
         <ul className="flex flex-col gap-1.5">
           {items.map((item) => (
-            <li key={item.href}>
+            <li key={item.label}>
               <NavItem item={item} onClick={onItemClick} />
             </li>
           ))}
@@ -77,7 +77,7 @@ function DrawerContent({
 /* ─── Standard (persistent) drawer ─── */
 
 interface StandardDrawerProps {
-  items: NavItemData[];
+  items: NavItemType[];
   orgName: string;
   orgLogo?: string | null;
   className?: string;
@@ -104,7 +104,7 @@ export function StandardDrawer({
 /* ─── Modal drawer (mobile / tablet) ─── */
 
 interface ModalDrawerProps {
-  items: NavItemData[];
+  items: NavItemType[];
   orgName: string;
   orgLogo?: string | null;
   open: boolean;

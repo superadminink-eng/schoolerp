@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     recentNotices,
     upcomingEvents,
     [classesCount, sectionsCount, vehiclesCount, booksCount],
-    [academicYearsCount, subjectMastersCount, totalClassesCount, totalSectionsCount]
+    [academicYearsCount, subjectMastersCount]
   ] = await Promise.all([
     // Core Counts
     Promise.all([
@@ -134,21 +134,10 @@ export async function GET(req: NextRequest) {
     // Onboarding Telemetry Status
     Promise.all([
       prisma.academicYear.count({
-        where: { organizationId: orgId },
+        where: { organizationId: orgId, deletedAt: null },
       }),
       prisma.subjectMaster.count({
         where: { organizationId: orgId, isActive: true },
-      }),
-      prisma.class.count({
-        where: { organizationId: orgId },
-      }),
-      prisma.section.count({
-        where: {
-          class: {
-            organizationId: orgId,
-            deletedAt: null,
-          }
-        },
       }),
     ]),
   ]);
@@ -198,8 +187,8 @@ export async function GET(req: NextRequest) {
     branch: branches > 0,
     subjectMaster: subjectMastersCount > 0,
     staff: staff > 0,
-    class: totalClassesCount > 0,
-    section: totalSectionsCount > 0,
+    class: classesCount > 0,
+    section: sectionsCount > 0,
   };
 
   const isOnboardingComplete =

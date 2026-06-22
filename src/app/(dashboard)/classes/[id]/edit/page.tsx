@@ -37,7 +37,7 @@ interface ClassData {
     id: string;
     amount: number | string;
     frequency: string;
-    feeCategory: { name: string };
+    feeCategory: { id: string; name: string };
     termType?: string;
   }>;
   feeInstallmentTemplates?: Array<{

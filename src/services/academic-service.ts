@@ -39,7 +39,7 @@ const classIncludes = {
     },
   },
   feeStructures: {
-    include: { feeCategory: { select: { name: true } } },
+    include: { feeCategory: { select: { id: true, name: true } } },
   },
   feeInstallmentTemplates: {
     orderBy: { dueDate: "asc" as const },
@@ -104,7 +104,7 @@ export class AcademicService {
           },
         },
         feeStructures: {
-          include: { feeCategory: { select: { name: true } } },
+          include: { feeCategory: { select: { id: true, name: true } } },
         },
         feeInstallmentTemplates: true,
       },
@@ -165,8 +165,8 @@ export class AcademicService {
         for (const fee of fees) {
           if (fee.id) {
             const existFee = existing.feeStructures.find(f => f.id === fee.id);
-            if (!existFee || Number(existFee.amount) !== Number(fee.amount) || existFee.feeCategory.name !== fee.name) {
-              throw new Error("CONFLICT:Cannot modify fee structure amounts or names when invoices have been generated");
+            if (!existFee || Number(existFee.amount) !== Number(fee.amount) || existFee.feeCategory.id !== fee.feeCategoryId) {
+              throw new Error("CONFLICT:Cannot modify fee structure amounts or categories when invoices have been generated");
             }
           } else {
             throw new Error("CONFLICT:Cannot add new fee structures when invoices have been generated");
@@ -345,25 +345,11 @@ export class AcademicService {
         }
 
         for (const fee of fees) {
-          const feeCategory = await tx.feeCategory.upsert({
-            where: {
-              organizationId_name: {
-                organizationId: ctx.organizationId,
-                name: fee.name,
-              },
-            },
-            update: {},
-            create: {
-              organizationId: ctx.organizationId,
-              name: fee.name,
-            },
-          });
-
           if (fee.id && existingFeeIds.includes(fee.id)) {
             await tx.feeStructure.update({
               where: { id: fee.id },
               data: {
-                feeCategoryId: feeCategory.id,
+                feeCategoryId: fee.feeCategoryId,
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,
@@ -374,7 +360,7 @@ export class AcademicService {
               data: {
                 classId: id,
                 academicYearId: existing.academicYearId,
-                feeCategoryId: feeCategory.id,
+                feeCategoryId: fee.feeCategoryId,
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,

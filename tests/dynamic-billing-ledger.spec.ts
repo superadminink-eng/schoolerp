@@ -106,6 +106,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
       data: {
         organizationId: orgId,
         name: "SV-Tuition",
+        code: "TUITION"
       }
     });
     feeCategoryId = feeCat.id;

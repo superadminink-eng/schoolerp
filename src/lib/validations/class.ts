@@ -17,10 +17,7 @@ const sectionSchema = z.object({
 
 const inlineFeeSchema = z.object({
   id: z.string().optional(),
-  name: z
-    .string()
-    .min(1, "Fee name is required")
-    .max(100, "Fee name must be at most 100 characters"),
+  feeCategoryId: z.string().min(1, "Fee category is required"),
   amount: z.number().positive("Amount must be positive"),
   termType: z.enum(["FULL_TERM", "HALF_TERM", "SHORT_TERM"]).default("FULL_TERM"),
 });
@@ -60,27 +57,56 @@ export const createClassSchema = z.object({
   fees: z.array(inlineFeeSchema).default([]),
   installments: z.array(inlineInstallmentSchema).default([]),
   status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
-}).refine((data) => {
-  if (!data.installments) return true;
-  const groups: Record<string, typeof data.installments> = {};
-  for (const inst of data.installments) {
-    if (!groups[inst.termType]) groups[inst.termType] = [];
-    groups[inst.termType].push(inst);
-  }
-  for (const termType in groups) {
-    const list = groups[termType];
-    for (let i = 1; i < list.length; i++) {
-      const prevDate = new Date(list[i - 1].dueDate);
-      const currDate = new Date(list[i].dueDate);
-      if (!isNaN(prevDate.getTime()) && !isNaN(currDate.getTime())) {
-        if (currDate < prevDate) return false;
+}).superRefine((data, ctx) => {
+  // Installments validation
+  if (data.installments && data.installments.length > 0) {
+    const instGroups: Record<string, typeof data.installments> = {};
+    for (const inst of data.installments) {
+      if (!instGroups[inst.termType]) instGroups[inst.termType] = [];
+      instGroups[inst.termType].push(inst);
+    }
+    for (const termType in instGroups) {
+      const list = instGroups[termType];
+      for (let i = 1; i < list.length; i++) {
+        const prevDate = new Date(list[i - 1].dueDate);
+        const currDate = new Date(list[i].dueDate);
+        if (!isNaN(prevDate.getTime()) && !isNaN(currDate.getTime())) {
+          if (currDate < prevDate) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Installment due dates must be in chronological order (e.g. Installment 2 cannot be before Installment 1)",
+              path: ["installments"],
+            });
+            break;
+          }
+        }
       }
     }
   }
-  return true;
-}, {
-  message: "Installment due dates must be in chronological order (e.g. Installment 2 cannot be before Installment 1)",
-  path: ["installments"],
+
+  // Fees uniqueness validation
+  if (data.fees && data.fees.length > 0) {
+    const feeGroups: Record<string, any[]> = {};
+    data.fees.forEach((fee, index) => {
+      if (!feeGroups[fee.termType]) feeGroups[fee.termType] = [];
+      feeGroups[fee.termType].push({ ...fee, index });
+    });
+
+    for (const termType in feeGroups) {
+      const list = feeGroups[termType];
+      const seen = new Set<string>();
+      for (const item of list) {
+        if (seen.has(item.feeCategoryId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Duplicate fee component detected for this term.",
+            path: ["fees", item.index, "feeCategoryId"],
+          });
+        }
+        seen.add(item.feeCategoryId);
+      }
+    }
+  }
 });
 
 // For update, subjects are expressed as an array of { id } (keep) or { subjectMasterId } (add new)
@@ -108,27 +134,56 @@ export const updateClassSchema = z.object({
   fees: z.array(inlineFeeSchema).optional(),
   installments: z.array(inlineInstallmentSchema).optional(),
   status: z.enum(["DRAFT", "ACTIVE"]).optional(),
-}).refine((data) => {
-  if (!data.installments) return true;
-  const groups: Record<string, typeof data.installments> = {};
-  for (const inst of data.installments) {
-    if (!groups[inst.termType]) groups[inst.termType] = [];
-    groups[inst.termType].push(inst);
-  }
-  for (const termType in groups) {
-    const list = groups[termType];
-    for (let i = 1; i < list.length; i++) {
-      const prevDate = new Date(list[i - 1].dueDate);
-      const currDate = new Date(list[i].dueDate);
-      if (!isNaN(prevDate.getTime()) && !isNaN(currDate.getTime())) {
-        if (currDate < prevDate) return false;
+}).superRefine((data, ctx) => {
+  // Installments validation
+  if (data.installments && data.installments.length > 0) {
+    const instGroups: Record<string, typeof data.installments> = {};
+    for (const inst of data.installments) {
+      if (!instGroups[inst.termType]) instGroups[inst.termType] = [];
+      instGroups[inst.termType].push(inst);
+    }
+    for (const termType in instGroups) {
+      const list = instGroups[termType];
+      for (let i = 1; i < list.length; i++) {
+        const prevDate = new Date(list[i - 1].dueDate);
+        const currDate = new Date(list[i].dueDate);
+        if (!isNaN(prevDate.getTime()) && !isNaN(currDate.getTime())) {
+          if (currDate < prevDate) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Installment due dates must be in chronological order (e.g. Installment 2 cannot be before Installment 1)",
+              path: ["installments"],
+            });
+            break;
+          }
+        }
       }
     }
   }
-  return true;
-}, {
-  message: "Installment due dates must be in chronological order (e.g. Installment 2 cannot be before Installment 1)",
-  path: ["installments"],
+
+  // Fees uniqueness validation
+  if (data.fees && data.fees.length > 0) {
+    const feeGroups: Record<string, any[]> = {};
+    data.fees.forEach((fee, index) => {
+      if (!feeGroups[fee.termType]) feeGroups[fee.termType] = [];
+      feeGroups[fee.termType].push({ ...fee, index });
+    });
+
+    for (const termType in feeGroups) {
+      const list = feeGroups[termType];
+      const seen = new Set<string>();
+      for (const item of list) {
+        if (seen.has(item.feeCategoryId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Duplicate fee component detected for this term.",
+            path: ["fees", item.index, "feeCategoryId"],
+          });
+        }
+        seen.add(item.feeCategoryId);
+      }
+    }
+  }
 });
 
 export type CreateClassInput = z.infer<typeof createClassSchema>;

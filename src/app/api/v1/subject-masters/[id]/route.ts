@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   apiSuccess,
@@ -64,21 +64,39 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (!existing) return apiNotFound("Subject");
 
-    const { code } = parsed.data;
+    const { code, name } = parsed.data;
 
     // Check unique code if changing
     if (code && code !== existing.code) {
-      const duplicate = await prisma.subjectMaster.findFirst({
+      const duplicateCode = await prisma.subjectMaster.findFirst({
         where: {
           organizationId: ctx.organizationId,
           code,
           id: { not: id },
         },
       });
-      if (duplicate) {
+      if (duplicateCode) {
         return apiError(
           "CONFLICT",
           `A subject with code "${code}" already exists`,
+          409
+        );
+      }
+    }
+
+    // Check unique name if changing
+    if (name && name.trim().toLowerCase() !== existing.name.trim().toLowerCase()) {
+      const duplicateName = await prisma.subjectMaster.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          name: name.trim(),
+          id: { not: id },
+        },
+      });
+      if (duplicateName) {
+        return apiError(
+          "CONFLICT",
+          `A subject with the name "${name}" already exists`,
           409
         );
       }
@@ -119,16 +137,15 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     });
 
     if (refCount > 0) {
-      // Soft delete — just deactivate
-      await prisma.subjectMaster.update({
-        where: { id },
-        data: { isActive: false },
-      });
-      return apiSuccess({
-        id,
-        deactivated: true,
-        message: `Deactivated because ${refCount} class subject(s) reference this entry`,
-      });
+      // Return 409 Conflict to force the user to explicitly archive via PATCH
+      return NextResponse.json({
+        success: false,
+        error: {
+          code: "HAS_DEPENDENCIES",
+          message: `Cannot delete because ${refCount} class subject(s) reference this entry. Please 'Deactivate' it from the Edit menu instead.`,
+          meta: { refCount }
+        }
+      }, { status: 409 });
     }
 
     // Hard delete — no references

@@ -9,13 +9,7 @@ import { TextField } from "@/components/ui/text-field";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { cn } from "@/lib/utils";
 import { SelectField } from "@/components/ui/select-field";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Divider } from "@/components/ui/divider";
 import { Icon } from "@/components/ui/icon";
@@ -73,8 +67,8 @@ interface SectionRow {
 
 interface FeeRow {
   id?: string;
-  name: string;
-  amount: number | string;
+  feeCategoryId: string;
+  amount: string | number;
   termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
 }
 
@@ -121,7 +115,7 @@ interface ClassData {
     id: string;
     amount: number | string;
     frequency: string;
-    feeCategory: { name: string };
+    feeCategory: { id: string; name: string };
     termType?: string;
   }>;
   feeInstallmentTemplates?: Array<{
@@ -167,6 +161,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   const [classId, setClassId] = useState<string | null>(initialData?.id ?? null);
   const [formMode, setFormMode] = useState<"create" | "edit">(mode);
   const [status, setStatus] = useState<"DRAFT" | "ACTIVE">(initialData?.status ?? "DRAFT");
+  const [submitError, setSubmitError] = useState<{message: string, details?: string} | null>(null);
 
   const hasEnrolledStudents = useMemo(() => {
     if (!initialData) return false;
@@ -216,11 +211,28 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   const [fees, setFees] = useState<FeeRow[]>(() =>
     initialData?.feeStructures?.map((f) => ({
       id: f.id,
-      name: f.feeCategory.name,
+      feeCategoryId: f.feeCategory?.id || "",
       amount: Number(f.amount),
       termType: (f.termType || "FULL_TERM") as any,
     })) ?? []
   );
+
+  const [feeCategories, setFeeCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchFeeCategories = async () => {
+      try {
+        const res = await fetch("/api/v1/fee-categories");
+        const json = await res.json();
+        if (json.success) {
+          setFeeCategories(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch fee categories", err);
+      }
+    };
+    fetchFeeCategories();
+  }, []);
 
   const [installments, setInstallments] = useState<InstallmentRow[]>(() =>
     initialData?.feeInstallmentTemplates?.map((t) => ({
@@ -437,7 +449,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
 
   // Fee helpers
   function addFee(termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM" = "FULL_TERM") {
-    setFees((prev) => [...prev, { name: "", amount: "", termType }]);
+    setFees((prev) => [...prev, { feeCategoryId: "", amount: "", termType }]);
   }
 
   function removeFee(index: number) {
@@ -638,7 +650,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
             subjectTeachers: s.subjectTeachers.filter((st) => st.staffId),
           })),
           fees: fees.map((f) => ({
-            name: f.name,
+            feeCategoryId: f.feeCategoryId,
             amount: parseNumOrUndef(f.amount),
             termType: f.termType,
           })),
@@ -657,7 +669,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           })),
           fees: fees.map((f) => ({
             ...(f.id ? { id: f.id } : {}),
-            name: f.name,
+            feeCategoryId: f.feeCategoryId,
             amount: parseNumOrUndef(f.amount),
             termType: f.termType,
           })),
@@ -679,7 +691,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       const newErrors: Record<string, string> = {};
 
       fees.forEach((f, idx) => {
-        if (!f.name.trim()) { newErrors[`fees.${idx}.name`] = "Required"; hasError = true; }
+        if (!f.feeCategoryId) { newErrors[`fees.${idx}.feeCategoryId`] = "Required"; hasError = true; }
         if (!f.amount || isNaN(parseFloat(f.amount as string))) { newErrors[`fees.${idx}.amount`] = "Required"; hasError = true; }
       });
 
@@ -724,6 +736,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     }
 
     setLoading(true);
+    setSubmitError(null);
     try {
       const res = await fetch(endpoint, {
         method,
@@ -740,7 +753,11 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           setErrors((prev) => ({ ...prev, ...apiErrors }));
           snackbar.show("Please correct the highlighted errors.", "error");
         } else {
-          snackbar.show(data.error?.message ?? "Operation failed", "error");
+          setSubmitError({
+            message: data.error?.message ?? "Operation failed",
+            details: typeof data.error?.details === "string" ? data.error.details : JSON.stringify(data.error?.details)
+          });
+          window.scrollTo({ top: 0, behavior: "smooth" });
         }
         return;
       }
@@ -805,7 +822,11 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       }
     } catch (err) {
       console.error("Save step error:", err);
-      snackbar.show("An error occurred", "error");
+      setSubmitError({
+        message: "An unexpected error occurred",
+        details: err instanceof Error ? err.message : String(err)
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setLoading(false);
     }
@@ -900,6 +921,29 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
         activeMainTab === "fees-and-installments" ? "max-w-5xl" : "max-w-2xl"
       )}
     >
+      {submitError && (
+        <div className="mb-6 rounded-2xl border border-error/20 bg-error/5 p-5 shadow-sm animate-in fade-in slide-in-from-top-4 flex items-start gap-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-error/10 text-error">
+            <Icon name="error" size={24} />
+          </div>
+          <div className="flex flex-col gap-1.5 flex-1 mt-0.5">
+            <h3 className="text-sm font-bold text-error tracking-tight">{submitError.message}</h3>
+            {submitError.details && submitError.details !== "undefined" && (
+              <p className="text-xs font-semibold text-error/80 font-mono whitespace-pre-wrap bg-error/5 p-2 rounded-lg border border-error/10">
+                {submitError.details}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSubmitError(null)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-error/60 hover:bg-error/10 hover:text-error transition-colors shrink-0"
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+      )}
+
       {hasEnrolledStudents && (
         <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900/30 p-5 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-3.5 shadow-sm backdrop-blur-sm animate-fadeIn">
           <div className="p-2 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
@@ -1263,17 +1307,41 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       .map(({ fee, index }) => (
                         <div key={index} className="flex items-start gap-2 animate-fadeIn">
                           <div className="flex-1">
-                            <TextField
-                              label=""
-                              placeholder="Fee name (e.g. Tuition)"
-                              value={fee.name}
-                              onChange={(e) =>
-                                updateFee(index, "name", e.target.value)
-                              }
-                              error={errors[`fees.${index}.name`]}
+                            <Select
+                              value={fee.feeCategoryId || ""}
+                              onValueChange={(val) => updateFee(index, "feeCategoryId", val)}
                               disabled={hasInvoices}
-                              fullWidth
-                            />
+                            >
+                              <SelectTrigger className={errors[`fees.${index}.feeCategoryId`] ? "border-red-500" : ""}>
+                                <SelectValue placeholder="Select Fee Category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {feeCategories.map((cat) => {
+                                  if (!cat.isActive && cat.id !== fee.feeCategoryId) return null;
+                                  
+                                  const isSelectedElsewhere = fees.some(
+                                    (f, i) => i !== index && f.feeCategoryId === cat.id && f.termType === activeTermTab
+                                  );
+
+                                  return (
+                                    <SelectItem 
+                                      key={cat.id} 
+                                      value={cat.id}
+                                      disabled={isSelectedElsewhere}
+                                    >
+                                      {cat.name} 
+                                      {!cat.isActive && " (Inactive)"}
+                                      {isSelectedElsewhere && " (Already Added)"}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                            {errors[`fees.${index}.feeCategoryId`] && (
+                              <p className="mt-1 text-xs text-red-500">
+                                {errors[`fees.${index}.feeCategoryId`]}
+                              </p>
+                            )}
                           </div>
                           <div className="w-40">
                             <CurrencyInput
@@ -1692,8 +1760,8 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                         <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin select-none">
                           {termFees.map((fee, idx) => (
                             <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-dashed border-slate-100 dark:border-slate-800/40">
-                              <span className="text-slate-600 dark:text-slate-400 truncate max-w-[130px]" title={fee.name || "Untitled Item"}>
-                                {fee.name || "Untitled Item"}
+                              <span className="text-slate-600 dark:text-slate-400 truncate max-w-[130px]" title={feeCategories.find(c => c.id === fee.feeCategoryId)?.name || "Untitled Item"}>
+                                {feeCategories.find(c => c.id === fee.feeCategoryId)?.name || "Untitled Item"}
                               </span>
                               <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
                                 ₹{(parseFloat(fee.amount.toString()) || 0).toLocaleString("en-IN")}

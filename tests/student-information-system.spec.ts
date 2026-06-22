@@ -180,6 +180,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
         data: {
           organizationId: org.id,
           name: "Test Tuition Fee",
+          code: "TUITION"
         },
       });
     }

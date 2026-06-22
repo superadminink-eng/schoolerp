@@ -232,7 +232,8 @@ async function globalSetup(config: FullConfig) {
       feeCategory = await prisma.feeCategory.create({
         data: {
           organizationId: org.id,
-          name: "Tuition Fee Test",
+          name: "Tuition",
+          code: "TUITION",
         },
       });
     }

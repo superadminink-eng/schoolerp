@@ -131,29 +131,61 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
   ],
 };
 
+export interface NavItemType {
+  label: string;
+  href?: string;
+  icon: string;
+  roles?: "all";
+  permission?: string;
+  children?: NavItemType[];
+}
+
 /**
  * Sidebar navigation items per role.
  */
-export const NAVIGATION_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", icon: "dashboard", roles: "all" as const },
-  { label: "Branches", href: "/branches", icon: "location_city", permission: "branches:manage" },
-  { label: "Users", href: "/users", icon: "group", permission: "users:read" },
-  { label: "Roles", href: "/roles", icon: "security", permission: "settings:manage" },
-  { label: "Staff", href: "/staff", icon: "badge", permission: "staff:read" },
-  { label: "Academic Years", href: "/academic-years", icon: "date_range", permission: "academic_years:read" },
-  { label: "Subjects", href: "/subject-masters", icon: "menu_book", permission: "subjects:read" },
-  { label: "Classes", href: "/classes", icon: "class", permission: "classes:read" },
-  { label: "Students", href: "/students", icon: "school", permission: "students:read" },
-  { label: "Fees", href: "/fees", icon: "payments", permission: "fees:read" },
-  { label: "Admissions", href: "/admissions", icon: "app_registration", permission: "admissions:inquiry_desk,admissions:document_verification,admissions:entrance_exam,admissions:registrar_desk" },
-  // { label: "Attendance", href: "/attendance/students", icon: "fact_check", permission: "attendance:read" },
-  // { label: "Exams", href: "/exams", icon: "quiz", permission: "exams:read" },
-  // { label: "Timetable", href: "/timetable", icon: "calendar_month", permission: "timetable:read" },
-  // { label: "Transport", href: "/transport/routes", icon: "directions_bus", permission: "transport:read" },
-  // { label: "Library", href: "/library/books", icon: "local_library", permission: "library:read" },
-  // { label: "Hostel", href: "/hostel", icon: "apartment", permission: "hostel:read" },
-  { label: "Notices", href: "/notices", icon: "campaign", permission: "notices:read" },
-  // { label: "Events", href: "/communication/events", icon: "event", permission: "events:read" },
-  // { label: "Reports", href: "/reports", icon: "analytics", permission: "reports:view" },
-  { label: "School Settings", href: "/settings", icon: "settings", permission: "settings:manage" },
+export const NAVIGATION_ITEMS: NavItemType[] = [
+  { label: "Dashboard", href: "/dashboard", icon: "dashboard", roles: "all" },
+  {
+    label: "Academics",
+    icon: "school",
+    children: [
+      { label: "Academic Years", href: "/academic-years", icon: "date_range", permission: "academic_years:read" },
+      { label: "Subjects", href: "/subject-masters", icon: "menu_book", permission: "subjects:read" },
+      { label: "Classes", href: "/classes", icon: "class", permission: "classes:read" },
+    ]
+  },
+  {
+    label: "People",
+    icon: "group",
+    children: [
+      { label: "Admissions", href: "/admissions", icon: "app_registration", permission: "admissions:inquiry_desk,admissions:document_verification,admissions:entrance_exam,admissions:registrar_desk" },
+      { label: "Students", href: "/students", icon: "person", permission: "students:read" },
+      { label: "Staff", href: "/staff", icon: "badge", permission: "staff:read" },
+    ]
+  },
+  {
+    label: "Financials",
+    icon: "payments",
+    children: [
+      { label: "Fees", href: "/fees", icon: "account_balance_wallet", permission: "fees:read" },
+    ]
+  },
+  {
+    label: "Communication",
+    icon: "campaign",
+    children: [
+      { label: "Notices", href: "/notices", icon: "notifications", permission: "notices:read" },
+    ]
+  },
+  {
+    label: "Administration",
+    icon: "settings",
+    children: [
+      { label: "Branches", href: "/branches", icon: "location_city", permission: "branches:manage" },
+      { label: "Users", href: "/users", icon: "manage_accounts", permission: "users:read" },
+      { label: "Roles", href: "/roles", icon: "security", permission: "settings:manage" },
+      { label: "Fee Categories", href: "/fee-categories", icon: "category", permission: "settings:manage" },
+      { label: "School Settings", href: "/settings", icon: "build", permission: "settings:manage" },
+    ]
+  }
 ];

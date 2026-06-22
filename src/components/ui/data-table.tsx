@@ -74,6 +74,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   quickFilter?: string;
   paginationPageSize?: number;
+  getRowClass?: (params: { data: T | undefined }) => string;
 }
 
 const AG_GRID_THEME_OVERRIDES: React.CSSProperties = {
@@ -105,6 +106,7 @@ export function DataTable<T>({
   emptyMessage = "No results found",
   quickFilter,
   paginationPageSize = 20,
+  getRowClass,
 }: DataTableProps<T>) {
   const gridRef = useRef<AgGridReact>(null);
 
@@ -317,6 +319,8 @@ export function DataTable<T>({
         paginationPageSize={paginationPageSize}
         paginationPageSizeSelector={false}
         quickFilterText={quickFilter}
+        getRowClass={getRowClass}
+        suppressRowClickSelection={true}
         rowClass={onRowClick ? "cursor-pointer" : undefined}
         suppressCellFocus={true}
       />

@@ -482,6 +482,7 @@ model SubjectMaster {
   subjects       Subject[]
 
   @@unique([organizationId, code])
+  @@unique([organizationId, name])
   @@index([organizationId])
   @@map("subject_masters")
 }
@@ -577,11 +578,14 @@ model FeeCategory {
   id             String         @id @default(cuid())
   organizationId String
   name           String
+  code           String
   description    String?
+  isActive       Boolean        @default(true)
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   feeStructures  FeeStructure[]
 
   @@unique([organizationId, name])
+  @@unique([organizationId, code])
   @@map("fee_categories")
 }
 

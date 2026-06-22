@@ -142,6 +142,7 @@ test.describe("Term Fees and Smart Late Fee Rules E2E", () => {
       data: {
         organizationId: orgId,
         name: "SV-Term-Tuition",
+        code: "TUITION",
       }
     });
     feeCategoryId = feeCat.id;

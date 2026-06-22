@@ -154,12 +154,12 @@ function MetricCard({ title, value, subtitle, icon, progress, color, onClick }: 
 
 function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboarding"] }) {
   const router = useRouter();
-  const steps = [
+  const rawSteps = [
     {
       number: 1,
       title: "Set Academic Year",
       description: "Define active school sessions. Required to schedule classes and track timelines.",
-      isCompleted: onboarding.steps.academicYear,
+      rawCompleted: onboarding.steps.academicYear,
       icon: "date_range",
       actionUrl: "/academic-years",
       actionLabel: "Set Academic Year",
@@ -168,7 +168,7 @@ function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboardin
       number: 2,
       title: "Add Campus Branches",
       description: "Set up physical branches. Classes, students, and staff operate inside branches.",
-      isCompleted: onboarding.steps.branch,
+      rawCompleted: onboarding.steps.branch,
       icon: "domain",
       actionUrl: "/branches",
       actionLabel: "Add Branches",
@@ -177,7 +177,7 @@ function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboardin
       number: 3,
       title: "Define Subject Catalog",
       description: "Build the course subjects list. You will assign these subjects to class schedules.",
-      isCompleted: onboarding.steps.subjectMaster,
+      rawCompleted: onboarding.steps.subjectMaster,
       icon: "menu_book",
       actionUrl: "/subject-masters",
       actionLabel: "Create Subjects",
@@ -186,7 +186,7 @@ function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboardin
       number: 4,
       title: "Register Faculty & Staff",
       description: "Add teachers, administrators, and staff profiles to assign to classes.",
-      isCompleted: onboarding.steps.staff,
+      rawCompleted: onboarding.steps.staff,
       icon: "group",
       actionUrl: "/staff",
       actionLabel: "Register Staff",
@@ -195,12 +195,23 @@ function OnboardingWizard({ onboarding }: { onboarding: DashboardData["onboardin
       number: 5,
       title: "Configure Classes & Divisions",
       description: "Define class grades (e.g. Standard 1) and division classrooms (e.g. A, B).",
-      isCompleted: onboarding.steps.class && onboarding.steps.section,
+      rawCompleted: onboarding.steps.class && onboarding.steps.section,
       icon: "class",
       actionUrl: "/classes",
       actionLabel: "Create Classes",
     },
   ];
+
+  // Silicon Valley Level Verification: Sequential Waterfall Completion
+  // A step can ONLY be completed if ALL preceding steps are also completed.
+  let allPreviousCompleted = true;
+  const steps = rawSteps.map((step) => {
+    const isCompleted = step.rawCompleted && allPreviousCompleted;
+    if (!isCompleted) {
+      allPreviousCompleted = false; // Block all subsequent steps from being marked as complete
+    }
+    return { ...step, isCompleted };
+  });
 
   const completedCount = steps.filter((s) => s.isCompleted).length;
   const activeStepIndex = steps.findIndex((s) => !s.isCompleted);

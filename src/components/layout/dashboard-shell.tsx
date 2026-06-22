@@ -9,7 +9,7 @@ import { NavRail } from "./nav-rail";
 import { TopAppBar } from "./top-app-bar";
 import { BranchSwitcher } from "./branch-switcher";
 import { UserMenu } from "./user-menu";
-import type { NavItemData } from "./nav-item";
+import type { NavItemType } from "@/config/permissions";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -37,18 +37,34 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
   const pathname = usePathname();
   const { can } = usePermissions();
 
-  const filteredItems = useMemo<NavItemData[]>(() => {
-    return NAVIGATION_ITEMS.filter((item) => {
-      if ("roles" in item && item.roles === "all") return true;
-      if ("permission" in item && item.permission) {
-        const permissions = item.permission.split(",");
-        return permissions.some((perm) => {
-          const [module, action] = perm.trim().split(":");
-          return can(module, action);
-        });
-      }
-      return false;
-    }).map(({ label, href, icon }) => ({ label, href, icon }));
+  const filteredItems = useMemo<NavItemType[]>(() => {
+    const filterItems = (items: NavItemType[]): NavItemType[] => {
+      return items.reduce<NavItemType[]>((acc, item) => {
+        if (item.roles === "all") {
+          acc.push(item);
+          return acc;
+        }
+
+        let hasAccess = false;
+        if (item.permission) {
+          const permissions = item.permission.split(",");
+          hasAccess = permissions.some((perm) => {
+            const [module, action] = perm.trim().split(":");
+            return can(module, action);
+          });
+        }
+
+        const filteredChildren = item.children ? filterItems(item.children) : undefined;
+
+        if (hasAccess || (filteredChildren && filteredChildren.length > 0)) {
+          acc.push({ ...item, children: filteredChildren });
+        }
+
+        return acc;
+      }, []);
+    };
+
+    return filterItems(NAVIGATION_ITEMS as NavItemType[]);
   }, [can]);
 
   const pageTitle = deriveTitle(pathname);

@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   apiSuccess,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     const subjectMasters = await prisma.subjectMaster.findMany({
       where,
-      orderBy: [{ name: "asc" }],
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
     });
 
     return apiSuccess(subjectMasters);
@@ -71,15 +71,45 @@ export async function POST(req: NextRequest) {
 
   try {
     // Check unique code per org
-    const existing = await prisma.subjectMaster.findFirst({
+    const existingCode = await prisma.subjectMaster.findFirst({
       where: { organizationId: ctx.organizationId, code },
     });
-    if (existing) {
+    if (existingCode) {
       return apiError(
         "CONFLICT",
         `A subject with code "${code}" already exists`,
         409
       );
+    }
+
+    const existingName = await prisma.subjectMaster.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        name: name.trim(),
+      },
+    });
+
+    if (existingName) {
+      if (existingName.isActive) {
+        return apiError(
+          "CONFLICT",
+          `A subject with the name "${name}" already exists`,
+          409
+        );
+      } else {
+        // Return special code for smart reactivation
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "ARCHIVED_CONFLICT",
+              message: `A subject with the name "${name}" already exists in your Archives.`,
+              meta: { duplicateId: existingName.id },
+            },
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const subjectMaster = await prisma.subjectMaster.create({

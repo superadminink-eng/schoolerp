@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
               select: {
                 amount: true,
                 termType: true,
-                feeCategory: { select: { name: true } },
+                feeCategory: { select: { id: true, name: true } },
               },
             },
             sections: {
@@ -351,25 +351,11 @@ export async function POST(req: NextRequest) {
 
       // Create fees
       for (const fee of fees) {
-        const feeCategory = await tx.feeCategory.upsert({
-          where: {
-            organizationId_name: {
-              organizationId: ctx.organizationId,
-              name: fee.name,
-            },
-          },
-          update: {},
-          create: {
-            organizationId: ctx.organizationId,
-            name: fee.name,
-          },
-        });
-
         await tx.feeStructure.create({
           data: {
             classId: cls.id,
             academicYearId,
-            feeCategoryId: feeCategory.id,
+            feeCategoryId: fee.feeCategoryId,
             amount: fee.amount,
             frequency: "ANNUAL",
             termType: fee.termType,
@@ -419,7 +405,7 @@ export async function POST(req: NextRequest) {
           },
         },
         feeStructures: {
-          include: { feeCategory: { select: { name: true } } },
+          include: { feeCategory: { select: { id: true, name: true } } },
         },
         feeInstallmentTemplates: {
           orderBy: { dueDate: "asc" },
@@ -440,8 +426,31 @@ export async function POST(req: NextRequest) {
       : null;
 
     return apiSuccess(fullFormatted, undefined, 201);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Create class error:", error);
-    return apiError("INTERNAL_ERROR", "Failed to create class", 500);
+    
+    // Handle Prisma unique constraint violations (P2002)
+    if (error.code === "P2002") {
+      const target = error.meta?.target || [];
+      if (Array.isArray(target) && target.includes("name") && target.includes("branchId") && target.includes("academicYearId")) {
+        return apiError(
+          "VALIDATION_ERROR",
+          "A class with this name already exists in the selected Branch and Academic Year.",
+          400,
+          [{ field: "name", message: "Class name must be unique per branch and academic year." }]
+        );
+      }
+      if (Array.isArray(target) && target.includes("feeCategoryId") && target.includes("termType")) {
+        return apiError(
+          "VALIDATION_ERROR",
+          "Duplicate fee component detected for the same term plan.",
+          400,
+          [{ field: "fees", message: "Duplicate fee component detected for this term." }]
+        );
+      }
+      return apiError("VALIDATION_ERROR", "A unique constraint violation occurred.", 400, error.meta?.target);
+    }
+
+    return apiError("INTERNAL_ERROR", "Failed to create class", 500, error?.message || String(error));
   }
 }

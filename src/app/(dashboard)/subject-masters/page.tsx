@@ -5,6 +5,8 @@ import { SearchBar } from "@/components/ui/search-bar";
 import { DataTable } from "@/components/ui/lazy-table";
 import type { Column } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Chip } from "@/components/ui/chip";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
@@ -44,6 +46,7 @@ export default function SubjectMastersPage() {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -55,7 +58,10 @@ export default function SubjectMastersPage() {
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/subject-masters?active=false");
+      const url = showInactive 
+        ? "/api/v1/subject-masters?active=false" 
+        : "/api/v1/subject-masters";
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) setSubjects(data.data);
     } catch {
@@ -63,7 +69,7 @@ export default function SubjectMastersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showInactive]);
 
   useEffect(() => {
     fetchSubjects();
@@ -89,18 +95,36 @@ export default function SubjectMastersPage() {
       });
       const data = await res.json();
       if (data.success) {
-        snackbar.show(
-          data.data.deactivated ? "Subject deactivated" : "Subject deleted",
-          "success"
-        );
+        snackbar.show("Subject deleted permanently", "success");
         fetchSubjects();
       } else {
+        // Specifically show the HAS_DEPENDENCIES error or fallback
         snackbar.show(data.error?.message ?? "Failed to delete subject", "error");
       }
     } catch {
       snackbar.show("An error occurred", "error");
     } finally {
       setDeleting(false);
+      setDialogOpen(false);
+    }
+  }
+
+  async function handleRestore(id: string) {
+    try {
+      const res = await fetch(`/api/v1/subject-masters/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Subject restored successfully", "success");
+        fetchSubjects();
+      } else {
+        snackbar.show(data.error?.message ?? "Failed to restore subject", "error");
+      }
+    } catch {
+      snackbar.show("An error occurred", "error");
     }
   }
 
@@ -115,14 +139,14 @@ export default function SubjectMastersPage() {
       key: "name",
       header: "Name",
       render: (row) => (
-        <span className="font-medium">
-          {row.name}
+        <div className="flex items-center gap-2">
+          <span className={!row.isActive ? "text-on-surface-variant line-through opacity-70" : "font-medium"}>
+            {row.name}
+          </span>
           {!row.isActive && (
-            <span className="ml-2 text-body-sm text-on-surface-variant">
-              (Inactive)
-            </span>
+            <Chip label="Archived" color="default" className="h-6 text-[10px] uppercase font-bold tracking-wider" />
           )}
-        </span>
+        </div>
       ),
     },
     {
@@ -160,23 +184,37 @@ export default function SubjectMastersPage() {
                 Edit
               </MenuItem>
               {can("subjects", "delete") && (
-                <DialogTrigger asChild>
-                  <MenuItem
-                    icon="delete"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-error"
-                  >
-                    Delete
-                  </MenuItem>
-                </DialogTrigger>
+                <>
+                  {row.isActive ? (
+                    <DialogTrigger asChild>
+                      <MenuItem
+                        icon="delete"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-error"
+                      >
+                        Delete
+                      </MenuItem>
+                    </DialogTrigger>
+                  ) : (
+                    <MenuItem
+                      icon="restore"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRestore(row.id);
+                      }}
+                    >
+                      Restore
+                    </MenuItem>
+                  )}
+                </>
               )}
             </MenuContent>
           </Menu>
           <DialogContent>
             <DialogTitle>Delete subject?</DialogTitle>
             <DialogDescription>
-              This will delete the subject &ldquo;{row.name}&rdquo;. If it is
-              referenced by any class, it will be deactivated instead.
+              This will permanently delete the subject &ldquo;{row.name}&rdquo;.
+              If it is referenced by any classes, deletion will be blocked to preserve historical data.
             </DialogDescription>
             <div className="mt-6 flex justify-end gap-3">
               <DialogClose asChild>
@@ -211,12 +249,20 @@ export default function SubjectMastersPage() {
 
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <SearchBar
-            value={searchInput}
-            onChange={setSearchInput}
-            placeholder="Search subjects"
-            className="sm:max-w-xs"
-          />
+          <div className="flex items-center gap-4">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              placeholder="Search subjects"
+              className="sm:max-w-xs"
+            />
+            <div className="flex items-center gap-2">
+              <Switch checked={showInactive} onCheckedChange={setShowInactive} />
+              <label className="text-body-sm text-on-surface-variant cursor-pointer" onClick={() => setShowInactive(!showInactive)}>
+                Show Inactive
+              </label>
+            </div>
+          </div>
           <PermissionGate module="subjects" action="create">
             <Button
               variant="filled"
@@ -231,14 +277,15 @@ export default function SubjectMastersPage() {
 
         <div className="rounded-md border border-outline-variant bg-surface overflow-hidden">
           <DataTable
-            columns={columns}
-            data={subjects}
-            keyExtractor={(row) => row.id}
-            onRowClick={(row) => openEdit(row)}
-            loading={loading}
-            emptyIcon="menu_book"
-            emptyMessage="No subjects found"
-            quickFilter={searchInput}
+          columns={columns}
+          data={subjects}
+          keyExtractor={(row) => row.id}
+          onRowClick={(row) => openEdit(row)}
+          loading={loading}
+          quickFilter={searchInput}
+          getRowClass={(params) => (!params.data?.isActive ? "opacity-60 bg-surface-container-lowest" : "")}
+          emptyIcon="book"
+          emptyMessage="No subjects found"
           />
         </div>
       </div>

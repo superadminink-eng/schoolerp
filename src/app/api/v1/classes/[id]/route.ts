@@ -49,7 +49,7 @@ const classIncludes = {
     },
   },
   feeStructures: {
-    include: { feeCategory: { select: { name: true } } },
+    include: { feeCategory: { select: { id: true, name: true } } },
   },
   feeInstallmentTemplates: {
     orderBy: { dueDate: "asc" as const },
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ...classRecord,
       hasInvoices,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Get class error:", error);
     return apiError("INTERNAL_ERROR", "Failed to get class", 500);
   }
@@ -133,7 +133,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           },
         },
         feeStructures: {
-          include: { feeCategory: { select: { name: true } } },
+          include: { feeCategory: { select: { id: true, name: true } } },
         },
         feeInstallmentTemplates: true,
       },
@@ -192,8 +192,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         for (const fee of fees) {
           if (fee.id) {
             const existFee = existing.feeStructures.find(f => f.id === fee.id);
-            if (!existFee || Number(existFee.amount) !== Number(fee.amount) || existFee.feeCategory.name !== fee.name) {
-              return apiError("CONFLICT", "Cannot modify fee structure amounts or names when invoices have been generated", 409);
+            if (!existFee || Number(existFee.amount) !== Number(fee.amount) || existFee.feeCategory.id !== fee.feeCategoryId) {
+              return apiError("CONFLICT", "Cannot modify fee structure amounts or categories when invoices have been generated", 409);
             }
           } else {
             return apiError("CONFLICT", "Cannot add new fee structures when invoices have been generated", 409);
@@ -488,25 +488,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         }
 
         for (const fee of fees) {
-          const feeCategory = await tx.feeCategory.upsert({
-            where: {
-              organizationId_name: {
-                organizationId: ctx.organizationId,
-                name: fee.name,
-              },
-            },
-            update: {},
-            create: {
-              organizationId: ctx.organizationId,
-              name: fee.name,
-            },
-          });
-
           if (fee.id && existingFeeIds.includes(fee.id)) {
             await tx.feeStructure.update({
               where: { id: fee.id },
               data: {
-                feeCategoryId: feeCategory.id,
+                feeCategoryId: fee.feeCategoryId,
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,
@@ -517,7 +503,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
               data: {
                 classId: id,
                 academicYearId: existing.academicYearId,
-                feeCategoryId: feeCategory.id,
+                feeCategoryId: fee.feeCategoryId,
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,
@@ -562,16 +548,32 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
 
     return apiSuccess(updated);
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof Error && error.message.startsWith("CONFLICT:")) {
       return apiError("CONFLICT", error.message.slice(9), 409);
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const target = (error.meta?.target as string[])?.join(", ");
-      return apiError("CONFLICT", `A division or configuration with these details already exists.`, 409);
+    if (error.code === "P2002") {
+      const target = error.meta?.target || [];
+      if (Array.isArray(target) && target.includes("name") && target.includes("branchId") && target.includes("academicYearId")) {
+        return apiError(
+          "VALIDATION_ERROR",
+          "A class with this name already exists in the selected Branch and Academic Year.",
+          400,
+          [{ field: "name", message: "Class name must be unique per branch and academic year." }]
+        );
+      }
+      if (Array.isArray(target) && target.includes("feeCategoryId") && target.includes("termType")) {
+        return apiError(
+          "VALIDATION_ERROR",
+          "Duplicate fee component detected for the same term plan.",
+          400,
+          [{ field: "fees", message: "Duplicate fee component detected for this term." }]
+        );
+      }
+      return apiError("VALIDATION_ERROR", "A unique constraint violation occurred.", 400, error.meta?.target);
     }
     console.error("Update class error:", error);
-    return apiError("INTERNAL_ERROR", "Failed to update class", 500);
+    return apiError("INTERNAL_ERROR", "Failed to update class", 500, error?.message || String(error));
   }
 }
 
@@ -607,12 +609,19 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       );
     }
 
-    // Cascade deletes sections + subjects + fee structures via Prisma onDelete: Cascade
-    await prisma.class.delete({ where: { id } });
+    // Instead of relying purely on the Prisma middleware for delete (which doesn't change the name),
+    // we explicitly update the class to soft delete it AND rename it to release the unique constraint.
+    await prisma.class.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        name: `${existing.name}_deleted_${Date.now()}`
+      }
+    });
 
     return apiSuccess({ id, deleted: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Delete class error:", error);
-    return apiError("INTERNAL_ERROR", "Failed to delete class", 500);
+    return apiError("INTERNAL_ERROR", "Failed to delete class", 500, error?.message || String(error));
   }
 }

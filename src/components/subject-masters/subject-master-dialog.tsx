@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectTrigger,
@@ -52,8 +53,10 @@ export function SubjectMasterDialog({
   const [code, setCode] = useState("");
   const [type, setType] = useState("THEORY");
   const [description, setDescription] = useState("");
+  const [isActive, setIsActive] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [archiveConflictId, setArchiveConflictId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -62,13 +65,16 @@ export function SubjectMasterDialog({
         setCode(initialData.code);
         setType(initialData.type);
         setDescription(initialData.description ?? "");
+        setIsActive(initialData.isActive ?? true);
       } else {
         setName("");
         setCode("");
         setType("THEORY");
         setDescription("");
+        setIsActive(true);
       }
       setErrors({});
+      setArchiveConflictId(null);
     }
   }, [open, mode, initialData]);
 
@@ -76,7 +82,7 @@ export function SubjectMasterDialog({
     e.preventDefault();
     setErrors({});
 
-    const formData = { name, code, type, description: description || undefined };
+    const formData = { name, code, type, description: description || undefined, isActive };
 
     if (mode === "create") {
       const result = createSubjectMasterSchema.safeParse(formData);
@@ -100,7 +106,11 @@ export function SubjectMasterDialog({
         const data = await res.json();
 
         if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create subject", "error");
+          if (data.error?.code === "ARCHIVED_CONFLICT") {
+            setArchiveConflictId(data.error.meta?.duplicateId);
+          } else {
+            snackbar.show(data.error?.message ?? "Failed to create subject", "error");
+          }
           return;
         }
 
@@ -149,13 +159,58 @@ export function SubjectMasterDialog({
     }
   }
 
+  async function handleRestoreArchived() {
+    if (!archiveConflictId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/v1/subject-masters/${archiveConflictId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Subject restored successfully", "success");
+        onOpenChange(false);
+        onSuccess();
+      } else {
+        snackbar.show(data.error?.message ?? "Failed to restore subject", "error");
+      }
+    } catch {
+      snackbar.show("An error occurred", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogTitle>
-          {mode === "create" ? "Add Subject" : "Edit Subject"}
+          {archiveConflictId ? "Subject Already Exists" : (mode === "create" ? "Add Subject" : "Edit Subject")}
         </DialogTitle>
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        
+        {archiveConflictId ? (
+          <div className="mt-4 space-y-6">
+            <div className="bg-primary-container/30 text-on-surface p-4 rounded-lg border border-primary/20">
+              <p className="text-body-md font-medium mb-2">
+                A subject named &quot;{name}&quot; is currently Archived in your system.
+              </p>
+              <p className="text-body-sm text-on-surface-variant">
+                Creating a new subject with the same name will fragment your historical records. Would you like to restore the existing subject instead?
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="text" onClick={() => setArchiveConflictId(null)} disabled={loading}>
+                Back
+              </Button>
+              <Button type="button" variant="filled" onClick={handleRestoreArchived} loading={loading}>
+                Restore Subject
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <TextField
             label="Name"
             value={name}
@@ -197,6 +252,17 @@ export function SubjectMasterDialog({
             placeholder="Optional description"
             fullWidth
           />
+          {mode === "edit" && (
+            <div className="flex items-center justify-between rounded-lg border border-outline-variant p-3">
+              <div>
+                <p className="text-label-lg font-medium text-on-surface">Status: {isActive ? "Active" : "Archived"}</p>
+                <p className="text-body-sm text-on-surface-variant">
+                  {isActive ? "Subject is available for new classes." : "Subject is hidden from new classes."}
+                </p>
+              </div>
+              <Switch checked={isActive} onCheckedChange={setIsActive} />
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <DialogClose asChild>
               <Button type="button" variant="text">
@@ -207,7 +273,8 @@ export function SubjectMasterDialog({
               {mode === "create" ? "Create" : "Save"}
             </Button>
           </div>
-        </form>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
