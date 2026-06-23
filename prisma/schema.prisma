@@ -15,6 +15,8 @@ model Organization {
   email                 String
   phone                 String?
   address               String?                @db.Text
+  billingAddress        String?                @db.Text
+  gstNumber             String?
   website               String?
   plan                  PlanType               @default(FREE)
   isActive              Boolean                @default(true)
@@ -47,6 +49,8 @@ model Branch {
   name                  String
   code                  String
   address               String?                @db.Text
+  billingAddress        String?                @db.Text
+  gstNumber             String?
   phone                 String?
   email                 String?
   isMain                Boolean                @default(false)

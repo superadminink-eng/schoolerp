@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-helpers";
 import { checkApiPermission, hasPermission } from "@/lib/rbac";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const userId = req.headers.get("x-user-id");
   const roleId = req.headers.get("x-user-role-id");

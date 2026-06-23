@@ -22,6 +22,7 @@ import { useAllPermissions } from "@/hooks/use-all-permissions";
 import { useUnlinkedUsers } from "@/hooks/use-unlinked-users";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { createStaffSchema, updateStaffSchema } from "@/lib/validations/staff";
 import { cn } from "@/lib/utils";
 
@@ -520,13 +521,15 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
   };
 
   const getPermissionByCol = (perms: typeof allPermissions, col: 'read' | 'create' | 'update' | 'delete' | 'special') => {
+    if (col === 'special') {
+      return perms.filter(p => !['read', 'view', 'create', 'update', 'delete'].includes(p.action));
+    }
     return perms.find(p => {
       const act = p.action;
       if (col === 'read') return act === 'read' || act === 'view';
       if (col === 'create') return act === 'create';
       if (col === 'update') return act === 'update';
       if (col === 'delete') return act === 'delete';
-      if (col === 'special') return act === 'manage' || act === 'approve' || act === 'grade' || act === 'export';
       return false;
     });
   };
@@ -578,7 +581,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
       if (col === 'create') return act === 'create';
       if (col === 'update') return act === 'update';
       if (col === 'delete') return act === 'delete';
-      if (col === 'special') return act === 'manage' || act === 'approve' || act === 'grade' || act === 'export';
+      if (col === 'special') return !['read', 'view', 'create', 'update', 'delete'].includes(act);
       return false;
     });
     
@@ -1313,18 +1316,18 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                                 </tr>
                               ) : (
                                 filteredModules.map(([moduleName, perms]) => {
-                                  const pRead = getPermissionByCol(perms, 'read');
-                                  const pCreate = getPermissionByCol(perms, 'create');
-                                  const pUpdate = getPermissionByCol(perms, 'update');
-                                  const pDelete = getPermissionByCol(perms, 'delete');
-                                  const pSpecial = getPermissionByCol(perms, 'special');
+                                  const pRead = getPermissionByCol(perms, 'read') as typeof allPermissions[number] | undefined;
+                                  const pCreate = getPermissionByCol(perms, 'create') as typeof allPermissions[number] | undefined;
+                                  const pUpdate = getPermissionByCol(perms, 'update') as typeof allPermissions[number] | undefined;
+                                  const pDelete = getPermissionByCol(perms, 'delete') as typeof allPermissions[number] | undefined;
+                                  const pSpecial = getPermissionByCol(perms, 'special') as typeof allPermissions;
                                   
                                   const hasAnyOverride = perms.some(p => customPermissions[p.id] !== undefined);
                                   
-                                  const renderCheckboxCell = (p?: typeof allPermissions[number], isSpecial = false) => {
+                                  const renderCheckboxCell = (p?: typeof allPermissions[number]) => {
                                     if (!p) {
                                       return (
-                                        <td className="p-1.5 text-center text-slate-300 dark:text-zinc-800 select-none font-mono">
+                                        <td className="p-1.5 text-center text-slate-300 dark:text-zinc-800 select-none font-mono font-bold">
                                           —
                                         </td>
                                       );
@@ -1350,10 +1353,10 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                                                 "transition-all duration-200 rounded-[4px] border w-4 h-4",
                                                 hasOverride
                                                   ? isGranted
-                                                    ? "border-amber-500 bg-amber-500 checked:bg-amber-500 checked:border-amber-500 text-on-primary ring-2 ring-amber-500/20"
-                                                    : "border-amber-500/70 border-dashed hover:border-amber-500 checked:bg-transparent"
+                                                    ? "border-amber-500 bg-amber-500 text-on-primary ring-2 ring-amber-500/20"
+                                                    : "border-amber-500/70 border-dashed hover:border-amber-500 bg-transparent"
                                                   : isGranted
-                                                  ? "border-primary bg-primary checked:bg-primary text-on-primary"
+                                                  ? "border-primary bg-primary text-on-primary"
                                                   : "border-slate-300 dark:border-zinc-800 hover:border-slate-400 dark:hover:border-zinc-600"
                                               )}
                                               title={p.description || `${p.action} permission`}
@@ -1366,6 +1369,99 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                                             )}
                                           </div>
                                         </div>
+                                      </td>
+                                    );
+                                  };
+
+                                  const renderSpecialCell = (specialPerms: typeof allPermissions) => {
+                                    if (specialPerms.length === 0) {
+                                      return (
+                                        <td className="p-1.5 text-center text-slate-300 dark:text-zinc-800 select-none font-mono font-bold">
+                                          —
+                                        </td>
+                                      );
+                                    }
+
+                                    const anyGranted = specialPerms.some(p => {
+                                      const roleHasIt = rolePermissionIds.has(p.id);
+                                      return customPermissions[p.id] !== undefined ? customPermissions[p.id] : roleHasIt;
+                                    });
+
+                                    const anyOverride = specialPerms.some(p => customPermissions[p.id] !== undefined);
+
+                                    return (
+                                      <td className="p-1.5 text-center">
+                                        <Menu>
+                                          <MenuTrigger asChild>
+                                            <button 
+                                              type="button"
+                                              disabled={!createAccount && !initialData?.userId}
+                                              className={cn(
+                                                "relative inline-flex items-center justify-center w-6 h-6 rounded border transition-colors",
+                                                anyOverride 
+                                                  ? anyGranted ? "bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700/50 dark:text-amber-400" : "bg-transparent border-dashed border-amber-400/70 text-amber-500"
+                                                  : anyGranted ? "bg-primary/10 border-primary/30 text-primary" : "bg-slate-50 border-slate-200 text-slate-400 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800",
+                                                (!createAccount && !initialData?.userId) && "opacity-50 cursor-not-allowed"
+                                              )}
+                                              title="Manage Special Actions"
+                                            >
+                                              <span className="material-symbols-outlined text-[14px]">
+                                                {anyGranted ? 'tune' : 'add'}
+                                              </span>
+                                              {anyOverride && (
+                                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 border border-white dark:border-zinc-950 rounded-full" />
+                                              )}
+                                            </button>
+                                          </MenuTrigger>
+                                          <MenuContent align="center" className="w-48 p-2 rounded-xl shadow-lg border-slate-200/50 dark:border-zinc-800/80">
+                                            <div className="px-2 py-1.5 text-xs font-bold text-slate-500 dark:text-zinc-400 border-b border-slate-100 dark:border-zinc-800/50 mb-1">
+                                              Special Actions
+                                            </div>
+                                            {specialPerms.map(p => {
+                                              const roleHasIt = rolePermissionIds.has(p.id);
+                                              const hasOverride = customPermissions[p.id] !== undefined;
+                                              const isGranted = hasOverride ? customPermissions[p.id] : roleHasIt;
+
+                                              return (
+                                                <MenuItem 
+                                                  key={p.id} 
+                                                  onSelect={(e) => {
+                                                    e.preventDefault();
+                                                    if (createAccount || initialData?.userId) {
+                                                      handleTogglePermission(p.id, roleHasIt);
+                                                    }
+                                                  }}
+                                                  className="gap-3 py-2 px-2 hover:bg-slate-50 dark:hover:bg-zinc-900/50 cursor-pointer rounded-lg"
+                                                >
+                                                  <Checkbox 
+                                                    checked={isGranted}
+                                                    disabled={!createAccount && !initialData?.userId}
+                                                    className={cn(
+                                                      "pointer-events-none w-4 h-4 rounded-[4px] border",
+                                                      hasOverride
+                                                        ? isGranted
+                                                          ? "border-amber-500 bg-amber-500 text-on-primary"
+                                                          : "border-amber-500/70 border-dashed bg-transparent"
+                                                        : isGranted
+                                                        ? "border-primary bg-primary text-on-primary"
+                                                        : "border-slate-300 dark:border-zinc-800"
+                                                    )}
+                                                  />
+                                                  <div className="flex flex-col">
+                                                    <span className="text-sm font-medium capitalize text-slate-700 dark:text-zinc-300">
+                                                      {p.action.replace(/_/g, ' ')}
+                                                    </span>
+                                                    {hasOverride && (
+                                                      <span className="text-[10px] text-amber-600 dark:text-amber-400 leading-none">
+                                                        Custom Override
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </MenuItem>
+                                              );
+                                            })}
+                                          </MenuContent>
+                                        </Menu>
                                       </td>
                                     );
                                   };
@@ -1396,17 +1492,39 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                                       {renderCheckboxCell(pCreate)}
                                       {renderCheckboxCell(pUpdate)}
                                       {renderCheckboxCell(pDelete)}
-                                      {renderCheckboxCell(pSpecial, true)}
+                                      {renderSpecialCell(pSpecial)}
                                       
-                                      <td className="p-1 text-center whitespace-nowrap">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleToggleRow(moduleName, perms)}
-                                          className="p-1 rounded-md text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
-                                          title="Toggle Row"
-                                        >
-                                          <span className="material-symbols-outlined text-[14px]">done_all</span>
-                                        </button>
+                                      <td className="p-1.5 text-center whitespace-nowrap">
+                                        <div className="inline-flex flex-col items-center justify-center select-none">
+                                          {(() => {
+                                            const activeStates = perms.map(p => {
+                                              const roleHasIt = rolePermissionIds.has(p.id);
+                                              return customPermissions[p.id] !== undefined ? customPermissions[p.id] : roleHasIt;
+                                            });
+                                            const allChecked = activeStates.length > 0 && activeStates.every(Boolean);
+                                            const someChecked = activeStates.some(Boolean);
+                                            const isIndeterminate = someChecked && !allChecked;
+                                            
+                                            return (
+                                              <Checkbox
+                                                checked={allChecked}
+                                                ref={(el) => { if (el) el.indeterminate = isIndeterminate; }}
+                                                disabled={!createAccount && !initialData?.userId}
+                                                onChange={() => {
+                                                  if (createAccount || initialData?.userId) {
+                                                    handleToggleRow(moduleName, perms);
+                                                  }
+                                                }}
+                                                className={cn(
+                                                  "transition-all duration-200 rounded-[4px] border w-4 h-4",
+                                                  allChecked || isIndeterminate ? "border-primary bg-primary text-on-primary" : "border-slate-300 dark:border-zinc-800 hover:border-slate-400 dark:hover:border-zinc-600",
+                                                  (!createAccount && !initialData?.userId) && "opacity-50 cursor-not-allowed"
+                                                )}
+                                                title="Toggle All row permissions"
+                                              />
+                                            );
+                                          })()}
+                                        </div>
                                       </td>
                                     </tr>
                                   );

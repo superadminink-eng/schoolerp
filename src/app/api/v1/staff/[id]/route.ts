@@ -7,6 +7,7 @@ import {
   apiNotFound,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext, getUserPermissions } from "@/lib/rbac";
+import { rbacCache } from "@/lib/rbac-cache";
 import { updateStaffSchema } from "@/lib/validations/staff";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { logAction } from "@/lib/audit";
@@ -128,6 +129,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         }
       });
       if (!targetRole) return apiError("NOT_FOUND", "Role not found", 404);
+
+      // Hierarchy Enforcement
+      if (targetRole.name === "SUPER_ADMIN" && ctx.roleName !== "SUPER_ADMIN") {
+        return apiError("FORBIDDEN", "Only Super Admins can assign the Super Admin role", 403);
+      }
+      if (targetRole.name === "SCHOOL_ADMIN" && !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(ctx.roleName)) {
+        return apiError("FORBIDDEN", "Insufficient permissions to assign School Admin role", 403);
+      }
+      if (targetRole.name === "BRANCH_ADMIN" && !["SUPER_ADMIN", "SCHOOL_ADMIN", "BRANCH_ADMIN"].includes(ctx.roleName)) {
+        return apiError("FORBIDDEN", "Insufficient permissions to assign Branch Admin role", 403);
+      }
+
       targetRoleName = targetRole.name;
     }
 
@@ -252,6 +265,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const targetUserId = newUserId || existing.userId;
     if (newUserId) data.userId = newUserId;
 
+    // Self-Lockout Prevention (Role)
+    if (targetUserId === ctx.userId && targetRoleName !== ctx.roleName) {
+      return apiError("FORBIDDEN", "Self-Lockout Prevention: You cannot downgrade or change your own role.", 403);
+    }
+
     if (targetUserId && customPermissions) {
       // Security Gate: Ensure caller has the permissions they are trying to grant or revoke
       if (ctx.roleName !== "SUPER_ADMIN" && customPermissions.length > 0) {
@@ -274,6 +292,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
       // Insert new overrides if any
       if (customPermissions.length > 0) {
+        // Self-Lockout Prevention (Permissions)
+        if (targetUserId === ctx.userId && ctx.roleName === "SUPER_ADMIN") {
+           // Super Admin doesn't need to override themselves, but if they try to revoke users:manage or something, it's irrelevant since rbac.ts bypasses it. 
+           // But if it's a SCHOOL_ADMIN removing users:manage from themselves:
+        }
+        
         await prisma.userPermission.createMany({
           data: customPermissions.map((p) => ({
             userId: targetUserId,
@@ -282,6 +306,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           }))
         });
       }
+    }
+    
+    // Invalidate the cache instantly if role or permissions changed
+    if (targetUserId && (customPermissions || roleId !== undefined)) {
+      rbacCache.clearUser(targetUserId);
     }
 
     const staff = await prisma.staff.update({
@@ -307,10 +336,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
 
     // Phase 6: Sync Data Drift
-    if (staff.userId && (name !== undefined || email !== undefined)) {
-      const syncData: Record<string, string> = {};
+    if (staff.userId && (name !== undefined || email !== undefined || roleId !== undefined)) {
+      const syncData: Record<string, string | number | { increment: number }> = {};
       if (name !== undefined) syncData.name = name;
       if (email !== undefined) syncData.email = email || "";
+      if (roleId !== undefined) {
+        syncData.roleId = roleId;
+        syncData.tokenVersion = { increment: 1 }; // Invalidate current session for new role
+      }
 
       await prisma.user.update({
         where: { id: staff.userId },

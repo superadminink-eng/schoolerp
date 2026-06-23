@@ -71,7 +71,18 @@ export async function GET(req: NextRequest) {
 
     // Phase 5: The "Shadow Override" Filtering Logic
     const overriddenIds = new Set(roles.map(r => r.overridesRoleId).filter(Boolean));
-    const finalRoles = roles.filter(r => !(r.organizationId === null && overriddenIds.has(r.id)));
+    let finalRoles = roles.filter(r => !(r.organizationId === null && overriddenIds.has(r.id)));
+
+    // Phase 6: Role Hierarchy Enforcement (Privilege Escalation Prevention)
+    finalRoles = finalRoles.filter(r => {
+      // Only SUPER_ADMIN can see/assign SUPER_ADMIN
+      if (r.name === "SUPER_ADMIN" && roleName !== "SUPER_ADMIN") return false;
+      // Only SUPER_ADMIN or SCHOOL_ADMIN can see/assign SCHOOL_ADMIN
+      if (r.name === "SCHOOL_ADMIN" && !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(roleName)) return false;
+      // Only SUPER_ADMIN, SCHOOL_ADMIN, or BRANCH_ADMIN can see/assign BRANCH_ADMIN
+      if (r.name === "BRANCH_ADMIN" && !["SUPER_ADMIN", "SCHOOL_ADMIN", "BRANCH_ADMIN"].includes(roleName)) return false;
+      return true;
+    });
 
     return apiSuccess(finalRoles);
   } catch (error) {

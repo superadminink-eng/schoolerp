@@ -14,7 +14,7 @@ export function useAllPermissions() {
   useEffect(() => {
     async function fetchPermissions() {
       try {
-        const res = await fetch("/api/v1/permissions");
+        const res = await fetch("/api/v1/permissions", { cache: "no-store" });
         const data = await res.json();
         if (data.success) {
           setPermissions(data.data);

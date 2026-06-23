@@ -131,6 +131,17 @@ export async function POST(req: NextRequest) {
         return apiError("NOT_FOUND", "Role not found", 404);
       }
 
+      // Hierarchy Enforcement
+      if (targetRole.name === "SUPER_ADMIN" && ctx.roleName !== "SUPER_ADMIN") {
+        return apiError("FORBIDDEN", "Only Super Admins can assign the Super Admin role", 403);
+      }
+      if (targetRole.name === "SCHOOL_ADMIN" && !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(ctx.roleName)) {
+        return apiError("FORBIDDEN", "Insufficient permissions to assign School Admin role", 403);
+      }
+      if (targetRole.name === "BRANCH_ADMIN" && !["SUPER_ADMIN", "SCHOOL_ADMIN", "BRANCH_ADMIN"].includes(ctx.roleName)) {
+        return apiError("FORBIDDEN", "Insufficient permissions to assign Branch Admin role", 403);
+      }
+
       let userId: string | undefined;
 
       // Link Existing User Account
@@ -158,8 +169,21 @@ export async function POST(req: NextRequest) {
           data: {
             roleId,
             branchId,
+            tokenVersion: { increment: 1 } // Force re-login with new role
           }
         });
+
+        // Apply custom permissions if provided
+        if (customPermissions && customPermissions.length > 0) {
+          await prisma.userPermission.deleteMany({ where: { userId } });
+          await prisma.userPermission.createMany({
+            data: customPermissions.map((p) => ({
+              userId: userId as string,
+              permissionId: p.permissionId,
+              granted: p.granted
+            }))
+          });
+        }
 
       } else if (createAccount && email && password) {
         // Create User Login Account if requested

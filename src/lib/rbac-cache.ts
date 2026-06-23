@@ -32,6 +32,14 @@ class RbacCache {
   clear(): void {
     this.cache.clear();
   }
+
+  clearUser(userId: string): void {
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(`perm:${userId}:`) || key.startsWith(`status:${userId}`)) {
+        this.cache.delete(key);
+      }
+    }
+  }
 }
 
 export const rbacCache = new RbacCache();

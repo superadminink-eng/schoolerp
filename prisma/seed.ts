@@ -3,12 +3,15 @@ import { MODULES, DEFAULT_ROLE_PERMISSIONS } from "../src/config/permissions";
 
 const prisma = new PrismaClient();
 
+console.log("INSIDE SEED.TS - MODULES.admissions:", MODULES.admissions);
+
 async function main() {
   console.log("Seeding permissions...");
 
   // Create all permissions
   const permissions: { module: string; action: string }[] = [];
-  for (const [module, actions] of Object.entries(MODULES)) {
+  for (const [module, config] of Object.entries(MODULES)) {
+    const actions = [...config.standard, ...(config.special || [])];
     for (const action of actions) {
       permissions.push({ module, action });
     }
@@ -42,6 +45,9 @@ async function main() {
   };
 
   for (const perm of permissions) {
+    if (perm.module === 'admissions') {
+      console.log(`Upserting admissions permission: ${perm.action}`);
+    }
     const key = `${perm.module}:${perm.action}`;
     const desc = descriptions[key] || `${perm.action} ${perm.module}`;
     await prisma.permission.upsert({
