@@ -129,6 +129,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (name) {
+      if (existing && existing.overridesRoleId && name !== existing.name) {
+        return apiError("FORBIDDEN", "Cannot rename a shadow role that overrides a system role.", 403);
+      }
+
       const nameCheck = await prisma.role.findFirst({
         where: {
           name,

@@ -337,12 +337,31 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     // Phase 6: Sync Data Drift
     if (staff.userId && (name !== undefined || email !== undefined || roleId !== undefined)) {
+      const linkedUser = await prisma.user.findFirst({ where: { id: staff.userId } });
       const syncData: Record<string, string | number | { increment: number }> = {};
+      
       if (name !== undefined) syncData.name = name;
-      if (email !== undefined) syncData.email = email || "";
+      
+      let needsInvalidation = false;
+      
+      if (email !== undefined) {
+        syncData.email = email || "";
+        // Security Feature: Invalidate session if email actually changed
+        if (linkedUser && linkedUser.email !== (email || "")) {
+          needsInvalidation = true;
+        }
+      }
+      
       if (roleId !== undefined) {
         syncData.roleId = roleId;
-        syncData.tokenVersion = { increment: 1 }; // Invalidate current session for new role
+        // Fix: Only invalidate session if role ACTUALLY changed
+        if (linkedUser && linkedUser.roleId !== roleId) {
+          needsInvalidation = true;
+        }
+      }
+
+      if (needsInvalidation) {
+        syncData.tokenVersion = { increment: 1 }; // Force re-login
       }
 
       await prisma.user.update({
@@ -350,7 +369,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         data: syncData,
       });
 
-      const linkedUser = await prisma.user.findFirst({ where: { id: staff.userId } });
       if (linkedUser && linkedUser.firebaseUid) {
         try {
           const fbUpdate: any = {};

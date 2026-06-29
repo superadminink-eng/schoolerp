@@ -17,6 +17,12 @@ export const createUserSchema = z.object({
     .string()
     .min(8, "Password must be at least 8 characters")
     .max(128, "Password must be at most 128 characters"),
+  customPermissions: z.array(
+    z.object({
+      permissionId: z.string(),
+      granted: z.boolean(),
+    })
+  ).optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -35,6 +41,12 @@ export const updateUserSchema = z.object({
     .max(128, "Password must be at most 128 characters")
     .optional()
     .or(z.literal("")),
+  customPermissions: z.array(
+    z.object({
+      permissionId: z.string(),
+      granted: z.boolean(),
+    })
+  ).optional(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

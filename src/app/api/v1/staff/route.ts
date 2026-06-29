@@ -174,15 +174,17 @@ export async function POST(req: NextRequest) {
         });
 
         // Apply custom permissions if provided
-        if (customPermissions && customPermissions.length > 0) {
+        if (customPermissions) {
           await prisma.userPermission.deleteMany({ where: { userId } });
-          await prisma.userPermission.createMany({
-            data: customPermissions.map((p) => ({
-              userId: userId as string,
-              permissionId: p.permissionId,
-              granted: p.granted
-            }))
-          });
+          if (customPermissions.length > 0) {
+            await prisma.userPermission.createMany({
+              data: customPermissions.map((p) => ({
+                userId: userId as string,
+                permissionId: p.permissionId,
+                granted: p.granted
+              }))
+            });
+          }
         }
 
       } else if (createAccount && email && password) {

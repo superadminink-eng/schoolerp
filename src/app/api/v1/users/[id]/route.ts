@@ -2,9 +2,10 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { apiSuccess, apiError, apiValidationError, apiNotFound } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, hasPermission, getUserPermissions } from "@/lib/rbac";
 import { updateUserSchema } from "@/lib/validations/user";
 import { logAction } from "@/lib/audit";
+import { rbacCache } from "@/lib/rbac-cache";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         createdAt: true,
         updatedAt: true,
         branch: { select: { id: true, name: true } },
+        permissions: { select: { permissionId: true, granted: true } },
       },
     });
 
@@ -84,10 +86,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (!existing) return apiNotFound("User");
 
-    // Cannot edit SUPER_ADMIN users
-    if (existing.role.name === "SUPER_ADMIN") {
-      return apiError("FORBIDDEN", "Cannot modify a SUPER_ADMIN user", 403);
-    }
 
     // Role Hierarchy Guard
     const getRoleWeight = (name: string) => {
@@ -110,7 +108,35 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return apiError("FORBIDDEN", "Cannot modify users in another branch", 403);
     }
 
-    const { name, phone, roleId, branchId, isActive, password } = parsed.data;
+    const { name, phone, roleId, branchId, isActive, password, customPermissions } = parsed.data;
+
+    // Self-Lockout Prevention (Anti-Suicide Rule)
+    if (id === ctx.userId && isActive === false) {
+      return apiError("FORBIDDEN", "Self-Lockout Prevention: You cannot deactivate your own account.", 403);
+    }
+    if (id === ctx.userId && roleId && roleId !== existing.roleId) {
+      return apiError("FORBIDDEN", "Self-Lockout Prevention: You cannot change your own role.", 403);
+    }
+
+    // Last Man Standing Failsafe (Protects SCHOOL_ADMIN locally)
+    if (existing.role.name === "SCHOOL_ADMIN" && (isActive === false || (roleId && roleId !== existing.roleId))) {
+      const activeSchoolAdminsCount = await prisma.user.count({
+        where: { role: { name: "SCHOOL_ADMIN" }, isActive: true, organizationId: ctx.organizationId }
+      });
+      if (activeSchoolAdminsCount <= 1) {
+        return apiError("FORBIDDEN", "The Last Man Standing Rule: Cannot deactivate or demote the only remaining active School Admin.", 403);
+      }
+    }
+
+    // Last Man Standing Failsafe (Protects SUPER_ADMIN globally)
+    if (existing.role.name === "SUPER_ADMIN" && (isActive === false || (roleId && roleId !== existing.roleId))) {
+      const activeSuperAdminsCount = await prisma.user.count({
+        where: { role: { name: "SUPER_ADMIN" }, isActive: true }
+      });
+      if (activeSuperAdminsCount <= 1) {
+        return apiError("FORBIDDEN", "The Last Man Standing Rule: Cannot deactivate or demote the only remaining active Super Admin globally.", 403);
+      }
+    }
 
     let targetRole = existing.role;
     if (roleId) {
@@ -124,9 +150,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       targetRole = foundRole;
     }
 
-    // Cannot promote to SUPER_ADMIN (defensive check)
-    if (targetRole.name === "SUPER_ADMIN") {
-      return apiError("FORBIDDEN", "Cannot assign SUPER_ADMIN role", 403);
+    // Cannot promote to SUPER_ADMIN unless caller is SUPER_ADMIN (Handover Rule)
+    if (targetRole.name === "SUPER_ADMIN" && existing.role.name !== "SUPER_ADMIN" && ctx.roleName !== "SUPER_ADMIN") {
+      return apiError("FORBIDDEN", "Only Super Admins can assign the Super Admin role", 403);
     }
 
     // Restrict promoting to SCHOOL_ADMIN role to only SUPER_ADMIN or SCHOOL_ADMIN callers
@@ -144,6 +170,43 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (!branch) {
         return apiError("NOT_FOUND", "Branch not found", 404);
       }
+    }
+    
+    if (customPermissions) {
+      // Security Gate: Ensure caller has the permissions they are trying to grant or revoke
+      if (ctx.roleName !== "SUPER_ADMIN" && customPermissions.length > 0) {
+        const callerPerms = await getUserPermissions(ctx.userId, ctx.roleId, ctx.roleName);
+        const permissionsToVerify = await prisma.permission.findMany({
+          where: { id: { in: customPermissions.map(p => p.permissionId) } }
+        });
+        for (const perm of permissionsToVerify) {
+          const permKey = `${perm.module}:${perm.action}`;
+          if (!callerPerms.has(permKey)) {
+            return apiError("FORBIDDEN", `Cannot grant or revoke permission "${permKey}" that you do not possess`, 403);
+          }
+        }
+      }
+
+      // Delete existing overrides for this user
+      await prisma.userPermission.deleteMany({
+        where: { userId: id }
+      });
+
+      // Insert new overrides if any
+      if (customPermissions.length > 0) {
+        await prisma.userPermission.createMany({
+          data: customPermissions.map((p) => ({
+            userId: id,
+            permissionId: p.permissionId,
+            granted: p.granted
+          }))
+        });
+      }
+    }
+
+    // Invalidate the cache instantly if role or permissions changed
+    if (customPermissions || roleId !== undefined) {
+      rbacCache.clearUser(id);
     }
 
     // Build update data
@@ -253,14 +316,19 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
     if (!existing) return apiNotFound("User");
 
-    // Cannot delete SUPER_ADMIN
-    if (existing.role.name === "SUPER_ADMIN") {
-      return apiError("FORBIDDEN", "Cannot deactivate a SUPER_ADMIN user", 403);
-    }
-
-    // Cannot delete yourself
+    // Cannot delete yourself (Anti-Suicide)
     if (existing.id === ctx.userId) {
       return apiError("FORBIDDEN", "Cannot deactivate your own account", 403);
+    }
+
+    // Last Man Standing Failsafe
+    if (existing.role.name === "SUPER_ADMIN") {
+      const activeSuperAdminsCount = await prisma.user.count({
+        where: { role: { name: "SUPER_ADMIN" }, isActive: true, organizationId: ctx.organizationId }
+      });
+      if (activeSuperAdminsCount <= 1) {
+        return apiError("FORBIDDEN", "The Last Man Standing Rule: Cannot deactivate the only remaining active Super Admin.", 403);
+      }
     }
 
     // Restrict branch-scoped roles from deactivating users in another branch

@@ -70,32 +70,24 @@ export async function POST(req: NextRequest) {
   const { name, code, type, description } = parsed.data;
 
   try {
-    // Check unique code per org
-    const existingCode = await prisma.subjectMaster.findFirst({
-      where: { organizationId: ctx.organizationId, code },
-    });
-    if (existingCode) {
-      return apiError(
-        "CONFLICT",
-        `A subject with code "${code}" already exists`,
-        409
-      );
-    }
-
-    const existingName = await prisma.subjectMaster.findFirst({
+    // Check for unique name or code per org
+    const existing = await prisma.subjectMaster.findFirst({
       where: {
         organizationId: ctx.organizationId,
-        name: name.trim(),
-      },
+        OR: [
+          { code },
+          { name: name.trim() }
+        ]
+      }
     });
 
-    if (existingName) {
-      if (existingName.isActive) {
-        return apiError(
-          "CONFLICT",
-          `A subject with the name "${name}" already exists`,
-          409
-        );
+    if (existing) {
+      if (existing.isActive) {
+        if (existing.code === code) {
+          return apiError("CONFLICT", `A subject with code "${code}" already exists`, 409);
+        } else {
+          return apiError("CONFLICT", `A subject with the name "${name}" already exists`, 409);
+        }
       } else {
         // Return special code for smart reactivation
         return NextResponse.json(
@@ -103,8 +95,8 @@ export async function POST(req: NextRequest) {
             success: false,
             error: {
               code: "ARCHIVED_CONFLICT",
-              message: `A subject with the name "${name}" already exists in your Archives.`,
-              meta: { duplicateId: existingName.id },
+              message: `A subject with the ${existing.code === code ? `code "${code}"` : `name "${name}"`} already exists in your Archives.`,
+              meta: { duplicateId: existing.id },
             },
           },
           { status: 409 }

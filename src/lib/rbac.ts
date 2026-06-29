@@ -12,7 +12,7 @@ export async function hasPermission(
   module: string,
   action: string
 ): Promise<boolean> {
-  if (roleName === "SUPER_ADMIN") return true;
+  if (roleName === "SUPER_ADMIN" || roleName === "SCHOOL_ADMIN") return true;
 
   const cacheKey = `perm:${userId}:${roleId}:${module}:${action}`;
   const cachedVal = rbacCache.get<boolean>(cacheKey);
@@ -53,7 +53,7 @@ export async function getUserPermissions(
   roleId: string,
   roleName: string
 ): Promise<Set<string>> {
-  if (roleName === "SUPER_ADMIN") {
+  if (roleName === "SUPER_ADMIN" || roleName === "SCHOOL_ADMIN") {
     const allPerms = await prisma.permission.findMany();
     return new Set(allPerms.map((p) => `${p.module}:${p.action}`));
   }
