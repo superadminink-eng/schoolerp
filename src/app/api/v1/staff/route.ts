@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
         where,
         select: {
           id: true,
+          employeeId: true,
           name: true,
           email: true,
           phone: true,
@@ -52,6 +53,12 @@ export async function GET(req: NextRequest) {
           joinDate: true,
           status: true,
           branch: { select: { id: true, name: true } },
+          departmentMaster: { select: { id: true, name: true, code: true } },
+          staffDesignations: {
+            select: {
+              designation: { select: { id: true, name: true, code: true } },
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
@@ -104,6 +111,8 @@ export async function POST(req: NextRequest) {
       password,
       customPermissions,
       staffType,
+      departmentId,
+      designationIds,
     } = parsed.data;
 
     // Restrict branch-scoped roles from creating staff in another branch
@@ -263,6 +272,23 @@ export async function POST(req: NextRequest) {
         employeeId = `STF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
       }
 
+      let departmentName = null;
+      if (departmentId) {
+        const dept = await prisma.departmentMaster.findFirst({
+          where: { id: departmentId, organizationId: ctx.organizationId }
+        });
+        if (dept) departmentName = dept.name;
+      }
+      let designationName = null;
+      if (designationIds && designationIds.length > 0) {
+        const desigs = await prisma.designationMaster.findMany({
+          where: { id: { in: designationIds }, organizationId: ctx.organizationId }
+        });
+        if (desigs.length > 0) {
+          designationName = desigs.map(d => d.name).join(", ");
+        }
+      }
+
       const staff = await prisma.staff.create({
         data: {
           branchId,
@@ -273,6 +299,14 @@ export async function POST(req: NextRequest) {
           email: email || null,
           phone: phone || null,
           role: targetRole.name, // Store string name for legacy compatibility
+          department: departmentName,
+          departmentId: departmentId || null,
+          designation: designationName,
+          staffDesignations: designationIds && designationIds.length > 0 ? {
+            create: designationIds.map(id => ({
+              designationId: id
+            }))
+          } : undefined,
           staffType,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
           gender: gender || null,
@@ -290,6 +324,12 @@ export async function POST(req: NextRequest) {
           joinDate: true,
           status: true,
           branch: { select: { id: true, name: true } },
+          departmentMaster: { select: { id: true, name: true, code: true } },
+          staffDesignations: {
+            select: {
+              designation: { select: { id: true, name: true, code: true } },
+            },
+          },
         },
       });
 

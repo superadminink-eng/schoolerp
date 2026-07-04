@@ -32,6 +32,8 @@ model Organization {
   notices               Notice[]
   roles                 Role[]
   subjectMasters        SubjectMaster[]
+  departmentMasters     DepartmentMaster[]
+  designationMasters    DesignationMaster[]
   users                 User[]
   classes               Class[]
   students              Student[]
@@ -418,6 +420,7 @@ model Staff {
   phone                   String?
   role                    String?
   department              String?
+  departmentId            String?
   designation             String?
   dateOfBirth             DateTime?
   gender                  Gender?
@@ -432,15 +435,18 @@ model Staff {
   sectionSubjectTeachings SectionSubjectTeacher[]    @relation("SectionSubjectTeacher")
   sectionClassTeacherOf   Section[]                  @relation("SectionClassTeacher")
   branch                  Branch                     @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  organization            Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization            Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   user                    User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  departmentMaster        DepartmentMaster?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   staffAttendances        StaffAttendance[]
   documents               StaffDocument[]
   subjectAssignments      TeacherSubjectAssignment[]
+  staffDesignations       StaffDesignation[]
 
   @@unique([branchId, employeeId])
   @@index([branchId])
   @@index([organizationId])
+  @@index([departmentId])
   @@index([deletedAt])
   @@map("staff")
 }
@@ -489,6 +495,56 @@ model SubjectMaster {
   @@unique([organizationId, name])
   @@index([organizationId])
   @@map("subject_masters")
+}
+
+model DepartmentMaster {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  code           String
+  description    String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff          Staff[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@map("department_masters")
+}
+
+model DesignationMaster {
+  id                String             @id @default(cuid())
+  organizationId    String
+  name              String
+  code              String
+  description       String?
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffDesignations StaffDesignation[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@map("designation_masters")
+}
+
+model StaffDesignation {
+  id            String            @id @default(cuid())
+  staffId       String
+  designationId String
+  createdAt     DateTime          @default(now())
+  designation   DesignationMaster @relation(fields: [designationId], references: [id], onDelete: Cascade)
+  staff         Staff             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, designationId])
+  @@index([staffId])
+  @@index([designationId])
+  @@map("staff_designations")
 }
 
 model SectionSubjectTeacher {

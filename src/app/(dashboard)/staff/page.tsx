@@ -47,6 +47,7 @@ const ROLE_OPTIONS = [
 
 interface StaffRow {
   id: string;
+  employeeId?: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -56,6 +57,8 @@ interface StaffRow {
   status: string;
   staffType: "TEACHING" | "NON_TEACHING";
   branch: { id: string; name: string };
+  departmentMaster?: { id: string; name: string; code: string } | null;
+  staffDesignations?: { designation: { id: string; name: string; code: string } }[];
 }
 
 const roleLabel = (role: string) =>
@@ -149,26 +152,38 @@ export default function StaffPage() {
   const columns: Column<StaffRow>[] = [
     {
       key: "name",
-      header: "Name",
+      header: "Staff Member",
       type: "avatar",
       avatarConfig: {
         firstName: (row) => row.name,
+        subtitle: (row) => {
+          const dept = row.departmentMaster?.name ? `${row.departmentMaster.name} Dept` : (row.staffType === "TEACHING" ? "Teaching" : "Non-Teaching");
+          const shortId = row.employeeId ? (row.employeeId.includes("-") ? `#${row.employeeId.split("-").slice(-1)[0]}` : `#${row.employeeId}`) : null;
+          return [dept, shortId].filter(Boolean).join(" • ");
+        },
       },
     },
     {
-      key: "email",
-      header: "Email",
-      render: (row) => row.email ?? "—",
-    },
-    {
-      key: "phone",
-      header: "Phone",
-      render: (row) => row.phone ?? "—",
-    },
-    {
       key: "role",
-      header: "Role",
+      header: "Role & Title",
       render: (row) => {
+        const desigs = row.staffDesignations?.map((sd) => sd.designation.name) || [];
+        if (desigs.length > 0) {
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 py-1">
+              {desigs.map((dName, idx) => (
+                <div
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold tracking-tight bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-900 dark:from-amber-500/20 dark:to-orange-500/20 dark:text-amber-300 border border-amber-500/30 shadow-sm"
+                >
+                  <Icon name="workspace_premium" size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>{dName}</span>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
         if (!row.role) return "—";
         const label = roleLabel(row.role);
         let iconName = "person";
@@ -177,12 +192,36 @@ export default function StaffPage() {
         else if (row.role.includes("LIBRARIAN")) iconName = "menu_book";
         
         return (
-          <div className="flex items-center gap-2 text-slate-700 font-medium h-full">
-            <Icon name={iconName} size={15} className="text-slate-400 shrink-0" />
-            <span className="text-sm font-medium text-slate-700">{label}</span>
+          <div className="flex items-center gap-2 text-slate-700 dark:text-zinc-300 font-medium py-1">
+            <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-slate-500 dark:text-zinc-400 shrink-0">
+              <Icon name={iconName} size={14} />
+            </div>
+            <span className="text-sm font-semibold">{label}</span>
           </div>
         );
       },
+    },
+    {
+      key: "contact",
+      header: "Contact Info",
+      render: (row) => (
+        <div className="flex flex-col gap-1 py-1">
+          {row.phone ? (
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200">
+              <Icon name="phone" size={13} className="text-slate-400 dark:text-zinc-500 shrink-0" />
+              <span>{row.phone}</span>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-400 italic">— No phone —</span>
+          )}
+          {row.email && (
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-zinc-400">
+              <Icon name="mail" size={13} className="text-slate-400 dark:text-zinc-500 shrink-0" />
+              <span className="truncate max-w-[180px]">{row.email}</span>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       key: "staffType",
@@ -201,16 +240,8 @@ export default function StaffPage() {
       },
     },
     {
-      key: "gender",
-      header: "Gender",
-      render: (row) =>
-        row.gender
-          ? row.gender.charAt(0) + row.gender.slice(1).toLowerCase()
-          : "—",
-    },
-    {
       key: "joinDate",
-      header: "Joining Date",
+      header: "Joined",
       type: "date",
       dateConfig: {
         value: (row) => row.joinDate,

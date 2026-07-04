@@ -23,7 +23,11 @@ export async function GET(req: NextRequest) {
     await hasPermission(userId, roleId, roleName, "staff", "create") ||
     await hasPermission(userId, roleId, roleName, "staff", "update") ||
     await hasPermission(userId, roleId, roleName, "users", "create") ||
-    await hasPermission(userId, roleId, roleName, "users", "update");
+    await hasPermission(userId, roleId, roleName, "users", "update") ||
+    await hasPermission(userId, roleId, roleName, "departments", "create") ||
+    await hasPermission(userId, roleId, roleName, "departments", "update") ||
+    await hasPermission(userId, roleId, roleName, "designations", "create") ||
+    await hasPermission(userId, roleId, roleName, "designations", "update");
 
   if (!isAllowed) {
     return Response.json(

@@ -23,6 +23,8 @@ export const MODULES: Record<string, { standard: ("create"|"read"|"update"|"dele
   branches: { standard: ["read"], special: ["manage"] },
   users: { standard: ["create", "read", "update", "delete"] },
   admissions: { standard: ["create", "read", "update", "delete"], special: ["inquiry_desk", "document_verification", "entrance_exam", "registrar_desk"] },
+  departments: { standard: ["create", "read", "update", "delete"] },
+  designations: { standard: ["create", "read", "update", "delete"] },
 };
 
 /**
@@ -53,10 +55,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
     "branches:read", "branches:manage",
     "users:create", "users:read", "users:update", "users:delete",
     "admissions:create", "admissions:read", "admissions:update", "admissions:delete", "admissions:inquiry_desk", "admissions:document_verification", "admissions:entrance_exam", "admissions:registrar_desk",
+    "departments:create", "departments:read", "departments:update", "departments:delete",
+    "designations:create", "designations:read", "designations:update", "designations:delete",
   ],
   BRANCH_ADMIN: [
     "students:create", "students:read", "students:update",
     "staff:create", "staff:read", "staff:update",
+    "departments:read", "designations:read",
     "attendance:create", "attendance:read", "attendance:update",
     "exams:create", "exams:read", "exams:update", "exams:grade",
     "timetable:read", "timetable:manage",
@@ -73,6 +78,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
   TEACHER: [
     "students:read",
     "staff:read",
+    "departments:read", "designations:read",
     "attendance:create", "attendance:read",
     "exams:read", "exams:grade",
     "timetable:read",
@@ -114,6 +120,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
   RECEPTIONIST: [
     "students:read",
     "staff:read",
+    "departments:read", "designations:read",
     "notices:read",
     "events:read",
     "admissions:inquiry_desk",
@@ -123,6 +130,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
   COUNSELOR: [
     "students:read",
     "staff:read",
+    "departments:read", "designations:read",
     "notices:read",
     "events:read",
     "admissions:inquiry_desk",
@@ -165,6 +173,8 @@ export const NAVIGATION_ITEMS: NavItemType[] = [
       { label: "Admissions", href: "/admissions", icon: "app_registration", permission: "admissions:inquiry_desk,admissions:document_verification,admissions:entrance_exam,admissions:registrar_desk" },
       { label: "Students", href: "/students", icon: "person", permission: "students:read" },
       { label: "Staff", href: "/staff", icon: "badge", permission: "staff:read" },
+      { label: "Departments", href: "/departments", icon: "domain", permission: "departments:read" },
+      { label: "Designations", href: "/designations", icon: "work", permission: "designations:read" },
     ]
   },
   {

@@ -20,6 +20,10 @@ import { useBranches } from "@/hooks/use-branches";
 import { useRoles } from "@/hooks/use-roles";
 import { useAllPermissions } from "@/hooks/use-all-permissions";
 import { useUnlinkedUsers } from "@/hooks/use-unlinked-users";
+import { useDepartments } from "@/hooks/use-departments";
+import { useDesignations } from "@/hooks/use-designations";
+import { usePermissions } from "@/hooks/use-permissions";
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
@@ -75,6 +79,8 @@ interface StaffData {
   joinDate: string;
   status: string;
   branch: { id: string; name: string };
+  departmentMaster?: { id: string; name: string; code: string } | null;
+  staffDesignations?: { designation: { id: string; name: string; code: string } }[];
   user?: {
     permissions: { permissionId: string; granted: boolean }[];
   } | null;
@@ -109,6 +115,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
 
   const { roles, loading: rolesLoading } = useRoles({ type: "STAFF" });
   const { permissions: allPermissions, loading: permsLoading } = useAllPermissions();
+  const { can } = usePermissions();
 
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
   const [name, setName] = useState(initialData?.name ?? "");
@@ -153,6 +160,72 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
   const [branchId, setBranchId] = useState(initialData?.branch?.id ?? "");
   const [status, setStatus] = useState(initialData?.status ?? "ACTIVE");
   const [staffType, setStaffType] = useState(initialData?.staffType ?? "TEACHING");
+
+  const { departments, isLoading: deptsLoading } = useDepartments();
+  const { designations, isLoading: desigsLoading, refetch: refetchDesignations } = useDesignations();
+
+  const displayDepartments = [...departments];
+  if (initialData?.departmentMaster && !displayDepartments.some(d => d.id === initialData.departmentMaster!.id)) {
+    displayDepartments.push({
+      id: initialData.departmentMaster.id,
+      name: `${initialData.departmentMaster.name} (Archived)`,
+      code: initialData.departmentMaster.code,
+    });
+  }
+
+  const displayDesignations = [...designations];
+  if (initialData?.staffDesignations) {
+    for (const sd of initialData.staffDesignations) {
+      if (sd.designation && !displayDesignations.some(d => d.id === sd.designation.id)) {
+        displayDesignations.push({
+          id: sd.designation.id,
+          name: `${sd.designation.name} (Archived)`,
+          code: sd.designation.code,
+        });
+      }
+    }
+  }
+
+  const [departmentId, setDepartmentId] = useState(initialData?.departmentMaster?.id ?? "");
+  const [designationIds, setDesignationIds] = useState<string[]>(() => {
+    if (initialData?.staffDesignations && initialData.staffDesignations.length > 0) {
+      return initialData.staffDesignations.map(sd => sd.designation.id);
+    }
+    return [];
+  });
+
+  const [isCreateDesigOpen, setIsCreateDesigOpen] = useState(false);
+  const [newDesigName, setNewDesigName] = useState("");
+  const [newDesigCode, setNewDesigCode] = useState("");
+  const [creatingDesig, setCreatingDesig] = useState(false);
+
+  async function handleCreateDesignation(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newDesigName || !newDesigCode || creatingDesig) return;
+    setCreatingDesig(true);
+    try {
+      const res = await fetch("/api/v1/designations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newDesigName, code: newDesigCode.toUpperCase(), isActive: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Designation created successfully!", "success");
+        await refetchDesignations();
+        setDesignationIds(prev => [...prev, data.data.id]);
+        setIsCreateDesigOpen(false);
+        setNewDesigName("");
+        setNewDesigCode("");
+      } else {
+        snackbar.show(data.error?.message ?? "Failed to create designation", "error");
+      }
+    } catch {
+      snackbar.show("Error creating designation", "error");
+    } finally {
+      setCreatingDesig(false);
+    }
+  }
 
   const [linkExistingUser, setLinkExistingUser] = useState(false);
   const [existingUserId, setExistingUserId] = useState("");
@@ -341,6 +414,8 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
         joinDate: joinDate || undefined,
         branchId,
         staffType,
+        departmentId: departmentId || undefined,
+        designationIds: designationIds.length > 0 ? designationIds : undefined,
         createAccount: linkExistingUser ? false : createAccount,
         existingUserId: linkExistingUser ? existingUserId : undefined,
         password: linkExistingUser ? undefined : password || undefined,
@@ -360,7 +435,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
           if (!firstErrorStep) {
             if (["name", "email", "phone", "dateOfBirth", "gender", "qualification"].includes(key)) {
               firstErrorStep = 1;
-            } else if (["roleId", "branchId", "joinDate", "status"].includes(key)) {
+            } else if (["roleId", "branchId", "joinDate", "status", "departmentId", "designationIds"].includes(key)) {
               firstErrorStep = 2;
             } else if (["createAccount", "password"].includes(key)) {
               firstErrorStep = 3;
@@ -414,6 +489,8 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
         branchId: branchId || undefined,
         status,
         staffType,
+        departmentId: departmentId || undefined,
+        designationIds: designationIds.length > 0 ? designationIds : undefined,
         createAccount,
         password: password || undefined,
         customPermissions: Object.entries(customPermissions).map(([permissionId, granted]) => ({
@@ -432,7 +509,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
           if (!firstErrorStep) {
             if (["name", "email", "phone", "dateOfBirth", "gender", "qualification"].includes(key)) {
               firstErrorStep = 1;
-            } else if (["roleId", "branchId", "joinDate", "status"].includes(key)) {
+            } else if (["roleId", "branchId", "joinDate", "status", "departmentId", "designationIds"].includes(key)) {
               firstErrorStep = 2;
             } else if (["createAccount", "password"].includes(key)) {
               firstErrorStep = 3;
@@ -1035,6 +1112,19 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                     fullWidth
                   />
 
+                  <SelectField
+                    label="Department"
+                    value={departmentId || "none"}
+                    onValueChange={(val) => setDepartmentId(val === "none" ? "" : val)}
+                    options={[
+                      { value: "none", label: "None / Not Assigned" },
+                      ...displayDepartments.map((d) => ({ value: d.id, label: `${d.name} (${d.code})` }))
+                    ]}
+                    placeholder={deptsLoading ? "Loading departments..." : "Select department"}
+                    error={errors.departmentId}
+                    fullWidth
+                  />
+
                   {mode === "edit" && (
                     <SelectField
                       label="Status"
@@ -1043,6 +1133,118 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                       options={STATUSES.map((s) => ({ value: s.value, label: s.label }))}
                       fullWidth
                     />
+                  )}
+                </div>
+
+                {/* Designations Section */}
+                <div className="p-5 rounded-2xl bg-slate-50/70 dark:bg-zinc-900/50 border border-slate-200/80 dark:border-zinc-800 space-y-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <label className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px] text-primary">badges</span>
+                        Designations (Multi-Select)
+                      </label>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                        Select all administrative or academic titles applicable to this staff member.
+                      </p>
+                    </div>
+
+                    {can("designations", "create") && (
+                      <Dialog open={isCreateDesigOpen} onOpenChange={setIsCreateDesigOpen}>
+                        <DialogTrigger asChild>
+                          <Button type="button" variant="outlined" size="sm" className="h-8 gap-1 text-xs border-primary/30 text-primary hover:bg-primary/5">
+                            <span className="material-symbols-outlined text-[16px]">add</span>
+                            Create New Designation
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md">
+                          <DialogTitle>Create Designation</DialogTitle>
+                          <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                            Add a new master designation title (e.g. Principal, HOD, Exam Controller). It will be immediately available for selection.
+                          </DialogDescription>
+                          <div className="space-y-4 mt-4">
+                            <TextField
+                              label="Designation Name"
+                              value={newDesigName}
+                              onChange={(e) => {
+                                setNewDesigName(e.target.value);
+                                if (!newDesigCode && e.target.value) {
+                                  setNewDesigCode(e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4).toUpperCase());
+                                }
+                              }}
+                              placeholder="e.g. Vice Principal"
+                              required
+                              fullWidth
+                            />
+                            <TextField
+                              label="Code / Abbreviation"
+                              value={newDesigCode}
+                              onChange={(e) => setNewDesigCode(e.target.value.toUpperCase())}
+                              placeholder="e.g. VP"
+                              required
+                              fullWidth
+                              maxLength={10}
+                            />
+                            <div className="flex justify-end gap-3 pt-2">
+                              <Button type="button" variant="outlined" size="sm" onClick={() => setIsCreateDesigOpen(false)}>
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleCreateDesignation}
+                                disabled={!newDesigName || !newDesigCode || creatingDesig}
+                              >
+                                {creatingDesig ? "Creating..." : "Create & Select"}
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
+
+                  {desigsLoading ? (
+                    <div className="text-xs text-slate-500 py-2">Loading designations...</div>
+                  ) : displayDesignations.length === 0 ? (
+                    <div className="text-xs text-slate-500 py-2 italic">
+                      {can("designations", "create")
+                        ? 'No designations available. Click "Create New Designation" above to add one.'
+                        : 'No designations available. Please contact an administrator to add designations.'}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
+                      {displayDesignations.map((desig) => {
+                        const isChecked = designationIds.includes(desig.id);
+                        return (
+                          <label
+                            key={desig.id}
+                            className={cn(
+                              "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer text-sm select-none",
+                              isChecked
+                                ? "bg-primary/5 border-primary/40 text-primary font-medium shadow-sm"
+                                : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-700"
+                            )}
+                          >
+                            <Checkbox
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                if (checked) {
+                                  setDesignationIds((prev) => [...prev, desig.id]);
+                                } else {
+                                  setDesignationIds((prev) => prev.filter((id) => id !== desig.id));
+                                }
+                              }}
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="truncate">{desig.name}</span>
+                              <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono uppercase">{desig.code}</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>

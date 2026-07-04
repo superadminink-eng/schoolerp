@@ -57,6 +57,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
         userId: true,
         user: { select: { permissions: true } },
         branch: { select: { id: true, name: true } },
+        departmentMaster: { select: { id: true, name: true, code: true } },
+        staffDesignations: {
+          select: {
+            designation: { select: { id: true, name: true, code: true } },
+          },
+        },
       },
     });
 
@@ -105,9 +111,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const existing = await prisma.staff.findFirst({ where: existingWhere });
     if (!existing) return apiNotFound("Staff member");
 
-    const { name, email, phone, roleId, dateOfBirth, gender, qualification, joinDate, branchId, status, createAccount,      password,
+    const { name, email, phone, roleId, dateOfBirth, gender, qualification, joinDate, branchId, status, createAccount, password,
       customPermissions,
       staffType,
+      departmentId,
+      designationIds,
     } = parsed.data;
 
     // If changing branch, verify it belongs to org
@@ -262,6 +270,31 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (branchId !== undefined) data.branchId = branchId;
     if (status !== undefined) data.status = status;
     if (staffType !== undefined) data.staffType = staffType;
+    if (departmentId !== undefined) {
+      data.departmentId = departmentId || null;
+      if (departmentId) {
+        const dept = await prisma.departmentMaster.findFirst({
+          where: { id: departmentId, organizationId: ctx.organizationId }
+        });
+        data.department = dept ? dept.name : null;
+      } else {
+        data.department = null;
+      }
+    }
+    if (designationIds !== undefined) {
+      if (designationIds.length > 0) {
+        const desigs = await prisma.designationMaster.findMany({
+          where: { id: { in: designationIds }, organizationId: ctx.organizationId }
+        });
+        data.designation = desigs.map(d => d.name).join(", ");
+      } else {
+        data.designation = null;
+      }
+      data.staffDesignations = {
+        deleteMany: {},
+        create: designationIds.map(dId => ({ designationId: dId }))
+      };
+    }
     const targetUserId = newUserId || existing.userId;
     if (newUserId) data.userId = newUserId;
 
