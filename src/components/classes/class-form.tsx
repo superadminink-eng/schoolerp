@@ -945,40 +945,46 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       )}
 
       {hasEnrolledStudents && (
-        <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900/30 p-5 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-3.5 shadow-sm backdrop-blur-sm animate-fadeIn">
-          <div className="p-2 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
-            <Icon name="security" size={22} className="animate-pulse" />
-          </div>
-          <div className="space-y-1.5 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <strong className="font-extrabold text-sm text-slate-800 dark:text-slate-200">
-                Granular Lifecycle Lock (स्मार्ट सुरक्षा लॉक)
-              </strong>
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 hidden sm:inline-block" />
-              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                Active Enrolled Students
-              </span>
+        <div className="mb-8 relative overflow-hidden rounded-2xl bg-gradient-to-br from-surface to-surface-container-lowest border border-outline/10 shadow-sm ring-1 ring-black/5 dark:ring-white/5 transition-all hover:shadow-md">
+          {/* Premium Glow Effect */}
+          <div className="absolute top-0 left-0 w-40 h-40 bg-primary/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+          
+          <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
+            {/* Icon Container with Inner Shadow */}
+            <div className="flex items-center justify-center h-16 w-16 shrink-0 rounded-2xl bg-surface border border-outline-variant/30 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_2px_10px_rgba(255,255,255,0.05)]">
+              <Icon name="lock" size={28} className="text-primary" />
             </div>
-            <div className="text-xs leading-relaxed text-slate-600 dark:text-slate-300 space-y-1">
-              {hasInvoices ? (
-                <>
-                  <span className="block font-medium">
-                    🇮🇳 फी आणि हप्ते लॉक केले आहेत कारण फीचे इनव्हॉइस (Invoices) आधीच तयार झाले आहेत. वर्ग नाव, शिक्षक, आणि हप्त्यांच्या तारखा बदलता येतील.
+            
+            {/* Content */}
+            <div className="flex-1 space-y-4">
+              <div>
+                <div className="flex items-center gap-3 mb-1.5">
+                  <h3 className="text-lg font-bold text-on-surface tracking-tight">Security Lock Engaged</h3>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-black tracking-widest uppercase">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Active Students
                   </span>
-                  <span className="block font-medium opacity-90 border-t border-amber-200/40 dark:border-amber-900/20 pt-1">
-                    🇬🇧 Fee structures and installment amounts are locked because invoices have already been generated. Class name, teachers, and installment due dates remain editable.
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="block font-medium">
-                    🇮🇳 वर्गात विद्यार्थी असल्याने फक्त श्रेणी (Grade Level) बदलणे प्रतिबंधित आहे. नवीन तुकडी जोडणे, रिकाम्या तुकड्या डिलीट करणे आणि फी बदलणे पूर्णपणे उपलब्ध आहे.
-                  </span>
-                  <span className="block font-medium opacity-90 border-t border-amber-200/40 dark:border-amber-900/20 pt-1">
-                    🇬🇧 Since students are enrolled, only the grade level is locked. Adding new divisions, deleting empty divisions, and updating fee amounts are fully permitted.
-                  </span>
-                </>
-              )}
+                </div>
+                <p className="text-sm text-on-surface-variant/80 max-w-2xl leading-relaxed">
+                  {hasInvoices 
+                    ? "Financial & structural integrity protected. Invoices are generated and students are enrolled."
+                    : "Structural integrity protected. Students are actively enrolled in this class."}
+                </p>
+              </div>
+
+              {/* Actionable Status Badges (Accurate Matrix) */}
+              <div className="flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-semibold text-red-700 dark:text-red-400">
+                  <Icon name="lock" size={14} />
+                  <span className="opacity-90">Locked:</span> 
+                  {hasInvoices ? "Grade level, fees & installments" : "Grade level"}
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                  <Icon name="edit" size={14} />
+                  <span className="opacity-90">Editable:</span> 
+                  {hasInvoices ? "Class name, teachers, divisions & dates" : "Fees, class name, teachers & divisions"}
+                </div>
+              </div>
             </div>
           </div>
         </div>
