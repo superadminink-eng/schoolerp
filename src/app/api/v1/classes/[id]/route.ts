@@ -526,6 +526,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             data: {
               classId: id,
               academicYearId: existing.academicYearId,
+              installmentMasterId: inst.installmentMasterId || null,
               name: inst.name,
               amount: inst.amount,
               dueDate: new Date(inst.dueDate),

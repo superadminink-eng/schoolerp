@@ -24,6 +24,7 @@ const inlineFeeSchema = z.object({
 
 const inlineInstallmentSchema = z.object({
   id: z.string().optional(),
+  installmentMasterId: z.string().nullish(),
   name: z
     .string()
     .min(1, "Installment name is required")

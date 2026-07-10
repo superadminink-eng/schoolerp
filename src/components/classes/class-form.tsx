@@ -17,8 +17,10 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useBranches } from "@/hooks/use-branches";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useTeachers } from "@/hooks/use-teachers";
 import { useSubjectMasters } from "@/hooks/use-subject-masters";
+import { useInstallmentMasters } from "@/hooks/use-installment-masters";
 import {
   createClassSchema,
   updateClassSchema,
@@ -74,6 +76,7 @@ interface FeeRow {
 
 interface InstallmentRow {
   id?: string;
+  installmentMasterId?: string | null;
   name: string;
   amount: number | string;
   dueDate: string;
@@ -146,6 +149,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
   const { branches, isLoading: branchesLoading } = useBranches();
   const { subjectMasters, isLoading: subjectMastersLoading } = useSubjectMasters();
+  const { installmentMasters } = useInstallmentMasters();
 
   const [name, setName] = useState(initialData?.name ?? "");
   const [numericGrade, setNumericGrade] = useState<string>(
@@ -237,6 +241,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   const [installments, setInstallments] = useState<InstallmentRow[]>(() =>
     initialData?.feeInstallmentTemplates?.map((t) => ({
       id: t.id,
+      installmentMasterId: t.installmentMasterId || null,
       name: t.name,
       amount: Number(t.amount),
       dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split("T")[0] : "",
@@ -989,6 +994,14 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           </div>
         </div>
       )}
+
+      {/* Datalist for Installment Masters (Creatable Combobox Fallback) */}
+      <datalist id="master-installments">
+        {installmentMasters.map((master) => (
+          <option key={master.id} value={master.name} />
+        ))}
+      </datalist>
+
       <Card variant="outlined">
         <CardContent className="p-6">
           <Tabs value={activeMainTab} onValueChange={setActiveMainTab}>
@@ -1471,9 +1484,15 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                       label="Installment Name"
                                       placeholder="e.g. Admission / Term 1"
                                       value={inst.name}
-                                      onChange={(e) =>
-                                        updateInstallment(index, "name", e.target.value)
-                                      }
+                                      list="master-installments"
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        const master = installmentMasters.find(
+                                          m => m.name.toLowerCase() === val.trim().toLowerCase()
+                                        );
+                                        updateInstallment(index, "name", val);
+                                        updateInstallment(index, "installmentMasterId", master ? master.id : null);
+                                      }}
                                       error={errors[`installments.${index}.name`]}
                                       disabled={hasInvoices}
                                       required
