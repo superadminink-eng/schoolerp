@@ -177,8 +177,8 @@ export async function POST(req: NextRequest) {
     });
 
     return apiSuccess(application, undefined, 201);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Create application error:", error);
-    return apiError("INTERNAL_ERROR", "Failed to create application", 500);
+    return apiError("INTERNAL_ERROR", `Failed to create application: ${error?.message || String(error)}`, 500);
   }
 }
