@@ -30,15 +30,28 @@ export async function GET(req: NextRequest) {
     ...buildSearchWhere(search, ["firstName", "lastName", "admissionNo"]),
   };
 
+  // Get active academic year for accurate class/section filtering
+  const currentAcademicYear = await prisma.academicYear.findFirst({
+    where: { organizationId: ctx.organizationId, isCurrent: true, deletedAt: null },
+    select: { id: true },
+  });
+
   const classId = url.searchParams.get("classId");
   const sectionId = url.searchParams.get("sectionId");
+  
   if (sectionId) {
     where.enrollments = {
-      some: { sectionId },
+      some: { 
+        sectionId,
+        ...(currentAcademicYear?.id ? { academicYearId: currentAcademicYear.id } : {})
+      },
     };
   } else if (classId) {
     where.enrollments = {
-      some: { section: { classId } },
+      some: { 
+        section: { classId },
+        ...(currentAcademicYear?.id ? { academicYearId: currentAcademicYear.id } : {})
+      },
     };
   }
 
@@ -77,6 +90,7 @@ export async function GET(req: NextRequest) {
           emergencyContact1: true,
           branch: { select: { id: true, name: true } },
           enrollments: {
+            where: currentAcademicYear?.id ? { academicYearId: currentAcademicYear.id } : undefined,
             take: 1,
             orderBy: { enrolledAt: "desc" },
             select: {

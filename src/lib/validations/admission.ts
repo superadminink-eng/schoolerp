@@ -67,44 +67,54 @@ export const createFollowUpSchema = z.object({
   }),
 });
 
-export const createApplicationSchema = z.object({
+export const candidateInfoSchema = z.object({
   inquiryId: z.string().optional().or(z.literal("")),
   branchId: z.string().min(1, "Branch is required"),
   academicYearId: z.string().min(1, "Academic year is required"),
   classId: z.string().min(1, "Class is required"),
-  
-  // Applicant details
   firstName: z
     .string()
+    .trim()
     .min(1, "First name is required")
     .max(100, "First name must be at most 100 characters"),
   lastName: z
     .string()
+    .trim()
     .min(1, "Last name is required")
     .max(100, "Last name must be at most 100 characters"),
   dateOfBirth: z.string().min(1, "Date of birth is required"),
   gender: z.enum(GENDERS, { required_error: "Gender is required" }),
-  bloodGroup: z.string().optional().or(z.literal("")),
-  address: z.string().min(1, "Address is required").max(500),
-  pincode: z.string().min(1, "Pincode is required").max(10),
-  previousSchool: z.string().max(200).optional().or(z.literal("")),
-  emergencyContact: requiredPhoneSchema,
+  bloodGroup: z.string().trim().optional().or(z.literal("")),
+});
 
-  // Parents details
-  fatherName: z.string().max(100).optional().or(z.literal("")),
+export const parentInfoSchema = z.object({
+  fatherName: z.string().trim().max(100).optional().or(z.literal("")),
   fatherPhone: optionalPhoneSchema,
   fatherEmail: z
     .string()
+    .trim()
     .email("Invalid email address")
     .optional()
     .or(z.literal("")),
-  fatherOccupation: z.string().max(100).optional().or(z.literal("")),
-  motherName: z.string().max(100).optional().or(z.literal("")),
+  fatherOccupation: z.string().trim().max(100).optional().or(z.literal("")),
+  motherName: z.string().trim().max(100).optional().or(z.literal("")),
   motherPhone: optionalPhoneSchema,
   motherEmail: z
     .string()
+    .trim()
     .email("Invalid email address")
     .optional()
     .or(z.literal("")),
-  motherOccupation: z.string().max(100).optional().or(z.literal("")),
+  motherOccupation: z.string().trim().max(100).optional().or(z.literal("")),
 });
+
+export const addressInfoSchema = z.object({
+  address: z.string().trim().min(1, "Address is required").max(500),
+  pincode: z.string().trim().min(1, "Pincode is required").max(10),
+  previousSchool: z.string().trim().max(200).optional().or(z.literal("")),
+  emergencyContact: requiredPhoneSchema,
+});
+
+export const createApplicationSchema = candidateInfoSchema
+  .merge(parentInfoSchema)
+  .merge(addressInfoSchema);

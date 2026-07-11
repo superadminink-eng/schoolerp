@@ -39,6 +39,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
             number: true,
             totalAmount: true,
             dueDate: true,
+            payments: {
+              select: {
+                id: true,
+                amount: true,
+                paidAt: true,
+              },
+              orderBy: {
+                paidAt: 'asc'
+              }
+            }
           },
         },
         student: {
@@ -74,6 +84,13 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ? `${enrollment.section.class.name} - ${enrollment.section.name}`
       : "—";
 
+    // Calculate the paid amount chronologically up to and including this receipt
+    let paidAmountUpToThis = 0;
+    for (const p of payment.invoice.payments) {
+      paidAmountUpToThis += Number(p.amount);
+      if (p.id === payment.id) break;
+    }
+
     return apiSuccess({
       id: payment.id,
       receiptNo: payment.receiptNo,
@@ -86,6 +103,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
         id: payment.invoice.id,
         number: payment.invoice.number,
         totalAmount: Number(payment.invoice.totalAmount),
+        paidAmount: paidAmountUpToThis,
+        pendingAmount: Number(payment.invoice.totalAmount) - paidAmountUpToThis,
         dueDate: payment.invoice.dueDate,
       },
       student: {

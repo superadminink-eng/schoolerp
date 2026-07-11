@@ -317,8 +317,6 @@ export default function LeavingCertificatePrintPage() {
           .print-container {
             border: none !important;
             box-shadow: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             min-height: auto !important;

@@ -47,7 +47,7 @@ export const createClassSchema = z.object({
   numericGrade: z
     .number()
     .int("Grade must be a whole number")
-    .min(0, "Grade must be at least 0")
+    .min(-10, "Grade must be at least -10")
     .max(20, "Grade must be at most 20"),
   branchId: z.string().min(1, "Branch is required"),
   academicYearId: z.string().min(1, "Academic year is required"),
@@ -125,7 +125,7 @@ export const updateClassSchema = z.object({
   numericGrade: z
     .number()
     .int("Grade must be a whole number")
-    .min(0, "Grade must be at least 0")
+    .min(-10, "Grade must be at least -10")
     .max(20, "Grade must be at most 20")
     .optional(),
   branchId: z.string().optional(),

@@ -502,6 +502,17 @@ export default function StudentsPage() {
           </Card>
         )}
 
+        {/* Results Count Indicator */}
+        <div className="flex items-center text-sm font-medium text-slate-600">
+          {loading ? (
+            <span className="animate-pulse">Calculating...</span>
+          ) : (
+            <span>
+              Results found: <strong className="text-slate-900 bg-slate-200 px-2 py-0.5 rounded-md ml-1">{totalItems}</strong>
+            </span>
+          )}
+        </div>
+
         {/* Table */}
         <div className="rounded-md border border-outline-variant bg-surface overflow-hidden">
           <DataTable

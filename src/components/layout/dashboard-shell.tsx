@@ -70,20 +70,20 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
   const pageTitle = deriveTitle(pathname);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-dim font-sans text-on-surface">
+    <div className="flex h-screen overflow-hidden bg-surface-dim font-sans text-on-surface print:h-auto print:block print:overflow-visible print:bg-white">
       {/* Persistent drawer — desktop only */}
       <StandardDrawer
         items={filteredItems}
         orgName={user.organizationName}
         orgLogo={user.organizationLogo}
-        className="hidden xl:block"
+        className="hidden xl:block print:hidden"
       />
 
       {/* Nav rail — tablet only */}
       <NavRail
         items={filteredItems}
         onMenuClick={() => setDrawerOpen(true)}
-        className="hidden md:flex xl:hidden"
+        className="hidden md:flex xl:hidden print:hidden"
       />
 
       {/* Modal drawer — opens from hamburger on mobile/tablet */}
@@ -96,10 +96,11 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       />
 
       {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden min-h-0 w-full">
+      <div className="flex flex-1 flex-col overflow-hidden min-h-0 w-full print:block print:overflow-visible">
         <TopAppBar
           title={pageTitle}
           onMenuClick={() => setDrawerOpen(true)}
+          className="print:hidden"
           trailing={
             <>
               <BranchSwitcher />
@@ -113,8 +114,8 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
           }
         />
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8">{children}</div>
+        <main className="flex-1 overflow-y-auto print:overflow-visible">
+          <div className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8 print:p-0 print:max-w-none">{children}</div>
         </main>
       </div>
     </div>

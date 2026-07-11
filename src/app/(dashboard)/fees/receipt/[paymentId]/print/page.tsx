@@ -18,6 +18,8 @@ interface ReceiptData {
     id: string;
     number: string;
     totalAmount: number;
+    paidAmount: number;
+    pendingAmount: number;
     dueDate: string;
   };
   student: {
@@ -105,6 +107,11 @@ export default function FeeReceiptPrintPage() {
 
   useEffect(() => {
     if (receipt) {
+      // Set document title for clean PDF saving
+      const safeName = `${receipt.student.firstName}_${receipt.student.lastName}`.replace(/[^a-zA-Z0-9_-]/g, "");
+      const receiptName = receipt.receiptNo || "Receipt";
+      document.title = `Fee_Receipt_${safeName}_${receiptName}`;
+
       const timer = setTimeout(() => {
         window.print();
       }, 800);
@@ -124,9 +131,9 @@ export default function FeeReceiptPrintPage() {
   if (!receipt) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-0 md:p-8 flex flex-col items-center">
+    <div className="min-h-screen bg-slate-50/50 p-0 md:p-8 flex flex-col items-center print:min-h-0 print:bg-white print:p-0 print:block">
       {/* Control Bar (Hidden during print) */}
-      <div className="w-full max-w-[700px] bg-white border border-slate-200 p-4 rounded-xl mb-6 flex justify-between items-center shadow-sm no-print">
+      <div className="w-full max-w-[700px] bg-white border border-slate-200 p-4 rounded-xl mb-6 flex justify-between items-center shadow-sm print:hidden">
         <button
           onClick={() => router.back()}
           className="flex items-center gap-1.5 px-4 py-2 border rounded-lg text-sm text-slate-700 bg-white hover:bg-slate-50 font-semibold cursor-pointer"
@@ -144,7 +151,7 @@ export default function FeeReceiptPrintPage() {
       </div>
 
       {/* Printable Receipt Container */}
-      <div className="w-full max-w-[700px] bg-white border border-slate-300 p-10 relative print-container flex flex-col justify-between shadow-sm">
+      <div className="w-full max-w-[700px] bg-white border border-slate-300 p-8 md:p-10 relative flex flex-col justify-between shadow-sm print:border-none print:shadow-none print:max-w-none print:w-full">
         
         {/* Border frame */}
         <div className="absolute inset-4 border border-slate-300 pointer-events-none" />
@@ -203,7 +210,17 @@ export default function FeeReceiptPrintPage() {
               </thead>
               <tbody>
                 <tr className="border-b border-slate-100 text-slate-700 font-semibold">
-                  <td className="py-3 px-4">Fee Payment ({receipt.invoice.number})</td>
+                  <td className="py-3 px-4">Invoice Total ({receipt.invoice.number})</td>
+                  <td className="py-3 px-4 text-right">₹{receipt.invoice.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                </tr>
+                {receipt.invoice.paidAmount - receipt.amount > 0 && (
+                  <tr className="border-b border-slate-100 text-slate-500 font-semibold">
+                    <td className="py-2.5 px-4">Previously Paid</td>
+                    <td className="py-2.5 px-4 text-right">₹{(receipt.invoice.paidAmount - receipt.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                )}
+                <tr className="border-b border-slate-100 text-slate-700 font-semibold">
+                  <td className="py-3 px-4">Amount Paid Now</td>
                   <td className="py-3 px-4 text-right">₹{receipt.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                 </tr>
                 {receipt.remarks && (
@@ -214,8 +231,8 @@ export default function FeeReceiptPrintPage() {
                   </tr>
                 )}
                 <tr className="bg-slate-50/50 border-t border-slate-200 font-bold text-slate-800">
-                  <td className="py-2.5 px-4 text-right uppercase tracking-wide text-[10px] text-slate-500">Total Received</td>
-                  <td className="py-2.5 px-4 text-right text-sm">₹{receipt.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                  <td className="py-2.5 px-4 text-right uppercase tracking-wide text-[10px] text-slate-500">Outstanding Balance</td>
+                  <td className="py-2.5 px-4 text-right text-sm">₹{receipt.invoice.pendingAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                 </tr>
               </tbody>
             </table>
@@ -274,8 +291,6 @@ export default function FeeReceiptPrintPage() {
           .print-container {
             border: none !important;
             box-shadow: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             min-height: auto !important;

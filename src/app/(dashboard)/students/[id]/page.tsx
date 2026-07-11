@@ -928,6 +928,23 @@ export default function StudentProfilePage() {
                   <div className="text-center p-6 text-on-surface-variant">Failed to load financial records.</div>
                 ) : (
                   <div className="space-y-6">
+                    {/* Fees Header & Actions */}
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                      <h3 className="text-title-md font-bold text-on-surface">Fees & Accounts Overview</h3>
+                      <PermissionGate module="fees" action="read">
+                        <Button
+                          type="button"
+                          variant="outlined"
+                          size="sm"
+                          icon="print"
+                          className="bg-white"
+                          onClick={() => window.open(`/fees/${params.id}/statement/print`, "_blank")}
+                        >
+                          Print Account Statement
+                        </Button>
+                      </PermissionGate>
+                    </div>
+
                     {/* Metrics Bento Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">
@@ -1035,22 +1052,36 @@ export default function StudentProfilePage() {
                         ) : (
                           fees.payments.map((pm: any) => (
                             <div key={pm.id} className="p-4 bg-slate-50/50 border border-outline-variant/30 rounded-xl space-y-2 text-xs">
-                              <div className="flex justify-between">
-                                <span className="font-bold font-mono text-on-surface">{pm.receiptNo || "Receipt"}</span>
-                                <strong className="text-emerald-600 font-bold">₹{pm.amount.toLocaleString("en-IN")}</strong>
-                              </div>
-                              <div className="text-[11px] text-on-surface-variant leading-relaxed">
-                                <div>Method: <strong>{pm.method}</strong></div>
-                                {pm.transactionId && <div>Txn ID: <strong className="font-mono">{pm.transactionId}</strong></div>}
-                                <div>Invoice: <strong className="font-mono">{pm.invoiceNumber}</strong></div>
-                                <div className="text-[10px] text-slate-400 mt-1">
-                                  Date: {new Date(pm.paidAt).toLocaleDateString("en-IN", {
-                                    day: "numeric",
-                                    month: "short",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <span className="font-bold font-mono text-on-surface">{pm.receiptNo || "Receipt"}</span>
+                                  <div className="text-[11px] text-on-surface-variant leading-relaxed mt-1">
+                                    <div>Method: <strong>{pm.method}</strong></div>
+                                    {pm.transactionId && <div>Txn ID: <strong className="font-mono">{pm.transactionId}</strong></div>}
+                                    <div>Invoice: <strong className="font-mono">{pm.invoiceNumber}</strong></div>
+                                    <div className="text-[10px] text-slate-400 mt-1">
+                                      Date: {new Date(pm.paidAt).toLocaleDateString("en-IN", {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-2.5 mt-1">
+                                  <strong className="text-emerald-600 font-bold text-sm">₹{pm.amount.toLocaleString("en-IN")}</strong>
+                                  <PermissionGate module="fees" action="read">
+                                    <button
+                                      type="button"
+                                      onClick={() => window.open(`/fees/receipt/${pm.id}/print`, "_blank")}
+                                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-teal-600 hover:text-teal-700 bg-teal-50 hover:bg-teal-100 px-2 py-1 rounded transition-colors"
+                                    >
+                                      <Icon name="print" size={13} />
+                                      Print
+                                    </button>
+                                  </PermissionGate>
                                 </div>
                               </div>
                             </div>
