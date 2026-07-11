@@ -123,6 +123,7 @@ interface ClassData {
   }>;
   feeInstallmentTemplates?: Array<{
     id: string;
+    installmentMasterId?: string | null;
     name: string;
     amount: number | string;
     dueDate: string | Date;
