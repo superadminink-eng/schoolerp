@@ -43,8 +43,16 @@ async function getNextSequenceValue(
  */
 export async function generateUniqueAdmissionNo(prisma: PrismaTx, organizationId: string): Promise<string> {
   const year = new Date().getFullYear();
-  const val = await getNextSequenceValue(prisma, organizationId, "ADMISSION", year);
-  return `ADM-${year}-${String(val).padStart(5, "0")}`;
+  let val = await getNextSequenceValue(prisma, organizationId, "ADMISSION", year);
+  let no = `ADM-${year}-${String(val).padStart(5, "0")}`;
+  
+  let exists = await prisma.student.findFirst({ where: { admissionNo: no } });
+  while (exists) {
+    val = await getNextSequenceValue(prisma, organizationId, "ADMISSION", year);
+    no = `ADM-${year}-${String(val).padStart(5, "0")}`;
+    exists = await prisma.student.findFirst({ where: { admissionNo: no } });
+  }
+  return no;
 }
 
 /**
@@ -52,8 +60,16 @@ export async function generateUniqueAdmissionNo(prisma: PrismaTx, organizationId
  */
 export async function generateUniqueInvoiceNo(prisma: PrismaTx, organizationId: string): Promise<string> {
   const year = new Date().getFullYear();
-  const val = await getNextSequenceValue(prisma, organizationId, "INVOICE", year);
-  return `INV-${year}-${String(val).padStart(5, "0")}`;
+  let val = await getNextSequenceValue(prisma, organizationId, "INVOICE", year);
+  let no = `INV-${year}-${String(val).padStart(5, "0")}`;
+
+  let exists = await prisma.invoice.findUnique({ where: { number: no } });
+  while (exists) {
+    val = await getNextSequenceValue(prisma, organizationId, "INVOICE", year);
+    no = `INV-${year}-${String(val).padStart(5, "0")}`;
+    exists = await prisma.invoice.findUnique({ where: { number: no } });
+  }
+  return no;
 }
 
 /**
@@ -61,8 +77,16 @@ export async function generateUniqueInvoiceNo(prisma: PrismaTx, organizationId: 
  */
 export async function generateUniqueReceiptNo(prisma: PrismaTx, organizationId: string): Promise<string> {
   const year = new Date().getFullYear();
-  const val = await getNextSequenceValue(prisma, organizationId, "RECEIPT", year);
-  return `RCP-${year}-${String(val).padStart(5, "0")}`;
+  let val = await getNextSequenceValue(prisma, organizationId, "RECEIPT", year);
+  let no = `RCP-${year}-${String(val).padStart(5, "0")}`;
+
+  let exists = await prisma.feePayment.findUnique({ where: { receiptNo: no } });
+  while (exists) {
+    val = await getNextSequenceValue(prisma, organizationId, "RECEIPT", year);
+    no = `RCP-${year}-${String(val).padStart(5, "0")}`;
+    exists = await prisma.feePayment.findUnique({ where: { receiptNo: no } });
+  }
+  return no;
 }
 
 /**
@@ -70,6 +94,14 @@ export async function generateUniqueReceiptNo(prisma: PrismaTx, organizationId: 
  */
 export async function generateUniqueApplicationNo(prisma: PrismaTx, organizationId: string): Promise<string> {
   const year = new Date().getFullYear();
-  const val = await getNextSequenceValue(prisma, organizationId, "APPLICATION", year);
-  return `APP-${year}-${String(val).padStart(5, "0")}`;
+  let val = await getNextSequenceValue(prisma, organizationId, "APPLICATION", year);
+  let no = `APP-${year}-${String(val).padStart(5, "0")}`;
+
+  let exists = await prisma.admissionApplication.findUnique({ where: { applicationNo: no } });
+  while (exists) {
+    val = await getNextSequenceValue(prisma, organizationId, "APPLICATION", year);
+    no = `APP-${year}-${String(val).padStart(5, "0")}`;
+    exists = await prisma.admissionApplication.findUnique({ where: { applicationNo: no } });
+  }
+  return no;
 }
