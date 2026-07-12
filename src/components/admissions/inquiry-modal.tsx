@@ -30,7 +30,7 @@ interface InquiryModalProps {
     notes: string;
   };
   setInquiryForm: (val: any) => void;
-  onSubmit: (e: React.FormEvent) => Promise<any> | void;
+  onSubmit: (e: React.FormEvent, force?: boolean) => Promise<any> | void;
   loading: boolean;
   branchId: string;
   academicYearId: string;
@@ -65,6 +65,7 @@ export default function InquiryModal({
     bypassAgeLimit: false,
   });
   const [expressAdmitting, setExpressAdmitting] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   const isFormDirty = () => {
     return (
@@ -146,10 +147,12 @@ export default function InquiryModal({
   useEffect(() => {
     if (!open) {
       setErrors({});
+      setDuplicateWarning(null);
     }
   }, [open]);
 
   const handleChange = (field: string, value: string) => {
+    setDuplicateWarning(null);
     setErrors((prev) => {
       const copy = { ...prev };
       delete copy[field];
@@ -159,14 +162,17 @@ export default function InquiryModal({
   };
 
   const handleExpressFieldChange = (field: string, value: any) => {
+    setDuplicateWarning(null);
     setExpressForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent, force: boolean = false) => {
     e.preventDefault();
     setErrors({});
+    setDuplicateWarning(null);
+    
     if (!expressAdmit) {
-      const result = await onSubmit(e);
+      const result = await onSubmit(e, force);
       if (result && !result.success && result.error) {
         if (result.error.code === "VALIDATION_ERROR" && result.error.details) {
           const newErrors: Record<string, string> = {};
@@ -174,6 +180,9 @@ export default function InquiryModal({
             newErrors[err.field] = err.message;
           });
           setErrors(newErrors);
+        } else if (result.error.code === "DUPLICATE_INQUIRY") {
+          setDuplicateWarning(result.error.message);
+          snackbar.show(result.error.message, "warning");
         }
       }
       return;
@@ -210,7 +219,11 @@ export default function InquiryModal({
         academicYearId,
       };
 
-      const res = await fetch("/api/v1/admissions/inquiries/express-create", {
+      const url = force 
+        ? "/api/v1/admissions/inquiries/express-create?force=true" 
+        : "/api/v1/admissions/inquiries/express-create";
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -228,6 +241,9 @@ export default function InquiryModal({
           });
           setErrors(newErrors);
           snackbar.show("Validation failed. Please check highlighted errors.", "error");
+        } else if (data.error?.code === "DUPLICATE_INQUIRY") {
+          setDuplicateWarning(data.error?.message);
+          snackbar.show(data.error?.message, "warning");
         } else {
           snackbar.show(data.error?.message || "Failed to direct admit student.", "error");
         }
@@ -703,30 +719,53 @@ export default function InquiryModal({
             </div>
 
             {/* Submit Actions */}
-            <div className="flex justify-end gap-4 pt-5 border-t border-slate-100 dark:border-zinc-800 shrink-0">
-              <Button
-                type="button"
-                variant="outlined"
-                onClick={() => handleOpenChange(false)}
-                className="rounded-2xl h-12 px-6 font-bold text-sm cursor-pointer"
-              >
-                Cancel
-              </Button>
-            <Button
-              type="submit"
-              variant="filled"
-              icon={expressAdmit ? "verified" : "save"}
-              loading={expressAdmit ? expressAdmitting : loading}
-              className={`rounded-2xl h-12 px-6 font-bold text-sm text-white ${
-                expressAdmit
-                  ? "bg-teal-700 hover:bg-teal-800"
-                  : "bg-primary hover:bg-primary/95"
-              }`}
-            >
-              {expressAdmit ? "Save & Enroll Student" : "Log Inquiry"}
-            </Button>
-          </div>
-        </form>
+            <div className="flex flex-col gap-4 pt-5 border-t border-slate-100 dark:border-zinc-800 shrink-0">
+              {duplicateWarning && (
+                <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
+                  <div className="flex items-start gap-3">
+                    <Icon name="warning" className="text-amber-500 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-bold text-amber-800 dark:text-amber-500">Duplicate Candidate Found</h4>
+                      <p className="text-xs font-semibold text-amber-700/80 dark:text-amber-400/80 mt-1">{duplicateWarning}</p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={(e) => handleFormSubmit(e as any, true)}
+                    variant="filled"
+                    className="bg-amber-500 text-white hover:bg-amber-600 font-bold shadow-lg shadow-amber-500/20"
+                    loading={expressAdmit ? expressAdmitting : loading}
+                  >
+                    Force Proceed
+                  </Button>
+                </div>
+              )}
+              <div className="flex justify-end gap-4">
+                <Button
+                  type="button"
+                  variant="outlined"
+                  onClick={() => handleOpenChange(false)}
+                  className="rounded-2xl h-12 px-6 font-bold text-sm cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="filled"
+                  icon={expressAdmit ? "verified" : "save"}
+                  loading={expressAdmit ? expressAdmitting : loading}
+                  disabled={!!duplicateWarning}
+                  className={`rounded-2xl h-12 px-6 font-bold text-sm text-white ${
+                    expressAdmit
+                      ? "bg-teal-700 hover:bg-teal-800"
+                      : "bg-primary hover:bg-primary/95"
+                  }`}
+                >
+                  {expressAdmit ? "Save & Enroll Student" : "Log Inquiry"}
+                </Button>
+              </div>
+            </div>
+          </form>
         </div>
       </DialogContent>
     </Dialog>

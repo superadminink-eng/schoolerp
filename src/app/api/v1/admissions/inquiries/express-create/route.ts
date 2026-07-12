@@ -93,6 +93,29 @@ export async function POST(req: NextRequest) {
 
     const { firstName, lastName } = splitFullName(data.studentName);
 
+    // Duplicate Lead Detection
+    const url = new URL(req.url);
+    if (url.searchParams.get("force") !== "true") {
+      const duplicate = await prisma.admissionInquiry.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          status: { notIn: ["CLOSED", "APPLIED"] },
+          OR: [
+            { parentPhone: data.parentPhone },
+            {
+              AND: [
+                { studentName: data.studentName },
+                { dateOfBirth: new Date(data.dateOfBirth) }
+              ]
+            }
+          ]
+        }
+      });
+      if (duplicate) {
+        return apiError("DUPLICATE_INQUIRY", "A potential duplicate inquiry exists for this student or phone number.", 409);
+      }
+    }
+
     // Database Transaction
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create Inquiry
@@ -128,9 +151,6 @@ export async function POST(req: NextRequest) {
           lastName,
           dateOfBirth: new Date(data.dateOfBirth),
           gender: data.gender,
-          address: "N/A",
-          pincode: "000000",
-          emergencyContact: data.parentPhone,
           fatherName: data.parentName,
           fatherPhone: data.parentPhone,
           fatherEmail: data.parentEmail,

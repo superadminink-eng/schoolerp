@@ -109,6 +109,29 @@ export async function POST(req: NextRequest) {
       return apiError("NOT_FOUND", "Academic year not found", 404);
     }
 
+    // Duplicate Lead Detection
+    const url = new URL(req.url);
+    if (url.searchParams.get("force") !== "true") {
+      const duplicate = await prisma.admissionInquiry.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          status: { notIn: ["CLOSED", "APPLIED"] },
+          OR: [
+            { parentPhone: data.parentPhone },
+            {
+              AND: [
+                { studentName: data.studentName },
+                { dateOfBirth: new Date(data.dateOfBirth) }
+              ]
+            }
+          ]
+        }
+      });
+      if (duplicate) {
+        return apiError("DUPLICATE_INQUIRY", "A potential duplicate inquiry exists for this student or phone number.", 409);
+      }
+    }
+
     const inquiry = await prisma.admissionInquiry.create({
       data: {
         organizationId: ctx.organizationId,

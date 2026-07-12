@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { Switch } from "@/components/ui/switch";
 import { TextField } from "@/components/ui/text-field";
 import { Card, CardContent } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
@@ -27,6 +28,7 @@ interface BranchData {
   code: string;
   phone: string | null;
   address: string | null;
+  hasEntranceTest: boolean;
 }
 
 interface AcademicYearData {
@@ -78,6 +80,7 @@ export default function SettingsPage() {
   const [branchCode, setBranchCode] = useState("");
   const [branchPhone, setBranchPhone] = useState("");
   const [branchAddress, setBranchAddress] = useState("");
+  const [branchHasEntranceTest, setBranchHasEntranceTest] = useState(true);
 
   // Academic year states
   const [academicYearName, setAcademicYearName] = useState("");
@@ -113,6 +116,7 @@ export default function SettingsPage() {
             branchCode: branch?.code || "",
             branchPhone: branch?.phone ?? "",
             branchAddress: branch?.address ?? "",
+            branchHasEntranceTest: branch?.hasEntranceTest ?? true,
             academicYearName: academicYear?.name || "",
             startDate: academicYear ? formatDateForInput(academicYear.startDate) : "",
             endDate: academicYear ? formatDateForInput(academicYear.endDate) : "",
@@ -135,6 +139,7 @@ export default function SettingsPage() {
             setBranchCode(branch.code);
             setBranchPhone(branch.phone ?? "");
             setBranchAddress(branch.address ?? "");
+            setBranchHasEntranceTest(branch.hasEntranceTest ?? true);
           }
 
           // Populate academic year details
@@ -169,6 +174,7 @@ export default function SettingsPage() {
     branchCode !== originalData.branchCode ||
     branchPhone !== originalData.branchPhone ||
     branchAddress !== originalData.branchAddress ||
+    branchHasEntranceTest !== originalData.branchHasEntranceTest ||
     academicYearName !== originalData.academicYearName ||
     startDate !== originalData.startDate ||
     endDate !== originalData.endDate
@@ -189,6 +195,7 @@ export default function SettingsPage() {
     setBranchCode(originalData.branchCode);
     setBranchPhone(originalData.branchPhone);
     setBranchAddress(originalData.branchAddress);
+    setBranchHasEntranceTest(originalData.branchHasEntranceTest);
 
     setAcademicYearName(originalData.academicYearName);
     setStartDate(originalData.startDate);
@@ -293,6 +300,7 @@ export default function SettingsPage() {
       formData.append("branchCode", branchCode.trim().toUpperCase());
       formData.append("branchPhone", branchPhone.trim());
       formData.append("branchAddress", branchAddress.trim());
+      formData.append("branchHasEntranceTest", String(branchHasEntranceTest));
 
       // Academic Year
       formData.append("academicYearName", academicYearName.trim());
@@ -330,6 +338,7 @@ export default function SettingsPage() {
           branchCode: branch?.code || "",
           branchPhone: branch?.phone ?? "",
           branchAddress: branch?.address ?? "",
+          branchHasEntranceTest: branch?.hasEntranceTest ?? true,
           academicYearName: academicYear?.name || "",
           startDate: academicYear ? formatDateForInput(academicYear.startDate) : "",
           endDate: academicYear ? formatDateForInput(academicYear.endDate) : "",
@@ -349,6 +358,7 @@ export default function SettingsPage() {
           setBranchCode(branch.code);
           setBranchPhone(branch.phone ?? "");
           setBranchAddress(branch.address ?? "");
+          setBranchHasEntranceTest(branch.hasEntranceTest ?? true);
         }
 
         if (academicYear) {
@@ -559,6 +569,17 @@ export default function SettingsPage() {
                           "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 focus:ring-4 focus:ring-primary/10 focus:border-primary",
                           "placeholder:text-slate-400 dark:placeholder:text-slate-650"
                         )}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between px-1 border-t border-outline/10 pt-4 mt-2">
+                      <label htmlFor="main-branch-entrance-test" className="text-body-md text-on-surface cursor-pointer">
+                        Enable Entrance Examinations & Interviews
+                      </label>
+                      <Switch
+                        id="main-branch-entrance-test"
+                        checked={branchHasEntranceTest}
+                        onCheckedChange={setBranchHasEntranceTest}
                       />
                     </div>
                   </div>

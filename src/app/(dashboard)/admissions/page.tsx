@@ -489,33 +489,7 @@ export default function AdmissionsPage() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Toggle Branch exam settings
-  const handleToggleEntranceExam = async () => {
-    if (!activeBranch) return;
-    setActionLoading(true);
-    try {
-      const nextSetting = !activeBranch.hasEntranceTest;
-      const res = await fetch(`/api/v1/branches/${activeBranch.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hasEntranceTest: nextSetting }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        snackbar.show(`Branch settings updated. Entrance exam: ${nextSetting ? "ENABLED" : "DISABLED"}`, "success");
-        setBranches((prev) =>
-          prev.map((b) => (b.id === activeBranch.id ? { ...b, hasEntranceTest: nextSetting } : b))
-        );
-        setActiveBranch((prev) => (prev ? { ...prev, hasEntranceTest: nextSetting } : null));
-      } else {
-        snackbar.show(data.error?.message || "Failed to update branch settings.", "error");
-      }
-    } catch {
-      snackbar.show("Network error during branch configuration.", "error");
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  // Toggle Branch exam settings logic moved to Settings (Security & Privacy)
 
   // Client side filters
   const filteredApplications = useMemo(() => {
@@ -918,12 +892,13 @@ export default function AdmissionsPage() {
   };
 
   // Dialog forms submissions
-  const handleCreateInquiry = async (e: React.FormEvent) => {
+  const handleCreateInquiry = async (e: React.FormEvent, force?: boolean) => {
     e.preventDefault();
     if (!branchFilter || !activeAcademicYearId) return;
     setActionLoading(true);
     try {
-      const res = await fetch("/api/v1/admissions/inquiries", {
+      const url = force ? "/api/v1/admissions/inquiries?force=true" : "/api/v1/admissions/inquiries";
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1352,31 +1327,16 @@ export default function AdmissionsPage() {
           </p>
         </div>
 
-        {/* Entrance Exam Settings Badge & Toggle */}
+        {/* Entrance Exam Settings Badge & Toggle moved to secure Settings */}
         {activeBranch && (
-          <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 p-3 border border-slate-100 dark:border-zinc-800 rounded-2xl shadow-sm">
-            <Icon name="palette" size={18} className="text-primary shrink-0" />
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-zinc-900/50 px-3 py-2 border border-slate-200 dark:border-zinc-800 rounded-xl">
+            <Icon name="business" size={18} className="text-primary shrink-0" />
             <div className="text-left">
-              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Entrance Exam</span>
-              <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                {activeBranch.hasEntranceTest ? "Required for Selection" : "Skipped (Direct Mode)"}
+              <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Branch</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                {activeBranch.name}
               </span>
             </div>
-            {isSuperAdmin && (
-              <button
-                onClick={handleToggleEntranceExam}
-                disabled={actionLoading}
-                className={`ml-2 relative inline-flex h-6.5 w-12 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ${
-                  activeBranch.hasEntranceTest ? "bg-primary" : "bg-slate-200 dark:bg-zinc-800"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none block h-4.5 w-4.5 rounded-full bg-white shadow-sm transition-all duration-300 ${
-                    activeBranch.hasEntranceTest ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -1386,6 +1346,7 @@ export default function AdmissionsPage() {
         stats={stats}
         hasInqAccess={hasInqAccess}
         hasAppAccess={hasAppAccess}
+        hasEntranceTest={!!activeBranch?.hasEntranceTest}
         activeTab={activeTab}
         stageFilter={stageFilter}
         onStageClick={handleStageClick}

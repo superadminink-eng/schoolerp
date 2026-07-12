@@ -13,6 +13,7 @@ interface StatsProps {
   };
   hasInqAccess: boolean;
   hasAppAccess: boolean;
+  hasEntranceTest: boolean;
   activeTab: "applications" | "inquiries";
   stageFilter: string;
   onStageClick: (stage: any) => void;
@@ -22,6 +23,7 @@ export default function AdmissionsStats({
   stats,
   hasInqAccess,
   hasAppAccess,
+  hasEntranceTest,
   activeTab,
   stageFilter,
   onStageClick,
@@ -30,7 +32,7 @@ export default function AdmissionsStats({
     <div
       className={`grid gap-4 shrink-0 transition-all duration-300 ${
         hasAppAccess
-          ? "grid-cols-2 md:grid-cols-5"
+          ? hasEntranceTest ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"
           : "grid-cols-1 md:grid-cols-1 max-w-xs"
       }`}
     >
@@ -131,7 +133,7 @@ export default function AdmissionsStats({
       )}
 
       {/* Step 4: Entrance Test */}
-      {hasAppAccess && (
+      {hasAppAccess && hasEntranceTest && (
         <button
           onClick={() => onStageClick("TEST_SCHEDULED")}
           className={`group relative text-left p-5 border rounded-3xl transition-all duration-300 bg-white dark:bg-zinc-900 border-purple-100 dark:border-purple-950/40 hover:border-purple-300 dark:hover:border-purple-900 hover:shadow-lg hover:shadow-purple-500/5 ${
@@ -180,7 +182,9 @@ export default function AdmissionsStats({
             >
               <Icon name="star" size={20} />
             </div>
-            <span className="text-[10px] font-bold tracking-wider text-teal-500/80 uppercase">Step 5</span>
+            <span className="text-[10px] font-bold tracking-wider text-teal-500/80 uppercase">
+              Step {hasEntranceTest ? "5" : "4"}
+            </span>
           </div>
           <span className="block text-3xl font-extrabold text-slate-800 dark:text-zinc-100 tracking-tight">
             {stats.readyToEnroll}

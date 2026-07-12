@@ -107,6 +107,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return apiError("FORBIDDEN", "Cannot deactivate the main branch", 403);
     }
 
+    if (hasEntranceTest === false) {
+      const activeTestCandidates = await prisma.admissionApplication.count({
+        where: {
+          branchId: id,
+          status: "TEST_SCHEDULED",
+        }
+      });
+      if (activeTestCandidates > 0) {
+        return apiError(
+          "BAD_REQUEST", 
+          `Cannot disable Entrance Exam. There are ${activeTestCandidates} candidate(s) currently scheduled for a test.`, 
+          400
+        );
+      }
+    }
+
     const data: Record<string, unknown> = {};
     if (name !== undefined) data.name = name;
     if (code !== undefined) data.code = code;

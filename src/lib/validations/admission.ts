@@ -109,10 +109,10 @@ export const parentInfoSchema = z.object({
 });
 
 export const addressInfoSchema = z.object({
-  address: z.string().trim().min(1, "Address is required").max(500),
-  pincode: z.string().trim().min(1, "Pincode is required").max(10),
+  address: z.string().trim().optional().or(z.literal("")),
+  pincode: z.string().trim().optional().or(z.literal("")),
   previousSchool: z.string().trim().max(200).optional().or(z.literal("")),
-  emergencyContact: requiredPhoneSchema,
+  emergencyContact: optionalPhoneSchema,
 });
 
 export const createApplicationSchema = candidateInfoSchema

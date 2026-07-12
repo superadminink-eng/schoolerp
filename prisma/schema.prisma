@@ -1061,10 +1061,10 @@ model AdmissionApplication {
   gender             Gender
   bloodGroup         String?
   photo              String?
-  address            String                @db.Text
-  pincode            String
+  address            String?               @db.Text
+  pincode            String?
   previousSchool     String?
-  emergencyContact   String
+  emergencyContact   String?
   fatherName         String?
   fatherPhone        String?
   fatherEmail        String?

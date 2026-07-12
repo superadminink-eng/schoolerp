@@ -18,6 +18,7 @@ const settingsSchema = z.object({
   branchCode: z.string().min(2, "Branch code must be at least 2 characters").max(20),
   branchPhone: z.string().optional().nullable(),
   branchAddress: z.string().optional().nullable(),
+  branchHasEntranceTest: z.union([z.boolean(), z.string().transform(val => val === "true")]).optional().default(true),
 
   // Academic year settings
   academicYearName: z.string().min(2, "Academic year name is required").max(50),
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
 
     const {
       name, phone, address, website,
-      branchName, branchCode, branchPhone, branchAddress,
+      branchName, branchCode, branchPhone, branchAddress, branchHasEntranceTest,
       academicYearName, startDate, endDate
     } = parsed.data;
 
@@ -139,6 +140,23 @@ export async function POST(req: NextRequest) {
 
     if (!mainBranch) {
       return apiError("NOT_FOUND", "Main branch not found for organization", 404);
+    }
+
+    // Ensure we cannot turn off entrance exam if there are active candidates
+    if (branchHasEntranceTest === false) {
+      const activeTestCandidates = await prisma.admissionApplication.count({
+        where: {
+          branchId: mainBranch.id,
+          status: "TEST_SCHEDULED",
+        }
+      });
+      if (activeTestCandidates > 0) {
+        return apiError(
+          "BAD_REQUEST", 
+          `Cannot disable Entrance Exam. There are ${activeTestCandidates} candidate(s) currently scheduled for a test.`, 
+          400
+        );
+      }
     }
 
     // 2. Check if the branchCode is already taken by ANOTHER branch in this organization
@@ -225,6 +243,7 @@ export async function POST(req: NextRequest) {
           code: branchCode.toUpperCase(),
           phone: branchPhone,
           address: branchAddress,
+          hasEntranceTest: branchHasEntranceTest,
         },
       });
 
