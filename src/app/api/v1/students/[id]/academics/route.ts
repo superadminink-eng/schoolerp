@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, apiNotFound } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/students/[id]/academics — Retrieve academic records (exams & marks) for a student

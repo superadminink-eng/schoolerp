@@ -9,7 +9,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateBranchSchema } from "@/lib/validations/branch";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/branches/:id — get a single branch

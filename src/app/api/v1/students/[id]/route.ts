@@ -11,7 +11,7 @@ import { updateStudentSchema } from "@/lib/validations/student";
 import { saveUploadedImage, deleteUploadedFile, UploadError } from "@/lib/upload";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/students/:id — get a single student

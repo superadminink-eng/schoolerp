@@ -138,6 +138,16 @@ export default function AdmissionsPage() {
   const [stageFilter, setStageFilter] = useState<string>("ALL");
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
   const [isClearingDemo, setIsClearingDemo] = useState(false);
+  
+  // Custom Generator State
+  const [billingMode, setBillingMode] = useState<"STANDARD" | "CUSTOM">("STANDARD");
+  const [customConfigRows, setCustomConfigRows] = useState(6);
+  const [customConfigStartDate, setCustomConfigStartDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [customConfigInterval, setCustomConfigInterval] = useState<"MONTHLY" | "BIMONTHLY" | "QUARTERLY">("MONTHLY");
+  const [customConfigLateFee, setCustomConfigLateFee] = useState(true);
+
   const hasDemoData = useMemo(() => {
     return applications.some(a => a.previousSchool === 'DEMO_SANDBOX' || ["Rohan", "Aarav", "Isha", "Ananya"].includes(a.firstName)) || 
            inquiries.some(i => i.notes?.startsWith('DEMO_DATA') || i.studentName === 'Aditya Kulkarni');
@@ -350,9 +360,13 @@ export default function AdmissionsPage() {
             setInstallmentTemplates(data.data);
             setCustomInstallments(
               data.data.map((t: any) => ({
+                id: `template-${t.id}`,
                 templateId: t.id,
+                name: t.name,
+                dueDate: t.dueDate,
                 amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
                 checked: true,
+                isCustom: false,
               }))
             );
           }
@@ -1276,8 +1290,15 @@ export default function AdmissionsPage() {
         installments: customInstallments
           .filter((inst) => inst.checked)
           .map((inst) => ({
-            templateId: inst.templateId,
+            templateId: inst.isCustom ? undefined : inst.templateId,
+            name: inst.name,
+            dueDate: inst.dueDate,
             amount: inst.amount,
+            lateFeeActive: inst.lateFeeActive,
+            lateFeeType: inst.lateFeeType,
+            lateFeeValue: inst.lateFeeValue,
+            lateFeePerDay: inst.lateFeePerDay,
+            lateFeeGrace: inst.lateFeeGrace,
           })),
         termType: promoteForm.termType,
       };
@@ -1648,6 +1669,16 @@ export default function AdmissionsPage() {
         installmentTemplates={installmentTemplates}
         customInstallments={customInstallments}
         setCustomInstallments={setCustomInstallments}
+        billingMode={billingMode}
+        setBillingMode={setBillingMode}
+        customConfigRows={customConfigRows}
+        setCustomConfigRows={setCustomConfigRows}
+        customConfigStartDate={customConfigStartDate}
+        setCustomConfigStartDate={setCustomConfigStartDate}
+        customConfigInterval={customConfigInterval}
+        setCustomConfigInterval={setCustomConfigInterval}
+        customConfigLateFee={customConfigLateFee}
+        setCustomConfigLateFee={setCustomConfigLateFee}
         promoteForm={promoteForm}
         setPromoteForm={setPromoteForm}
         verifyForm={verifyForm}

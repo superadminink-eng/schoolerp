@@ -9,7 +9,7 @@ import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { createFollowUpSchema } from "@/lib/validations/admission";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * POST /api/v1/admissions/inquiries/[id]/follow-ups — Log a follow-up conversation

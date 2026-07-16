@@ -16,7 +16,7 @@ import {
 } from "@/lib/unique-id";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 function splitFullName(name: string) {
   const parts = name.trim().split(/\s+/);

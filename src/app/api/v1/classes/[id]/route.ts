@@ -10,7 +10,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateClassSchema } from "@/lib/validations/class";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 const classIncludes = {
   subjects: {

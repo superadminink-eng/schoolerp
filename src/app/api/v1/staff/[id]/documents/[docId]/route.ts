@@ -4,7 +4,7 @@ import { apiSuccess, apiError, apiNotFound } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { deleteUploadedFile } from "@/lib/upload";
 
-type RouteContext = { params: Promise<{ id: string; docId: string }> };
+type RouteContext = any;
 
 /**
  * DELETE /api/v1/staff/:id/documents/:docId — delete a staff document

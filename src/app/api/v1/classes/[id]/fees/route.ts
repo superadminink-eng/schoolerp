@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-helpers";
 import { checkApiPermission } from "@/lib/rbac";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/classes/:id/fees — list fees for a class (for student form)
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       name: fs.feeCategory.name,
       amount: Number(fs.amount),
       frequency: fs.frequency,
+      applicability: fs.applicability,
     }));
 
     return apiSuccess(fees);

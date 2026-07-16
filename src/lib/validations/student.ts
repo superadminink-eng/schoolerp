@@ -97,6 +97,30 @@ export const createStudentSchema = z.object({
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().min(0, "Discount cannot be negative").max(100, "Discount cannot exceed 100%").optional()
   ),
+  discountAmount: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(0, "Discount amount cannot be negative").optional()
+  ),
+  optionalFeeIds: z.union([
+    z.string().transform(v => [v]),
+    z.array(z.string())
+  ]).optional(),
+  customInstallments: z.string().optional().transform((str) => {
+    if (!str) return [];
+    try {
+      return JSON.parse(str);
+    } catch {
+      return [];
+    }
+  }).pipe(
+    z.array(
+      z.object({
+        name: z.string().min(1, "Installment name is required"),
+        dueDate: z.string().min(1, "Due date is required"),
+        amount: z.number().min(0, "Amount must be positive"),
+      })
+    )
+  ),
   amountPaid: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().min(0, "Amount cannot be negative").optional()

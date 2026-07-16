@@ -202,10 +202,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Extract text fields from FormData
-  const fields: Record<string, string> = {};
+  const fields: Record<string, any> = {};
   for (const [key, value] of formData.entries()) {
     if (typeof value === "string") {
-      fields[key] = value;
+      if (key === 'optionalFeeIds') {
+        if (!fields[key]) fields[key] = [];
+        fields[key].push(value);
+      } else {
+        fields[key] = value;
+      }
     }
   }
 
@@ -228,6 +233,9 @@ export async function POST(req: NextRequest) {
     const studentInput = {
       ...data,
       discountPercent: fields.discountPercent,
+      discountAmount: fields.discountAmount,
+      optionalFeeIds: data.optionalFeeIds,
+      customInstallments: data.customInstallments,
       amountPaid: fields.amountPaid,
       paymentMethod: fields.paymentMethod,
       transactionId: fields.transactionId,

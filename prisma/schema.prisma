@@ -42,6 +42,7 @@ model Organization {
   systemSequences       SystemSequence[]
   invoices              Invoice[]
   feePayments           FeePayment[]
+  studentFeeAssignments StudentFeeAssignment[]
 
   @@map("organizations")
 }
@@ -77,6 +78,7 @@ model Branch {
   routes                TransportRoute[]
   users                 User[]
   vehicles              Vehicle[]
+  studentFeeAssignments StudentFeeAssignment[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -321,6 +323,7 @@ model Student {
   motherOccupation   String?
   admissionDate      DateTime            @default(now())
   status             StudentStatus       @default(ACTIVE)
+  advanceBalance     Decimal             @default(0.00) @db.Decimal(10, 2)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   category           StudentCategory     @default(GENERAL)
@@ -337,6 +340,7 @@ model Student {
   enrollments        StudentEnrollment[]
   parentLinks        StudentParent[]
   transportAlloc     StudentTransport?
+  feeAssignments     StudentFeeAssignment[]
   branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -375,6 +379,8 @@ model StudentEnrollment {
   rollNo         String?
   enrolledAt     DateTime     @default(now())
   termType       TermType     @default(FULL_TERM)
+  installmentMasterId String?
+  installmentMaster   InstallmentMaster? @relation(fields: [installmentMasterId], references: [id])
   academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   section        Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -383,6 +389,35 @@ model StudentEnrollment {
   @@unique([academicYearId, sectionId, rollNo])
   @@index([sectionId])
   @@map("student_enrollments")
+}
+
+model StudentFeeAssignment {
+  id              String       @id @default(cuid())
+  organizationId  String
+  branchId        String
+  studentId       String
+  feeStructureId  String
+  
+  isOptedIn       Boolean      @default(true)
+  isWaived        Boolean      @default(false)
+  discountPercent Decimal?     @db.Decimal(5, 2)
+  discountAmount  Decimal?     @db.Decimal(10, 2)
+  
+  validFrom       DateTime?
+  validTo         DateTime?
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  student         Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeStructure    FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, feeStructureId])
+  @@index([organizationId])
+  @@index([branchId])
+  @@map("student_fee_assignments")
 }
 
 model Parent {
@@ -657,12 +692,14 @@ model FeeStructure {
   feeCategoryId  String
   amount         Decimal       @db.Decimal(10, 2)
   frequency      FeeFrequency  @default(MONTHLY)
+  applicability  FeeApplicability @default(MANDATORY)
   dueDate        Int?
   termType       TermType      @default(FULL_TERM)
   academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   class          Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
   feeCategory    FeeCategory   @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
   invoiceItems   InvoiceItem[]
+  studentAssignments StudentFeeAssignment[]
 
   @@unique([academicYearId, classId, feeCategoryId, termType])
   @@index([classId], map: "fee_structures_classId_fkey")
@@ -680,6 +717,7 @@ model InstallmentMaster {
   deletedAt      DateTime?
   organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   templates      FeeInstallmentTemplate[]
+  enrollments    StudentEnrollment[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, code])
@@ -718,7 +756,9 @@ model Invoice {
   year               Int
   totalAmount        Decimal       @db.Decimal(10, 2)
   paidAmount         Decimal       @default(0.00) @db.Decimal(10, 2)
+  type               InvoiceType   @default(STANDARD)
   status             InvoiceStatus @default(PENDING)
+  remarks            String?       @db.Text
   dueDate            DateTime
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
@@ -1212,6 +1252,17 @@ enum PaymentMethod {
   CHEQUE
   BANK_TRANSFER
   UPI
+}
+
+enum FeeApplicability {
+  MANDATORY
+  OPTIONAL
+  MODULE_DRIVEN
+}
+
+enum InvoiceType {
+  STANDARD
+  SUPPLEMENTARY
 }
 
 enum InvoiceStatus {

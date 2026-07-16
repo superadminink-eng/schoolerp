@@ -8,7 +8,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateInstallmentMasterSchema } from "@/lib/validations/installment-master";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * PATCH /api/v1/installment-masters/[id] — update an installment master

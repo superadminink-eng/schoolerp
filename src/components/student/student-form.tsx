@@ -29,6 +29,7 @@ import {
   ID_TYPES,
   PAYMENT_MODES,
 } from "@/lib/validations/student";
+import { FeeConfiguration, FeeInfo, CustomInstallment } from "./fee-configuration";
 
 const GENDERS = [
   { value: "MALE", label: "Male" },
@@ -53,13 +54,6 @@ interface ClassOption {
 interface SectionOption {
   id: string;
   name: string;
-}
-
-interface FeeInfo {
-  id: string;
-  name: string;
-  amount: number;
-  frequency: string;
 }
 
 interface StudentData {
@@ -152,6 +146,9 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       classId: initialData?.enrollments?.[0]?.section?.class?.id ?? initialData?.classId ?? "",
       sectionId: initialData?.enrollments?.[0]?.section?.id ?? "",
       discountPercent: "",
+      discountAmount: "",
+      optionalFeeIds: [] as string[],
+      customInstallments: [] as CustomInstallment[],
       amountPaid: "",
       paymentMethod: "",
       transactionId: "",
@@ -162,6 +159,9 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const classId = watch("classId");
   const paymentMethod = watch("paymentMethod");
   const discountPercent = watch("discountPercent");
+  const discountAmount = watch("discountAmount");
+  const optionalFeeIds = watch("optionalFeeIds");
+  const customInstallments = watch("customInstallments");
   const amountPaid = watch("amountPaid");
 
   // File states (handled manually since react-hook-form manages text inputs by default)
@@ -181,28 +181,10 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("personal");
 
-  const TABS = ["personal", "family", "admin"] as const;
+  const TABS = ["personal", "family", "admin", "fees"] as const;
   const tabIndex = TABS.indexOf(activeTab as (typeof TABS)[number]);
 
-  // Fee computation
-  const annualTotal = useMemo(
-    () =>
-      fees.reduce((sum, f) => {
-        switch (f.frequency) {
-          case "MONTHLY": return sum + f.amount * 12;
-          case "QUARTERLY": return sum + f.amount * 4;
-          case "SEMI_ANNUAL": return sum + f.amount * 2;
-          default: return sum + f.amount;
-        }
-      }, 0),
-    [fees]
-  );
-
-  const discountAmt = annualTotal * (parseFloat(discountPercent) || 0) / 100;
-  const discountedTotal = annualTotal - discountAmt;
-  const paidNum = parseFloat(amountPaid) || 0;
-  const remainingAmount = Math.max(0, discountedTotal - paidNum);
-
+  // Fee computation is now mostly handled in FeeConfiguration, but we calculate remaining amount for Initial Payment UI
   const showTransactionId = paymentMethod === "UPI" || paymentMethod === "ONLINE" || paymentMethod === "BANK_TRANSFER";
 
   // Auto-assign branch for non-SUPER_ADMIN users
@@ -283,7 +265,13 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       // Add all text fields
       for (const [key, value] of Object.entries(formDataFields)) {
         if (value !== undefined && value !== null && value !== "") {
-          formData.append(key, String(value));
+          if (key === "optionalFeeIds") {
+            (value as string[]).forEach(id => formData.append("optionalFeeIds", id));
+          } else if (key === "customInstallments") {
+            formData.append("customInstallments", JSON.stringify(value));
+          } else {
+            formData.append(key, String(value));
+          }
         }
       }
 
@@ -377,7 +365,8 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
         <TabsList>
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="family">Family & Address</TabsTrigger>
-          <TabsTrigger value="admin">Administration</TabsTrigger>
+          <TabsTrigger value="admin">Academic</TabsTrigger>
+          <TabsTrigger value="fees">Fee Configuration</TabsTrigger>
         </TabsList>
 
         {/* ── Tab 1: Personal Information ────────────────────── */}
@@ -636,7 +625,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
           </Card>
         </TabsContent>
 
-        {/* ── Tab 3: Administration ─────────────────────────── */}
+        {/* ── Tab 3: Academic ─────────────────────────── */}
         <TabsContent value="admin">
           <Card variant="outlined">
             <CardContent className="p-6 space-y-4">
@@ -737,137 +726,113 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                   )}
                 </div>
               </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {feesLoading && (
-                <p className="text-body-sm text-on-surface-variant">Loading fees...</p>
-              )}
-              {fees.length > 0 && !feesLoading && (
-                <>
-                  <div className="rounded-lg border border-outline-variant p-4 space-y-2">
-                    <p className="text-label-lg font-medium text-on-surface">Fee Structure</p>
-                    {fees.map((fee, i) => (
-                      <div key={i} className="flex items-center justify-between text-body-sm text-on-surface-variant">
-                        <span>{fee.name}</span>
-                        <span>₹{fee.amount.toLocaleString("en-IN")} / {fee.frequency.replace(/_/g, " ").toLowerCase()}</span>
-                      </div>
-                    ))}
-                    <Divider />
-                    <div className="flex items-center justify-between">
-                      <p className="text-label-md font-medium text-on-surface">Estimated Annual Total</p>
-                      <p className="text-label-md font-semibold text-on-surface">
-                        ₹{annualTotal.toLocaleString("en-IN")}
-                      </p>
-                    </div>
-                  </div>
+          {/* ── Tab 4: Fee Configuration ─────────────────────────── */}
+          <TabsContent value="fees">
+            <Card variant="outlined">
+              <CardContent className="p-6 space-y-6">
+                {feesLoading && (
+                  <p className="text-body-sm text-on-surface-variant">Loading fees...</p>
+                )}
+                {fees.length > 0 && !feesLoading && (
+                  <>
+                    <FeeConfiguration 
+                      fees={fees}
+                      discountPercent={discountPercent}
+                      discountAmount={discountAmount}
+                      amountPaid={amountPaid}
+                      optionalFeeIds={optionalFeeIds}
+                      customInstallments={customInstallments}
+                      onUpdate={(field, val) => setValue(field as any, val)}
+                    />
 
-                  {mode === "create" && (
-                    <div className="rounded-lg border border-outline-variant p-4 space-y-4">
-                      <p className="text-label-lg font-medium text-on-surface">Fee Collection</p>
-
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <TextField
-                          label="Discount %"
-                          type="number"
-                          {...register("discountPercent")}
-                          error={errors.discountPercent?.message}
-                          fullWidth
-                        />
-                        <div className="flex flex-col justify-end">
-                          <p className="text-body-sm text-on-surface-variant">Discounted Total</p>
-                          <p className="text-label-lg font-semibold text-on-surface">
-                            ₹{discountedTotal.toLocaleString("en-IN")}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <Controller
-                          control={control}
-                          name="amountPaid"
-                          render={({ field }) => (
-                            <CurrencyInput
-                              label="Amount Paid"
-                              value={field.value}
-                              onChange={field.onChange}
-                              error={errors.amountPaid?.message}
+                    {mode === "create" && (
+                      <div className="rounded-lg border border-outline-variant p-4 space-y-4 mt-6">
+                        <p className="text-label-lg font-bold text-on-surface">Initial Payment Collection</p>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <Controller
+                            control={control}
+                            name="amountPaid"
+                            render={({ field }) => (
+                              <CurrencyInput
+                                label="Amount Paid Now (₹)"
+                                value={field.value}
+                                onChange={field.onChange}
+                                error={errors.amountPaid?.message}
+                                fullWidth
+                              />
+                            )}
+                          />
+                          <div className="flex flex-col gap-1">
+                            <label className="text-label-md text-on-surface-variant px-1">
+                              Payment Method
+                            </label>
+                            <Controller
+                              control={control}
+                              name="paymentMethod"
+                              render={({ field }) => (
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <SelectTrigger fullWidth>
+                                    <SelectValue placeholder="Select method" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {PAYMENT_MODES.map((m) => (
+                                      <SelectItem key={m} value={m}>
+                                        {PAYMENT_METHOD_LABELS[m]}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                            {errors.paymentMethod?.message && (
+                              <p className="px-4 text-[12px] leading-4 text-error">{errors.paymentMethod.message}</p>
+                            )}
+                          </div>
+                          {showTransactionId && (
+                            <TextField
+                              label="Transaction ID"
+                              {...register("transactionId")}
+                              error={errors.transactionId?.message}
                               fullWidth
                             />
                           )}
-                        />
-                        <div className="flex flex-col justify-end">
-                          <p className="text-body-sm text-on-surface-variant">Remaining</p>
-                          <p className="text-label-lg font-semibold text-on-surface">
-                            ₹{remainingAmount.toLocaleString("en-IN")}
-                          </p>
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-label-md text-on-surface-variant px-1">
-                            Payment Method
-                          </label>
-                          <Controller
-                            control={control}
-                            name="paymentMethod"
-                            render={({ field }) => (
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <SelectTrigger fullWidth>
-                                  <SelectValue placeholder="Select method" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {PAYMENT_MODES.map((m) => (
-                                    <SelectItem key={m} value={m}>
-                                      {PAYMENT_METHOD_LABELS[m]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                          {errors.paymentMethod?.message && (
-                            <p className="px-4 text-[12px] leading-4 text-error">{errors.paymentMethod.message}</p>
-                          )}
-                        </div>
-                        {showTransactionId && (
-                          <TextField
-                            label="Transaction ID"
-                            {...register("transactionId")}
-                            error={errors.transactionId?.message}
-                            fullWidth
-                          />
-                        )}
-                      </div>
+                    )}
+                  </>
+                )}
+                {fees.length === 0 && !feesLoading && classId && (
+                  <p className="text-body-sm text-error">No fee structure configured for this class yet. Please set it up in Settings.</p>
+                )}
+                {mode === "edit" && initialData?.totalFees != null && initialData.totalFees > 0 && (
+                  <div className="rounded-lg border border-outline-variant p-4 space-y-4 mt-6">
+                    <p className="text-label-lg font-medium text-on-surface">Fee Summary</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <TextField
+                        label="Total Fees"
+                        value={`₹${initialData.totalFees.toLocaleString("en-IN")}`}
+                        readOnly
+                        fullWidth
+                      />
+                      <TextField
+                        label="Collected"
+                        value={`₹${(initialData.totalFeesPaid ?? 0).toLocaleString("en-IN")}`}
+                        readOnly
+                        fullWidth
+                      />
+                      <TextField
+                        label="Remaining"
+                        value={`₹${(initialData.pendingFees ?? 0).toLocaleString("en-IN")}`}
+                        readOnly
+                        fullWidth
+                      />
                     </div>
-                  )}
-
-                  {mode === "edit" && initialData?.totalFees != null && initialData.totalFees > 0 && (
-                    <div className="rounded-lg border border-outline-variant p-4 space-y-4">
-                      <p className="text-label-lg font-medium text-on-surface">Fee Summary</p>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                        <TextField
-                          label="Total Fees"
-                          value={`₹${initialData.totalFees.toLocaleString("en-IN")}`}
-                          readOnly
-                          fullWidth
-                        />
-                        <TextField
-                          label="Collected"
-                          value={`₹${(initialData.totalFeesPaid ?? 0).toLocaleString("en-IN")}`}
-                          readOnly
-                          fullWidth
-                        />
-                        <TextField
-                          label="Remaining"
-                          value={`₹${(initialData.pendingFees ?? 0).toLocaleString("en-IN")}`}
-                          readOnly
-                          fullWidth
-                        />
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
+                  </div>
+                )}
             </CardContent>
           </Card>
         </TabsContent>

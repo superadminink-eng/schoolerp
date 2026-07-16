@@ -10,7 +10,7 @@ import crypto from "crypto";
 import { generateUniqueAdmissionNo, generateUniqueInvoiceNo, generateUniqueReceiptNo } from "@/lib/unique-id";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * POST /api/v1/admissions/applications/[id]/promote — Promote shortlisted candidate to active student
@@ -47,7 +47,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     amountPaid?: number;
     paymentMethod?: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
     transactionId?: string;
-    installments?: { templateId: string; amount: number }[];
+    installments?: { 
+      templateId?: string; 
+      name?: string; 
+      dueDate?: string; 
+      amount: number;
+      lateFeeActive?: boolean;
+      lateFeeType?: "DAILY" | "FIXED" | "PERCENTAGE";
+      lateFeeValue?: number;
+      lateFeePerDay?: number;
+      lateFeeGrace?: number;
+    }[];
     termType?: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
   };
 
@@ -198,36 +208,38 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       // 1. Check if installment templates are setup or provided
       let targetInstallments: { name: string; amount: Prisma.Decimal; dueDate: Date; lateFeeActive: boolean; lateFeeType: string; lateFeeValue: Prisma.Decimal; lateFeePerDay: Prisma.Decimal; lateFeeGrace: number }[] = [];
       
-      if (installments) {
+      if (totalDiscountedFee.equals(0)) {
+        // 100% Scholarship - No installments required
+        targetInstallments = [];
+      } else if (installments) {
         if (installments.length === 0) {
           throw new Error("INSTALLMENT_AMOUNT_MISMATCH: At least one fee installment must be selected.");
         }
-        if (installments.some(inst => inst.amount <= 0)) {
-          throw new Error("INSTALLMENT_AMOUNT_MISMATCH: All installment amounts must be greater than zero.");
+        if (installments.some(inst => inst.amount < 0)) {
+          throw new Error("INSTALLMENT_AMOUNT_MISMATCH: Installment amounts cannot be negative.");
         }
-        // Resolve templates matching the IDs passed in request
-        const templateIds = installments.map(i => i.templateId);
-        const matchedTemplates = await tx.feeInstallmentTemplate.findMany({
+        const templateIds = installments.filter(i => i.templateId).map(i => i.templateId as string);
+        const matchedTemplates = templateIds.length > 0 ? await tx.feeInstallmentTemplate.findMany({
           where: { id: { in: templateIds } },
-        });
+        }) : [];
 
         targetInstallments = installments.map(inst => {
-          const temp = matchedTemplates.find(t => t.id === inst.templateId);
+          const temp = inst.templateId ? matchedTemplates.find(t => t.id === inst.templateId) : null;
           return {
-            name: temp?.name || "Installment",
+            name: inst.name || temp?.name || "Custom Installment",
             amount: new Prisma.Decimal(inst.amount),
-            dueDate: temp?.dueDate || new Date(),
-            lateFeeActive: temp?.lateFeeActive || false,
-            lateFeeType: temp?.lateFeeType || "DAILY",
-            lateFeeValue: temp ? new Prisma.Decimal(temp.lateFeeValue) : new Prisma.Decimal(0),
-            lateFeePerDay: temp ? new Prisma.Decimal(temp.lateFeePerDay) : new Prisma.Decimal(0),
-            lateFeeGrace: temp?.lateFeeGrace || 0,
+            dueDate: inst.dueDate ? new Date(inst.dueDate) : (temp?.dueDate || new Date()),
+            lateFeeActive: inst.lateFeeActive ?? (temp?.lateFeeActive || false),
+            lateFeeType: inst.lateFeeType || temp?.lateFeeType || "DAILY",
+            lateFeeValue: new Prisma.Decimal(inst.lateFeeValue ?? (temp ? Number(temp.lateFeeValue) : 0)),
+            lateFeePerDay: new Prisma.Decimal(inst.lateFeePerDay ?? (temp ? Number(temp.lateFeePerDay) : 0)),
+            lateFeeGrace: inst.lateFeeGrace ?? (temp?.lateFeeGrace || 0),
           };
         });
 
         const totalCustomAmount = targetInstallments.reduce((sum, inst) => sum.plus(inst.amount), new Prisma.Decimal(0));
-        if (totalCustomAmount.gt(totalDiscountedFee)) {
-          throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of custom installments (₹${totalCustomAmount}) exceeds the total discounted fee structures (₹${totalDiscountedFee}).`);
+        if (!totalCustomAmount.equals(totalDiscountedFee)) {
+          throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of custom installments (₹${totalCustomAmount}) must exactly match the total onboarding fee (₹${totalDiscountedFee}).`);
         }
       } else {
         // Query standard class templates from DB

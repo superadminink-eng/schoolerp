@@ -12,7 +12,7 @@ import { updateStaffSchema } from "@/lib/validations/staff";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/staff/:id — get a single staff member
