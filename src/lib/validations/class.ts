@@ -20,6 +20,7 @@ const inlineFeeSchema = z.object({
   feeCategoryId: z.string().min(1, "Fee category is required"),
   amount: z.number().positive("Amount must be positive"),
   termType: z.enum(["FULL_TERM", "HALF_TERM", "SHORT_TERM"]).default("FULL_TERM"),
+  applicability: z.enum(["MANDATORY", "OPTIONAL"]).default("MANDATORY"),
 });
 
 const inlineInstallmentSchema = z.object({

@@ -7,6 +7,7 @@ import {
   apiNotFound,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { FeeService } from "@/services/fee-service";
 import { updateStudentSchema } from "@/lib/validations/student";
 import { saveUploadedImage, deleteUploadedFile, UploadError } from "@/lib/upload";
 import { logAction } from "@/lib/audit";
@@ -87,6 +88,35 @@ export async function GET(req: NextRequest, context: RouteContext) {
             },
           },
         },
+        feeAssignments: {
+          select: {
+            feeStructureId: true,
+            isOptedIn: true,
+            discountPercent: true,
+            discountAmount: true,
+            feeStructure: {
+              select: {
+                applicability: true,
+              }
+            }
+          }
+        },
+        invoices: {
+          where: {
+            status: { not: "CANCELLED" },
+            deletedAt: null,
+          },
+          orderBy: { dueDate: "asc" },
+          select: {
+            id: true,
+            number: true,
+            dueDate: true,
+            totalAmount: true,
+            paidAmount: true,
+            status: true,
+            remarks: true,
+          }
+        }
       },
     });
 
@@ -137,7 +167,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   // Accept both FormData (with files) and JSON
-  let fields: Record<string, string> = {};
+  let fields: Record<string, any> = {};
   let formData: any = null;
   const contentType = req.headers.get("content-type") || "";
 
@@ -146,7 +176,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       formData = await req.formData();
       for (const [key, value] of formData.entries()) {
         if (typeof value === "string") {
-          fields[key] = value;
+          if (key === 'optionalFeeIds') {
+            if (!fields[key]) fields[key] = [];
+            fields[key].push(value);
+          } else {
+            fields[key] = value;
+          }
         }
       }
     } else {
@@ -265,68 +300,119 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (leavingDate !== undefined) data.leavingDate = leavingDate ? new Date(leavingDate) : null;
     if (leavingReason !== undefined) data.leavingReason = leavingReason || null;
 
-    // Handle section change — update or create enrollment
-    if (sectionId && sectionId !== "") {
-      const section = await prisma.section.findFirst({
-        where: { id: sectionId },
-        include: { class: true },
-      });
-      const targetBranchId = branchId || existing.branchId;
-      if (!section || section.class.branchId !== targetBranchId) {
-        return apiError("NOT_FOUND", "Section not found for this branch", 404);
+    const result = await prisma.$transaction(async (tx) => {
+      // Handle section change — update or create enrollment
+      if (sectionId && sectionId !== "") {
+        const section = await tx.section.findFirst({
+          where: { id: sectionId },
+          include: { class: true },
+        });
+        const targetBranchId = branchId || existing.branchId;
+        if (!section || section.class.branchId !== targetBranchId) {
+          throw new Error("SECTION_NOT_FOUND");
+        }
+
+        const latestEnrollment = await tx.studentEnrollment.findFirst({
+          where: { studentId: id },
+          orderBy: { enrolledAt: "desc" },
+        });
+        if (latestEnrollment) {
+          await tx.studentEnrollment.update({
+            where: { id: latestEnrollment.id },
+            data: { sectionId },
+          });
+        } else {
+          // No enrollment exists — create one
+          await tx.studentEnrollment.create({
+            data: {
+              studentId: id,
+              sectionId,
+              academicYearId: section.class.academicYearId,
+            },
+          });
+        }
       }
 
-      const latestEnrollment = await prisma.studentEnrollment.findFirst({
-        where: { studentId: id },
-        orderBy: { enrolledAt: "desc" },
+      const student = await tx.student.update({
+        where: { id },
+        data,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          admissionNo: true,
+          dateOfBirth: true,
+          gender: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          branch: { select: { id: true, name: true } },
+        },
       });
-      if (latestEnrollment) {
-        await prisma.studentEnrollment.update({
-          where: { id: latestEnrollment.id },
-          data: { sectionId },
-        });
-      } else {
-        // No enrollment exists — create one
-        await prisma.studentEnrollment.create({
-          data: {
-            studentId: id,
-            sectionId,
-            academicYearId: section.class.academicYearId,
-          },
-        });
-      }
-    }
 
-    const student = await prisma.student.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        admissionNo: true,
-        dateOfBirth: true,
-        gender: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        branch: { select: { id: true, name: true } },
-      },
+      // Handle Fee Updates
+      const { optionalFeeIds, discountPercent, discountAmount, customInstallments } = fields;
+      if (customInstallments || optionalFeeIds || discountPercent !== undefined || discountAmount !== undefined) {
+        // Find the current classId for the student
+        let currentClassId = null;
+        if (sectionId && sectionId !== "") {
+          const section = await tx.section.findFirst({ where: { id: sectionId }, select: { classId: true } });
+          currentClassId = section?.classId;
+        } else {
+          const enrollment = await tx.studentEnrollment.findFirst({
+            where: { studentId: id },
+            orderBy: { enrolledAt: "desc" },
+            include: { section: true },
+          });
+          currentClassId = enrollment?.section?.classId;
+        }
+
+        if (currentClassId) {
+          try {
+            await FeeService.updateStudentFees(tx, id, ctx.organizationId, {
+              classId: currentClassId,
+              discountPercent: discountPercent ? parseFloat(discountPercent) : undefined,
+              discountAmount: discountAmount ? parseFloat(discountAmount) : undefined,
+              optionalFeeIds: optionalFeeIds || [],
+              customInstallments: customInstallments ? JSON.parse(customInstallments) : undefined,
+            });
+          } catch (feeError: any) {
+            if (feeError.message === "AMOUNT_EXCEEDS_TOTAL") {
+              throw new Error("AMOUNT_EXCEEDS_TOTAL");
+            }
+            if (feeError.message?.startsWith("INSTALLMENTS_SUM_MISMATCH")) {
+              throw new Error("INSTALLMENTS_SUM_MISMATCH");
+            }
+            throw feeError;
+          }
+        }
+      }
+
+      return student;
     });
 
     await logAction({
       organizationId: ctx.organizationId,
-      branchId: student.branch.id,
+      branchId: result.branch.id,
       userId: ctx.userId,
       action: "UPDATE",
       module: "students",
-      entityId: student.id,
-      details: { admissionNo: student.admissionNo, name: `${student.firstName} ${student.lastName}` },
+      entityId: result.id,
+      details: { admissionNo: result.admissionNo, name: `${result.firstName} ${result.lastName}` },
     });
 
-    return apiSuccess(student);
-  } catch (error) {
+    return apiSuccess(result);
+  } catch (error: any) {
     console.error("Update student error:", error);
+    if (error.message === "SECTION_NOT_FOUND") {
+      return apiError("NOT_FOUND", "Section not found for this branch", 404);
+    }
+    if (error.message === "AMOUNT_EXCEEDS_TOTAL") {
+      return apiError("VALIDATION_ERROR", "Cannot reduce total fees below the amount already paid.", 422);
+    }
+    if (error.message === "INSTALLMENTS_SUM_MISMATCH") {
+      return apiError("VALIDATION_ERROR", "Sum of custom installments does not match the total payable amount.", 422);
+    }
     return apiError("INTERNAL_ERROR", "Failed to update student", 500);
   }
 }

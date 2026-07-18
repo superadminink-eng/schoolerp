@@ -4,7 +4,7 @@ import { forwardRef, useState, type InputHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
-  label: string;
+  label?: string;
   variant?: "outlined" | "filled" | "compact";
   error?: string;
   helperText?: string;

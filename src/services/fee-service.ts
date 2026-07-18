@@ -68,6 +68,7 @@ export class FeeService {
 
     // Create StudentFeeAssignments
     for (const fs of feeStructures) {
+      const isMandatory = fs.applicability === "MANDATORY";
       await tx.studentFeeAssignment.create({
         data: {
           organizationId,
@@ -76,8 +77,8 @@ export class FeeService {
           feeStructureId: fs.id,
           isOptedIn: true,
           isWaived: false,
-          discountPercent: input.discountPercent || null,
-          discountAmount: input.discountAmount || null,
+          discountPercent: isMandatory ? (input.discountPercent || null) : null,
+          discountAmount: isMandatory ? (input.discountAmount || null) : null,
         }
       });
     }
@@ -95,13 +96,20 @@ export class FeeService {
       return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
     });
 
-    const annualTotal = feeItems.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+    // Split into Mandatory vs Optional for Discount Math
+    const mandatoryTotal = feeItems.filter(f => feeStructures.find(fs => fs.id === f.feeStructureId)?.applicability === "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+    const optionalTotal = feeItems.filter(f => feeStructures.find(fs => fs.id === f.feeStructureId)?.applicability !== "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+    const annualTotal = mandatoryTotal.plus(optionalTotal);
     
-    // Apply discount
+    // Apply discount only to Mandatory Fees (Discount Leakage Fix)
+    const discountPct = new Prisma.Decimal(input.discountPercent ?? 0);
+    const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
+
+    const discountedMandatoryFee = mandatoryTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+    
     let totalDiscount = new Prisma.Decimal(input.discountAmount || 0);
-    if (input.discountPercent) {
-      totalDiscount = totalDiscount.plus(annualTotal.mul(new Prisma.Decimal(input.discountPercent).div(100)));
-    }
+    totalDiscount = totalDiscount.plus(mandatoryTotal.minus(discountedMandatoryFee));
+
     const discountedTotal = annualTotal.minus(totalDiscount);
     
     if (new Prisma.Decimal(input.amountPaid ?? 0).gt(discountedTotal)) {
@@ -201,6 +209,178 @@ export class FeeService {
 
 
     return invoices;
+  }
+
+  /**
+   * Updates a student's fee configuration post-admission.
+   * Modifies StudentFeeAssignments and recalculates pending invoices.
+   */
+  static async updateStudentFees(
+    tx: Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">,
+    studentId: string,
+    organizationId: string,
+    input: {
+      classId: string;
+      discountPercent?: number;
+      discountAmount?: number;
+      optionalFeeIds?: string[];
+      customInstallments?: CustomInstallment[];
+    }
+  ) {
+    const student = await tx.student.findUnique({ where: { id: studentId }, select: { branchId: true } });
+    if (!student) throw new Error("STUDENT_NOT_FOUND");
+
+    // 1. Calculate total paid so far
+    const existingInvoices = await tx.invoice.findMany({
+      where: { studentId, status: { not: "CANCELLED" }, deletedAt: null },
+      select: { id: true, status: true, paidAmount: true },
+    });
+    
+    const totalPaidSoFar = existingInvoices.reduce((sum, inv) => sum.plus(inv.paidAmount), new Prisma.Decimal(0));
+
+    // 2. Fetch new fee structures
+    const feeStructures = await tx.feeStructure.findMany({
+      where: { 
+        classId: input.classId,
+        OR: [
+          { applicability: "MANDATORY" },
+          { id: { in: input.optionalFeeIds || [] } }
+        ]
+      },
+      include: { feeCategory: { select: { name: true } } },
+    });
+
+    if (feeStructures.length === 0) return null;
+
+    // 3. Compute annual amounts
+    const feeItems = feeStructures.map((fs) => {
+      const base = new Prisma.Decimal(fs.amount);
+      let annual: Prisma.Decimal;
+      switch (fs.frequency) {
+        case "MONTHLY": annual = base.mul(12); break;
+        case "QUARTERLY": annual = base.mul(4); break;
+        case "SEMI_ANNUAL": annual = base.mul(2); break;
+        default: annual = base;
+      }
+      return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
+    });
+    // Split into Mandatory vs Optional for Discount Math
+    const mandatoryTotal = feeItems.filter(f => feeStructures.find(fs => fs.id === f.feeStructureId)?.applicability === "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+    const optionalTotal = feeItems.filter(f => feeStructures.find(fs => fs.id === f.feeStructureId)?.applicability !== "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+    const annualTotal = mandatoryTotal.plus(optionalTotal);
+
+    // 4. Apply discount only to Mandatory Fees (Discount Leakage Fix)
+    const discountPct = new Prisma.Decimal(input.discountPercent ?? 0);
+    const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
+
+    // Calculate discounted mandatory fee
+    const discountedMandatoryFee = mandatoryTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+    
+    // Calculate effective global discount amount
+    let totalDiscount = new Prisma.Decimal(input.discountAmount || 0);
+    totalDiscount = totalDiscount.plus(mandatoryTotal.minus(discountedMandatoryFee));
+
+    const discountedTotal = annualTotal.minus(totalDiscount);
+
+    // 5. Validate that we are not reducing fees below what's already paid
+    if (totalPaidSoFar.gt(discountedTotal)) {
+      throw new Error("AMOUNT_EXCEEDS_TOTAL"); // Reusing the same error type for consistency
+    }
+
+    // 6. Delete old fee assignments and create new ones
+    await tx.studentFeeAssignment.deleteMany({
+      where: { studentId }
+    });
+
+    for (const fs of feeStructures) {
+      const isMandatory = fs.applicability === "MANDATORY";
+      await tx.studentFeeAssignment.create({
+        data: {
+          organizationId,
+          branchId: student.branchId,
+          studentId,
+          feeStructureId: fs.id,
+          isOptedIn: true,
+          isWaived: false,
+          discountPercent: isMandatory ? (input.discountPercent || null) : null,
+          discountAmount: isMandatory ? (input.discountAmount || null) : null,
+        }
+      });
+    }
+
+    // 7. Cancel all purely PENDING invoices
+    const pendingInvoices = existingInvoices.filter(i => i.status === "PENDING");
+    if (pendingInvoices.length > 0) {
+      await tx.invoice.updateMany({
+        where: { id: { in: pendingInvoices.map(i => i.id) } },
+        data: { 
+          status: "CANCELLED",
+          remarks: "Cancelled due to fee revision",
+        }
+      });
+    }
+
+    // 8. Distribute the remaining balance across new custom installments
+    const remainingBalanceToBill = discountedTotal.minus(totalPaidSoFar);
+    const newInvoices = [];
+
+    if (remainingBalanceToBill.gt(0) && input.customInstallments && input.customInstallments.length > 0) {
+      // Validate sum of new custom installments equals remaining balance
+      const sumNewInstallments = input.customInstallments.reduce((s, i) => s.plus(new Prisma.Decimal(i.amount)), new Prisma.Decimal(0));
+      if (!sumNewInstallments.toDecimalPlaces(2).equals(remainingBalanceToBill.toDecimalPlaces(2))) {
+        throw new Error(`INSTALLMENTS_SUM_MISMATCH: Expected ${remainingBalanceToBill.toFixed(2)}, got ${sumNewInstallments.toFixed(2)}`);
+      }
+
+      for (const inst of input.customInstallments) {
+        const instAmount = new Prisma.Decimal(inst.amount);
+        const ratio = discountedTotal.equals(0) ? new Prisma.Decimal(0) : instAmount.div(discountedTotal);
+        
+        const invoiceNo = await generateUniqueInvoiceNo(tx, organizationId);
+
+        const invoice = await tx.invoice.create({
+          data: {
+            studentId,
+            organizationId,
+            number: invoiceNo,
+            year: new Date(inst.dueDate).getFullYear(),
+            month: new Date(inst.dueDate).getMonth() + 1,
+            totalAmount: instAmount,
+            paidAmount: 0,
+            status: "PENDING",
+            dueDate: new Date(inst.dueDate),
+            remarks: `Installment: ${inst.name}`,
+            items: {
+              create: (() => {
+                let distributedForThisInvoice = new Prisma.Decimal(0);
+                return feeItems.map((fi, index) => {
+                  let finalItemAmt: Prisma.Decimal;
+                  
+                  if (index === feeItems.length - 1) {
+                    // Penny Drop: Last item takes the exact remainder
+                    finalItemAmt = instAmount.minus(distributedForThisInvoice);
+                  } else {
+                    const rawItemAmt = fi.annual.mul(ratio);
+                    const discountRatio = annualTotal.equals(0) ? new Prisma.Decimal(1) : new Prisma.Decimal(1).minus(totalDiscount.div(annualTotal));
+                    finalItemAmt = rawItemAmt.mul(discountRatio).toDecimalPlaces(2);
+                  }
+                  
+                  distributedForThisInvoice = distributedForThisInvoice.plus(finalItemAmt);
+                  
+                  return {
+                    feeStructureId: fi.feeStructureId,
+                    amount: finalItemAmt,
+                    description: fi.name,
+                  };
+                });
+              })(),
+            },
+          },
+        });
+        newInvoices.push(invoice);
+      }
+    }
+
+    return newInvoices;
   }
 
   /**

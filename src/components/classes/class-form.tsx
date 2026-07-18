@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { SelectField } from "@/components/ui/select-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Divider } from "@/components/ui/divider";
 import { Icon } from "@/components/ui/icon";
 import { useSnackbar } from "@/components/ui/snackbar";
@@ -72,6 +74,7 @@ interface FeeRow {
   feeCategoryId: string;
   amount: string | number;
   termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
+  applicability?: "MANDATORY" | "OPTIONAL";
 }
 
 interface InstallmentRow {
@@ -120,6 +123,7 @@ interface ClassData {
     frequency: string;
     feeCategory: { id: string; name: string };
     termType?: string;
+    applicability?: string;
   }>;
   feeInstallmentTemplates?: Array<{
     id: string;
@@ -219,6 +223,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       feeCategoryId: f.feeCategory?.id || "",
       amount: Number(f.amount),
       termType: (f.termType || "FULL_TERM") as any,
+      applicability: (f.applicability || "MANDATORY") as any,
     })) ?? []
   );
 
@@ -454,9 +459,12 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   }
 
   // Fee helpers
-  function addFee(termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM" = "FULL_TERM") {
-    setFees((prev) => [...prev, { feeCategoryId: "", amount: "", termType }]);
-  }
+  const addFee = (termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM" = "FULL_TERM") => {
+    setFees((prev) => [
+      ...prev,
+      { feeCategoryId: "", amount: "", termType, applicability: "MANDATORY" },
+    ]);
+  };
 
   function removeFee(index: number) {
     setFees((prev) => prev.filter((_, i) => i !== index));
@@ -659,6 +667,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
             feeCategoryId: f.feeCategoryId,
             amount: parseNumOrUndef(f.amount),
             termType: f.termType,
+            applicability: f.applicability || "MANDATORY",
           })),
           installments: formattedInstallments,
           status: nextStatus,
@@ -678,6 +687,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
             feeCategoryId: f.feeCategoryId,
             amount: parseNumOrUndef(f.amount),
             termType: f.termType,
+            applicability: f.applicability || "MANDATORY",
           })),
           installments: formattedInstallments,
           status: nextStatus,
@@ -1325,14 +1335,14 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       .map((fee, index) => ({ fee, index }))
                       .filter(({ fee }) => fee.termType === activeTermTab)
                       .map(({ fee, index }) => (
-                        <div key={index} className="flex items-start gap-2 animate-fadeIn">
+                        <div key={index} className="flex items-center gap-3 animate-fadeIn w-full relative pb-4">
                           <div className="flex-1">
                             <Select
                               value={fee.feeCategoryId || ""}
                               onValueChange={(val) => updateFee(index, "feeCategoryId", val)}
                               disabled={hasInvoices}
                             >
-                              <SelectTrigger className={errors[`fees.${index}.feeCategoryId`] ? "border-red-500" : ""}>
+                              <SelectTrigger className={`h-11 rounded-lg ${errors[`fees.${index}.feeCategoryId`] ? "border-red-500" : ""}`}>
                                 <SelectValue placeholder="Select Fee Category" />
                               </SelectTrigger>
                               <SelectContent>
@@ -1358,31 +1368,44 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                               </SelectContent>
                             </Select>
                             {errors[`fees.${index}.feeCategoryId`] && (
-                              <p className="mt-1 text-xs text-red-500">
+                              <p className="text-[10px] text-red-500 absolute bottom-0 left-0">
                                 {errors[`fees.${index}.feeCategoryId`]}
                               </p>
                             )}
                           </div>
                           <div className="w-40">
-                            <CurrencyInput
-                              label=""
-                              placeholder="Amount (₹)"
-                              value={fee.amount.toString()}
-                              onChange={(e) =>
-                                updateFee(index, "amount", e.target.value)
-                              }
-                              error={errors[`fees.${index}.amount`]}
+                            <div className="relative">
+                              <CurrencyInput
+                                placeholder="Amount (₹)"
+                                value={fee.amount.toString()}
+                                onChange={(e) =>
+                                  updateFee(index, "amount", e.target.value)
+                                }
+                                error={errors[`fees.${index}.amount`]}
+                                disabled={hasInvoices}
+                                fullWidth
+                                className="h-11 rounded-lg"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 px-2 border-l border-slate-200 dark:border-slate-800 ml-1 h-8">
+                            <Switch
+                              checked={fee.applicability === "OPTIONAL"}
+                              onCheckedChange={(checked) => updateFee(index, "applicability", checked ? "OPTIONAL" : "MANDATORY")}
                               disabled={hasInvoices}
-                              fullWidth
+                              className="scale-90"
                             />
+                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 select-none tracking-wide">
+                              Optional Add-on
+                            </span>
                           </div>
                           {!hasInvoices && (
                             <button
                               type="button"
                               onClick={() => removeFee(index)}
-                              className="rounded-full p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:text-slate-500 dark:hover:text-rose-400 dark:hover:bg-rose-950/20 transition-all duration-200 cursor-pointer mt-1 flex items-center justify-center"
+                              className="rounded-full p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-500 dark:hover:text-rose-400 dark:hover:bg-rose-950/30 transition-all duration-200 cursor-pointer flex items-center justify-center ml-2"
                             >
-                              <Icon name="close" size={20} />
+                              <Icon name="close" size={18} />
                             </button>
                           )}
                         </div>

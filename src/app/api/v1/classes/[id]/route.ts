@@ -496,6 +496,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,
+                applicability: fee.applicability,
               },
             });
           } else {
@@ -507,6 +508,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,
+                applicability: fee.applicability,
               },
             });
           }

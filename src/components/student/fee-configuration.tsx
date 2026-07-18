@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -19,6 +19,8 @@ export interface CustomInstallment {
   name: string;
   dueDate: string;
   amount: number;
+  status?: string;
+  paidAmount?: number;
 }
 
 interface FeeConfigurationProps {
@@ -47,29 +49,42 @@ export function FeeConfiguration({
   const optionalFees = fees.filter(f => f.applicability === "OPTIONAL");
 
   // Calculate annual total
-  const annualTotal = useMemo(() => {
-    let total = 0;
-    const allSelectedFees = [
-      ...mandatoryFees,
-      ...optionalFees.filter(f => optionalFeeIds.includes(f.id))
-    ];
+  const { mandatoryTotal, optionalTotal, annualTotal } = useMemo(() => {
+    let mTotal = 0;
+    let oTotal = 0;
 
-    allSelectedFees.forEach(f => {
+    mandatoryFees.forEach(f => {
       switch (f.frequency) {
-        case "MONTHLY": total += f.amount * 12; break;
-        case "QUARTERLY": total += f.amount * 4; break;
-        case "SEMI_ANNUAL": total += f.amount * 2; break;
-        default: total += f.amount;
+        case "MONTHLY": mTotal += f.amount * 12; break;
+        case "QUARTERLY": mTotal += f.amount * 4; break;
+        case "SEMI_ANNUAL": mTotal += f.amount * 2; break;
+        default: mTotal += f.amount;
       }
     });
-    return total;
+
+    optionalFees.filter(f => optionalFeeIds.includes(f.id)).forEach(f => {
+      switch (f.frequency) {
+        case "MONTHLY": oTotal += f.amount * 12; break;
+        case "QUARTERLY": oTotal += f.amount * 4; break;
+        case "SEMI_ANNUAL": oTotal += f.amount * 2; break;
+        default: oTotal += f.amount;
+      }
+    });
+
+    return { mandatoryTotal: mTotal, optionalTotal: oTotal, annualTotal: mTotal + oTotal };
   }, [mandatoryFees, optionalFees, optionalFeeIds]);
 
   // Calculate discounts
   const dPct = parseFloat(discountPercent) || 0;
   const dAmt = parseFloat(discountAmount) || 0;
-  const totalDiscount = dAmt + (annualTotal * dPct / 100);
+  // Discount is ONLY applied to Mandatory fees to prevent discount leakage
+  const totalDiscount = dAmt + (mandatoryTotal * dPct / 100);
   const discountedTotal = Math.max(0, annualTotal - totalDiscount);
+
+  // Calculate Paid amounts
+  const lockedInstallments = customInstallments.filter(i => i.status === "PAID" || i.status === "PARTIAL");
+  const lockedSum = lockedInstallments.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+  const remainingBalanceToBill = Math.max(0, discountedTotal - lockedSum);
 
   // Magic Grid handlers
   const handleAddInstallment = () => {
@@ -77,6 +92,8 @@ export function FeeConfiguration({
       name: `Installment ${customInstallments.length + 1}`,
       dueDate: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().slice(0, 10),
       amount: 0,
+      status: "PENDING",
+      paidAmount: 0,
     };
     onUpdate("customInstallments", [...customInstallments, newInst]);
   };
@@ -93,18 +110,27 @@ export function FeeConfiguration({
     onUpdate("customInstallments", newInsts);
   };
 
-  const handleDistributeEvenly = () => {
-    if (customInstallments.length === 0) return;
-    const count = customInstallments.length;
-    const baseAmount = Math.floor(discountedTotal / count);
-    const remainder = discountedTotal - (baseAmount * count);
+  const handleDistributeEvenly = useCallback(() => {
+    const pendingIndices = customInstallments
+      .map((inst, idx) => inst.status === "PAID" || inst.status === "PARTIAL" ? -1 : idx)
+      .filter(idx => idx !== -1);
+      
+    if (pendingIndices.length === 0) return;
     
-    const newInsts = customInstallments.map((inst, idx) => ({
-      ...inst,
-      amount: idx === count - 1 ? baseAmount + remainder : baseAmount
-    }));
+    const count = pendingIndices.length;
+    const baseAmount = Math.floor(remainingBalanceToBill / count);
+    const remainder = remainingBalanceToBill - (baseAmount * count);
+    
+    const newInsts = [...customInstallments];
+    pendingIndices.forEach((idx, i) => {
+      newInsts[idx] = {
+        ...newInsts[idx],
+        amount: i === count - 1 ? baseAmount + remainder : baseAmount
+      };
+    });
+    
     onUpdate("customInstallments", newInsts);
-  };
+  }, [customInstallments, remainingBalanceToBill, onUpdate]);
 
   const toggleOptionalFee = (id: string) => {
     if (optionalFeeIds.includes(id)) {
@@ -116,6 +142,28 @@ export function FeeConfiguration({
 
   const currentGridSum = customInstallments.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   const isSumMismatch = magicGridEnabled && Math.abs(currentGridSum - discountedTotal) > 0.01;
+
+  // Auto-distribute when discountedTotal changes or if there is a mismatch on load
+  // This drastically improves UX by removing immediate red errors and keeping things synced
+  const prevDiscountedTotalRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!magicGridEnabled) return;
+    
+    // If it's the first mount, only auto-distribute if there's a mismatch (fixes legacy data)
+    if (prevDiscountedTotalRef.current === null) {
+      prevDiscountedTotalRef.current = discountedTotal;
+      if (Math.abs(currentGridSum - discountedTotal) > 0.01) {
+         handleDistributeEvenly();
+      }
+      return;
+    }
+
+    // If the total changed due to checking/unchecking optional fees or discount change
+    if (prevDiscountedTotalRef.current !== discountedTotal) {
+      prevDiscountedTotalRef.current = discountedTotal;
+      handleDistributeEvenly();
+    }
+  }, [discountedTotal, magicGridEnabled, currentGridSum, handleDistributeEvenly]);
 
   return (
     <div className="space-y-6">
@@ -236,13 +284,16 @@ export function FeeConfiguration({
             </div>
             
             <div className="space-y-3">
-              {customInstallments.map((inst, idx) => (
+              {customInstallments.map((inst, idx) => {
+                const isPaid = inst.status === "PAID" || inst.status === "PARTIAL";
+                return (
                 <div key={idx} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center bg-surface p-3 rounded-lg border border-outline-variant">
                   <div className="w-full sm:w-1/3">
                     <TextField
-                      label="Installment Name"
+                      label={isPaid ? `Installment Name (${inst.status})` : "Installment Name"}
                       value={inst.name}
                       onChange={(e) => handleUpdateInstallment(idx, "name", e.target.value)}
+                      disabled={isPaid}
                       fullWidth
                     />
                   </div>
@@ -252,6 +303,7 @@ export function FeeConfiguration({
                       type="date"
                       value={inst.dueDate}
                       onChange={(e) => handleUpdateInstallment(idx, "dueDate", e.target.value)}
+                      disabled={isPaid}
                       fullWidth
                     />
                   </div>
@@ -260,21 +312,23 @@ export function FeeConfiguration({
                       label="Amount (₹)"
                       value={String(inst.amount)}
                       onChange={(val) => handleUpdateInstallment(idx, "amount", Number(val))}
+                      disabled={isPaid}
                       fullWidth
                     />
                   </div>
                   <div className="flex justify-end w-full sm:w-auto mt-2 sm:mt-0">
                     <button 
                       type="button" 
-                      onClick={() => handleRemoveInstallment(idx)}
-                      className="text-error hover:bg-error/10 p-2 rounded-full transition-colors"
-                      title="Remove"
+                      onClick={() => !isPaid && handleRemoveInstallment(idx)}
+                      disabled={isPaid}
+                      className={`p-2 rounded-full transition-colors ${isPaid ? 'text-outline opacity-50 cursor-not-allowed' : 'text-error hover:bg-error/10'}`}
+                      title={isPaid ? "Cannot remove paid installment" : "Remove"}
                     >
                       <Icon name="delete" size={20} />
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             <div className={`p-3 mt-4 rounded border flex justify-between items-center ${isSumMismatch ? 'bg-error-container text-on-error-container border-error/50' : 'bg-primary-container text-on-primary-container border-primary/20'}`}>

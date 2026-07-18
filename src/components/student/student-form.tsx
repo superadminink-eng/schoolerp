@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useForm, Controller } from "react-hook-form";
@@ -95,6 +95,24 @@ interface StudentData {
   totalFees?: number;
   totalFeesPaid?: number;
   pendingFees?: number;
+  feeAssignments?: Array<{
+    feeStructureId: string;
+    isOptedIn: boolean;
+    discountPercent: string | null;
+    discountAmount: string | null;
+    feeStructure: {
+      applicability: string;
+    };
+  }>;
+  invoices?: Array<{
+    id: string;
+    number: string;
+    dueDate: string;
+    totalAmount: string;
+    paidAmount: string;
+    status: string;
+    remarks: string | null;
+  }>;
 }
 
 interface StudentFormProps {
@@ -145,10 +163,16 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       branchId: initialData?.branch?.id ?? "",
       classId: initialData?.enrollments?.[0]?.section?.class?.id ?? initialData?.classId ?? "",
       sectionId: initialData?.enrollments?.[0]?.section?.id ?? "",
-      discountPercent: "",
-      discountAmount: "",
-      optionalFeeIds: [] as string[],
-      customInstallments: [] as CustomInstallment[],
+      discountPercent: (initialData?.feeAssignments?.find(fa => fa.discountPercent)?.discountPercent) ?? "",
+      discountAmount: (initialData?.feeAssignments?.find(fa => fa.discountAmount)?.discountAmount) ?? "",
+      optionalFeeIds: initialData?.feeAssignments?.filter(fa => fa.isOptedIn && fa.feeStructure.applicability === "OPTIONAL").map(fa => fa.feeStructureId) ?? [],
+      customInstallments: (initialData?.invoices?.map(inv => ({
+        name: inv.remarks?.replace('Installment: ', '') || 'Installment',
+        dueDate: formatDateForInput(inv.dueDate),
+        amount: Number(inv.totalAmount),
+        status: inv.status,
+        paidAmount: Number(inv.paidAmount)
+      })) as CustomInstallment[]) ?? ([] as CustomInstallment[]),
       amountPaid: "",
       paymentMethod: "",
       transactionId: "",
@@ -235,11 +259,16 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       .finally(() => setSectionsLoading(false));
   }, [classId, setValue]);
 
+  const prevClassId = useRef(classId);
   useEffect(() => {
-    setValue("discountPercent", "");
-    setValue("amountPaid", "");
-    setValue("paymentMethod", "");
-    setValue("transactionId", "");
+    if (prevClassId.current !== undefined && prevClassId.current !== classId) {
+      setValue("discountPercent", "");
+      setValue("amountPaid", "");
+      setValue("paymentMethod", "");
+      setValue("transactionId", "");
+    }
+    prevClassId.current = classId;
+
     if (!classId) {
       setFees([]);
       return;
@@ -746,7 +775,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                       amountPaid={amountPaid}
                       optionalFeeIds={optionalFeeIds}
                       customInstallments={customInstallments}
-                      onUpdate={(field, val) => setValue(field as any, val)}
+                      onUpdate={(field, val) => setValue(field as any, val, { shouldValidate: true, shouldDirty: true, shouldTouch: true })}
                     />
 
                     {mode === "create" && (
@@ -808,31 +837,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 {fees.length === 0 && !feesLoading && classId && (
                   <p className="text-body-sm text-error">No fee structure configured for this class yet. Please set it up in Settings.</p>
                 )}
-                {mode === "edit" && initialData?.totalFees != null && initialData.totalFees > 0 && (
-                  <div className="rounded-lg border border-outline-variant p-4 space-y-4 mt-6">
-                    <p className="text-label-lg font-medium text-on-surface">Fee Summary</p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <TextField
-                        label="Total Fees"
-                        value={`₹${initialData.totalFees.toLocaleString("en-IN")}`}
-                        readOnly
-                        fullWidth
-                      />
-                      <TextField
-                        label="Collected"
-                        value={`₹${(initialData.totalFeesPaid ?? 0).toLocaleString("en-IN")}`}
-                        readOnly
-                        fullWidth
-                      />
-                      <TextField
-                        label="Remaining"
-                        value={`₹${(initialData.pendingFees ?? 0).toLocaleString("en-IN")}`}
-                        readOnly
-                        fullWidth
-                      />
-                    </div>
-                  </div>
-                )}
+
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,11 @@ interface InstallmentTemplate {
   name: string;
   amount: string;
   dueDate: string;
+  lateFeeActive?: boolean;
+  lateFeeType?: "DAILY" | "FIXED" | "PERCENTAGE";
+  lateFeeValue?: number;
+  lateFeePerDay?: number;
+  lateFeeGrace?: number;
 }
 
 interface CustomInstallment {
@@ -125,8 +130,11 @@ interface WorkspaceProps {
   onWithdrawApplicant?: (reason: string) => Promise<boolean>;
   onReactivateApplicant?: () => Promise<void>;
   actionLoading: boolean;
-  formError?: string | null;
+  formError: string | null;
   setFormError?: (err: string | null) => void;
+  classFees?: any[];
+  selectedOptionalFees?: { id: string; amount: number }[];
+  setSelectedOptionalFees?: (val: any) => void;
 }
 
 export default function ApplicantWorkspace({
@@ -163,12 +171,61 @@ export default function ApplicantWorkspace({
   actionLoading,
   formError,
   setFormError,
+  classFees = [],
+  selectedOptionalFees = [],
+  setSelectedOptionalFees,
 }: WorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<"general" | "parents">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "parents" | "docs">("general");
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState("");
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [reactivateLoading, setReactivateLoading] = useState(false);
+
+  const mandatoryTotal = classFees.length > 0
+    ? classFees.filter(f => f.applicability === "MANDATORY").reduce((acc, curr) => {
+        const mult = curr.frequency === "MONTHLY" ? 12 : curr.frequency === "QUARTERLY" ? 4 : curr.frequency === "SEMI_ANNUAL" ? 2 : 1;
+        return acc + Number(curr.amount) * mult;
+      }, 0)
+    : (installmentTemplates || []).reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+  const optionalTotal = selectedOptionalFees.reduce((acc: any, curr: any) => {
+    const classFee = classFees.find(f => f.id === curr.id);
+    const mult = classFee ? (classFee.frequency === "MONTHLY" ? 12 : classFee.frequency === "QUARTERLY" ? 4 : classFee.frequency === "SEMI_ANNUAL" ? 2 : 1) : 1;
+    return acc + Number(curr.amount) * mult;
+  }, 0);
+
+  const baseTotal = mandatoryTotal + optionalTotal;
+  const totalDiscountedFee = Math.max(0, Math.round(mandatoryTotal * (1 - (promoteForm.discountPercent || 0) / 100))) + optionalTotal;
+
+  // Auto-distribute totalDiscountedFee when it changes (due to optional fees or discount)
+  useEffect(() => {
+    if (customInstallments && customInstallments.length > 0) {
+      setCustomInstallments((prev: any[]) => {
+        const checkedInsts = prev.filter(i => i.checked);
+        if (checkedInsts.length === 0) return prev;
+        
+        let remaining = totalDiscountedFee;
+        const newInsts = prev.map((inst) => {
+          if (!inst.checked) return { ...inst, amount: 0 };
+          const isLast = inst.id === checkedInsts[checkedInsts.length - 1].id;
+          let rowAmount = 0;
+          
+          if (isLast) {
+            rowAmount = remaining;
+          } else {
+            rowAmount = Math.round(totalDiscountedFee / checkedInsts.length);
+            remaining -= rowAmount;
+          }
+          
+          return { ...inst, amount: rowAmount };
+        });
+        
+        // Deep compare to prevent unnecessary state updates
+        const isDifferent = newInsts.some((inst, i) => inst.amount !== prev[i].amount);
+        return isDifferent ? newInsts : prev;
+      });
+    }
+  }, [totalDiscountedFee, customInstallments.length, setCustomInstallments]);
 
   if (!selectedApp) return null;
 
@@ -283,8 +340,18 @@ export default function ApplicantWorkspace({
     );
   };
 
-  const baseTotal = installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0);
-  const totalDiscountedFee = Math.max(0, Math.round(baseTotal * (1 - (promoteForm.discountPercent || 0) / 100)));
+  // Add-ons Handlers
+  const handleOptionalFeeToggle = (fee: any, checked: boolean) => {
+    if (checked) {
+      setSelectedOptionalFees?.((prev: any) => [...prev, { id: fee.id, amount: fee.amount }]);
+    } else {
+      setSelectedOptionalFees?.((prev: any) => prev.filter((f: any) => f.id !== fee.id));
+    }
+  };
+
+  const handleOptionalFeeAmountChange = (feeId: string, newAmount: number) => {
+    setSelectedOptionalFees?.((prev: any) => prev.map((f: any) => f.id === feeId ? { ...f, amount: newAmount } : f));
+  };
 
   // God-Level Custom Installments Generator
   const generateCustomInstallments = () => {
@@ -1089,8 +1156,50 @@ export default function ApplicantWorkspace({
                       </div>
                     )}
 
+                    {/* Optional Add-ons */}
+                    {classFees.filter(f => f.applicability === "OPTIONAL").length > 0 && (
+                      <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none">
+                          Optional Add-ons
+                        </span>
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                          {classFees.filter(f => f.applicability === "OPTIONAL").map(fee => {
+                            const isSelected = selectedOptionalFees.some(o => o.id === fee.id);
+                            const selectedFee = selectedOptionalFees.find(o => o.id === fee.id);
+                            return (
+                              <div key={fee.id} className={`flex items-center gap-3 p-2 rounded-xl border transition-all ${isSelected ? "border-indigo-200 bg-indigo-50/50 dark:border-indigo-900/50 dark:bg-indigo-900/20" : "border-slate-100 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-900/40"}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => handleOptionalFeeToggle(fee, e.target.checked)}
+                                  className="rounded text-indigo-500 focus:ring-indigo-500/20 w-4 h-4"
+                                />
+                                <div className="flex-1 flex items-center justify-between">
+                                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{fee.name}</span>
+                                  {isSelected ? (
+                                    <div className="flex items-center gap-1 w-24">
+                                      <span className="text-xs font-bold text-slate-400">₹</span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={selectedFee?.amount || ""}
+                                        onChange={(e) => handleOptionalFeeAmountChange(fee.id, Number(e.target.value))}
+                                        className="w-full h-7 px-2 rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-zinc-950 text-xs font-bold text-indigo-700 dark:text-indigo-400 text-right outline-none focus:border-indigo-400"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Scholarship / Discount */}
-                    <div className="flex flex-col gap-1.5 w-full">
+                    <div className="flex flex-col gap-1.5 w-full pt-2">
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                         Scholarship / Discount (%)
                       </span>
@@ -1173,9 +1282,15 @@ export default function ApplicantWorkspace({
                                     type="date" 
                                     value={inst.dueDate.split('T')[0]}
                                     onChange={(e) => {
-                                      const newInsts = [...customInstallments];
-                                      newInsts[index].dueDate = new Date(e.target.value).toISOString();
-                                      setCustomInstallments(newInsts);
+                                      if (!e.target.value) return;
+                                      try {
+                                        const d = new Date(e.target.value);
+                                        if (!isNaN(d.getTime())) {
+                                          const newInsts = [...customInstallments];
+                                          newInsts[index].dueDate = d.toISOString();
+                                          setCustomInstallments(newInsts);
+                                        }
+                                      } catch (err) {}
                                     }}
                                     disabled={!inst.checked}
                                     className="text-[10px] text-slate-500 dark:text-zinc-400 bg-transparent outline-none cursor-pointer"
