@@ -7,7 +7,7 @@ import { updateUserSchema } from "@/lib/validations/user";
 import { logAction } from "@/lib/audit";
 import { rbacCache } from "@/lib/rbac-cache";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/users/:id — get a single user

@@ -88,10 +88,12 @@ export async function runLateFeesCalculation(currentDate: Date = new Date()) {
           let accumulatedPenalty = new Prisma.Decimal(0);
           const value = new Prisma.Decimal(inv.lateFeeValue);
 
+          const principalBase = new Prisma.Decimal(inv.totalAmount).minus(new Prisma.Decimal(inv.paidAmount));
+
           if (inv.lateFeeType === "LUMP_SUM") {
             accumulatedPenalty = value;
           } else if (inv.lateFeeType === "PERCENTAGE") {
-            accumulatedPenalty = new Prisma.Decimal(inv.totalAmount).mul(value).div(100);
+            accumulatedPenalty = principalBase.mul(value).div(100);
           } else {
             // DAILY rate (fallback to legacy lateFeePerDay if value is 0)
             const rate = value.gt(0) ? value : new Prisma.Decimal(inv.lateFeePerDay);

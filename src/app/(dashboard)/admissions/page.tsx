@@ -138,6 +138,16 @@ export default function AdmissionsPage() {
   const [stageFilter, setStageFilter] = useState<string>("ALL");
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
   const [isClearingDemo, setIsClearingDemo] = useState(false);
+  
+  // Custom Generator State
+  const [billingMode, setBillingMode] = useState<"STANDARD" | "CUSTOM">("STANDARD");
+  const [customConfigRows, setCustomConfigRows] = useState(6);
+  const [customConfigStartDate, setCustomConfigStartDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [customConfigInterval, setCustomConfigInterval] = useState<"MONTHLY" | "BIMONTHLY" | "QUARTERLY">("MONTHLY");
+  const [customConfigLateFee, setCustomConfigLateFee] = useState(true);
+
   const hasDemoData = useMemo(() => {
     return applications.some(a => a.previousSchool === 'DEMO_SANDBOX' || ["Rohan", "Aarav", "Isha", "Ananya"].includes(a.firstName)) || 
            inquiries.some(i => i.notes?.startsWith('DEMO_DATA') || i.studentName === 'Aditya Kulkarni');
@@ -169,7 +179,7 @@ export default function AdmissionsPage() {
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [classSections, setClassSections] = useState<Section[]>([]);
   const [installmentTemplates, setInstallmentTemplates] = useState<any[]>([]);
-  const [customInstallments, setCustomInstallments] = useState<{ templateId: string; amount: number; checked: boolean }[]>([]);
+  const [customInstallments, setCustomInstallments] = useState<any[]>([]);
 
   // Stepper Wizards Form States
   const [inquiryForm, setInquiryForm] = useState({
@@ -237,6 +247,9 @@ export default function AdmissionsPage() {
     transactionId: "",
     termType: "FULL_TERM" as "FULL_TERM" | "HALF_TERM" | "SHORT_TERM",
   });
+
+  const [classFees, setClassFees] = useState<any[]>([]);
+  const [selectedOptionalFees, setSelectedOptionalFees] = useState<{ id: string; amount: number }[]>([]);
 
   // Persistent Filters State Engine
   useEffect(() => {
@@ -350,9 +363,13 @@ export default function AdmissionsPage() {
             setInstallmentTemplates(data.data);
             setCustomInstallments(
               data.data.map((t: any) => ({
+                id: `template-${t.id}`,
                 templateId: t.id,
+                name: t.name,
+                dueDate: t.dueDate,
                 amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
                 checked: true,
+                isCustom: false,
               }))
             );
           }
@@ -364,7 +381,7 @@ export default function AdmissionsPage() {
     }
   }, [workspaceOpen, selectedApp?.class?.id, promoteForm.termType]);
 
-  // Load sections dynamically when selectedApp changes
+  // Load sections and fees dynamically when selectedApp changes
   useEffect(() => {
     if (workspaceOpen && selectedApp && selectedApp.class?.id) {
       const fetchSections = async () => {
@@ -379,7 +396,19 @@ export default function AdmissionsPage() {
           console.error("Failed to load sections.");
         }
       };
+      const fetchFees = async () => {
+        try {
+          const res = await fetch(`/api/v1/classes/${selectedApp.class?.id}/fees`);
+          const data = await res.json();
+          if (data.success) {
+            setClassFees(data.data);
+          }
+        } catch {
+          console.error("Failed to load fees.");
+        }
+      };
       fetchSections();
+      fetchFees();
     }
   }, [workspaceOpen, selectedApp?.class?.id]);
 
@@ -887,6 +916,7 @@ export default function AdmissionsPage() {
       transactionId: "",
       termType: "FULL_TERM",
     });
+    setSelectedOptionalFees([]);
 
     setWorkspaceOpen(true);
   };
@@ -1241,20 +1271,11 @@ export default function AdmissionsPage() {
     setActionLoading(true);
     try {
       const payload = {
-        sectionId: promoteForm.sectionId,
-        rollNo: promoteForm.rollNo || undefined,
-        admissionDate: promoteForm.admissionDate,
-        discountPercent: Number(promoteForm.discountPercent) || undefined,
-        amountPaid: Number(promoteForm.amountPaid) || undefined,
-        paymentMethod: promoteForm.paymentMethod,
-        transactionId: promoteForm.transactionId || undefined,
-        installments: customInstallments
-          .filter((inst) => inst.checked)
-          .map((inst) => ({
-            templateId: inst.templateId,
-            amount: inst.amount,
-          })),
-        termType: promoteForm.termType,
+        ...promoteForm,
+        amountPaid: Number(promoteForm.amountPaid),
+        discountPercent: Number(promoteForm.discountPercent),
+        installments: customInstallments.filter((i) => i.checked),
+        optionalFees: selectedOptionalFees,
       };
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/promote`, {
         method: "POST",
@@ -1609,6 +1630,16 @@ export default function AdmissionsPage() {
         installmentTemplates={installmentTemplates}
         customInstallments={customInstallments}
         setCustomInstallments={setCustomInstallments}
+        billingMode={billingMode}
+        setBillingMode={setBillingMode}
+        customConfigRows={customConfigRows}
+        setCustomConfigRows={setCustomConfigRows}
+        customConfigStartDate={customConfigStartDate}
+        setCustomConfigStartDate={setCustomConfigStartDate}
+        customConfigInterval={customConfigInterval}
+        setCustomConfigInterval={setCustomConfigInterval}
+        customConfigLateFee={customConfigLateFee}
+        setCustomConfigLateFee={setCustomConfigLateFee}
         promoteForm={promoteForm}
         setPromoteForm={setPromoteForm}
         verifyForm={verifyForm}
@@ -1623,6 +1654,9 @@ export default function AdmissionsPage() {
         actionLoading={actionLoading}
         formError={formError}
         setFormError={setFormError}
+        classFees={classFees}
+        selectedOptionalFees={selectedOptionalFees}
+        setSelectedOptionalFees={setSelectedOptionalFees}
       />
     </div>
   );

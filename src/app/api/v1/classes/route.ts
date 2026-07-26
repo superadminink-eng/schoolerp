@@ -359,6 +359,7 @@ export async function POST(req: NextRequest) {
             amount: fee.amount,
             frequency: "ANNUAL",
             termType: fee.termType,
+            applicability: fee.applicability,
           },
         });
       }

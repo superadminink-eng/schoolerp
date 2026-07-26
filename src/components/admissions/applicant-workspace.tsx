@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,26 @@ interface InstallmentTemplate {
   name: string;
   amount: string;
   dueDate: string;
+  lateFeeActive?: boolean;
+  lateFeeType?: "DAILY" | "FIXED" | "PERCENTAGE";
+  lateFeeValue?: number;
+  lateFeePerDay?: number;
+  lateFeeGrace?: number;
 }
 
 interface CustomInstallment {
-  templateId: string;
+  id: string;
+  templateId?: string;
+  name: string;
+  dueDate: string;
   amount: number;
   checked: boolean;
+  isCustom: boolean;
+  lateFeeActive?: boolean;
+  lateFeeType?: "DAILY" | "FIXED" | "PERCENTAGE";
+  lateFeeValue?: number;
+  lateFeePerDay?: number;
+  lateFeeGrace?: number;
 }
 
 interface Application {
@@ -72,6 +86,16 @@ interface WorkspaceProps {
   installmentTemplates: InstallmentTemplate[];
   customInstallments: CustomInstallment[];
   setCustomInstallments: (val: any) => void;
+  billingMode: "STANDARD" | "CUSTOM";
+  setBillingMode: (val: "STANDARD" | "CUSTOM") => void;
+  customConfigRows: number;
+  setCustomConfigRows: (val: number) => void;
+  customConfigStartDate: string;
+  setCustomConfigStartDate: (val: string) => void;
+  customConfigInterval: "MONTHLY" | "BIMONTHLY" | "QUARTERLY";
+  setCustomConfigInterval: (val: "MONTHLY" | "BIMONTHLY" | "QUARTERLY") => void;
+  customConfigLateFee: boolean;
+  setCustomConfigLateFee: (val: boolean) => void;
   promoteForm: {
     sectionId: string;
     rollNo: string;
@@ -106,8 +130,11 @@ interface WorkspaceProps {
   onWithdrawApplicant?: (reason: string) => Promise<boolean>;
   onReactivateApplicant?: () => Promise<void>;
   actionLoading: boolean;
-  formError?: string | null;
+  formError: string | null;
   setFormError?: (err: string | null) => void;
+  classFees?: any[];
+  selectedOptionalFees?: { id: string; amount: number }[];
+  setSelectedOptionalFees?: (val: any) => void;
 }
 
 export default function ApplicantWorkspace({
@@ -120,6 +147,16 @@ export default function ApplicantWorkspace({
   installmentTemplates,
   customInstallments,
   setCustomInstallments,
+  billingMode,
+  setBillingMode,
+  customConfigRows,
+  setCustomConfigRows,
+  customConfigStartDate,
+  setCustomConfigStartDate,
+  customConfigInterval,
+  setCustomConfigInterval,
+  customConfigLateFee,
+  setCustomConfigLateFee,
   promoteForm,
   setPromoteForm,
   verifyForm,
@@ -134,12 +171,61 @@ export default function ApplicantWorkspace({
   actionLoading,
   formError,
   setFormError,
+  classFees = [],
+  selectedOptionalFees = [],
+  setSelectedOptionalFees,
 }: WorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<"general" | "parents">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "parents" | "docs">("general");
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState("");
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [reactivateLoading, setReactivateLoading] = useState(false);
+
+  const mandatoryTotal = classFees.length > 0
+    ? classFees.filter(f => f.applicability === "MANDATORY").reduce((acc, curr) => {
+        const mult = curr.frequency === "MONTHLY" ? 12 : curr.frequency === "QUARTERLY" ? 4 : curr.frequency === "SEMI_ANNUAL" ? 2 : 1;
+        return acc + Number(curr.amount) * mult;
+      }, 0)
+    : (installmentTemplates || []).reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+  const optionalTotal = selectedOptionalFees.reduce((acc: any, curr: any) => {
+    const classFee = classFees.find(f => f.id === curr.id);
+    const mult = classFee ? (classFee.frequency === "MONTHLY" ? 12 : classFee.frequency === "QUARTERLY" ? 4 : classFee.frequency === "SEMI_ANNUAL" ? 2 : 1) : 1;
+    return acc + Number(curr.amount) * mult;
+  }, 0);
+
+  const baseTotal = mandatoryTotal + optionalTotal;
+  const totalDiscountedFee = Math.max(0, Math.round(mandatoryTotal * (1 - (promoteForm.discountPercent || 0) / 100))) + optionalTotal;
+
+  // Auto-distribute totalDiscountedFee when it changes (due to optional fees or discount)
+  useEffect(() => {
+    if (customInstallments && customInstallments.length > 0) {
+      setCustomInstallments((prev: any[]) => {
+        const checkedInsts = prev.filter(i => i.checked);
+        if (checkedInsts.length === 0) return prev;
+        
+        let remaining = totalDiscountedFee;
+        const newInsts = prev.map((inst) => {
+          if (!inst.checked) return { ...inst, amount: 0 };
+          const isLast = inst.id === checkedInsts[checkedInsts.length - 1].id;
+          let rowAmount = 0;
+          
+          if (isLast) {
+            rowAmount = remaining;
+          } else {
+            rowAmount = Math.round(totalDiscountedFee / checkedInsts.length);
+            remaining -= rowAmount;
+          }
+          
+          return { ...inst, amount: rowAmount };
+        });
+        
+        // Deep compare to prevent unnecessary state updates
+        const isDifferent = newInsts.some((inst, i) => inst.amount !== prev[i].amount);
+        return isDifferent ? newInsts : prev;
+      });
+    }
+  }, [totalDiscountedFee, customInstallments.length, setCustomInstallments]);
 
   if (!selectedApp) return null;
 
@@ -225,11 +311,14 @@ export default function ApplicantWorkspace({
         setCustomInstallments((insts: CustomInstallment[]) =>
           insts.map((inst) => {
             const template = installmentTemplates.find((t) => t.id === inst.templateId);
-            const baseAmount = template ? Number(template.amount) : 0;
-            return {
-              ...inst,
-              amount: Math.max(0, Math.round(baseAmount * (1 - discount / 100))),
-            };
+            if (template) {
+              const baseAmount = Number(template.amount) || 0;
+              return {
+                ...inst,
+                amount: Math.max(0, Math.round(baseAmount * (1 - discount / 100))),
+              };
+            }
+            return inst;
           })
         );
       }
@@ -251,8 +340,77 @@ export default function ApplicantWorkspace({
     );
   };
 
-  const baseTotal = installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0);
-  const totalDiscountedFee = Math.max(0, Math.round(baseTotal * (1 - (promoteForm.discountPercent || 0) / 100)));
+  // Add-ons Handlers
+  const handleOptionalFeeToggle = (fee: any, checked: boolean) => {
+    if (checked) {
+      setSelectedOptionalFees?.((prev: any) => [...prev, { id: fee.id, amount: fee.amount }]);
+    } else {
+      setSelectedOptionalFees?.((prev: any) => prev.filter((f: any) => f.id !== fee.id));
+    }
+  };
+
+  const handleOptionalFeeAmountChange = (feeId: string, newAmount: number) => {
+    setSelectedOptionalFees?.((prev: any) => prev.map((f: any) => f.id === feeId ? { ...f, amount: newAmount } : f));
+  };
+
+  // God-Level Custom Installments Generator
+  const generateCustomInstallments = () => {
+    if (customConfigRows <= 0) return;
+
+    // Helper: Safely add months to a date without overflowing (e.g. Jan 31 -> Feb 28)
+    const addMonths = (dateStr: string, months: number) => {
+      const d = new Date(dateStr);
+      const day = d.getDate();
+      d.setMonth(d.getMonth() + months);
+      if (d.getDate() !== day) {
+        d.setDate(0); // If day overflowed, set to last day of previous month
+      }
+      return d;
+    };
+
+    // Extract default late fee settings from standard templates if available
+    const defaultTemplate = installmentTemplates[0];
+    const lateFeeType = defaultTemplate?.lateFeeType || "DAILY";
+    const lateFeeValue = Number(defaultTemplate?.lateFeeValue) || 0;
+    const lateFeePerDay = Number(defaultTemplate?.lateFeePerDay) || 0;
+    const lateFeeGrace = Number(defaultTemplate?.lateFeeGrace) || 0;
+
+    const newInsts: CustomInstallment[] = [];
+    let remainingAmount = totalDiscountedFee;
+    let currentDateStr = customConfigStartDate;
+
+    for (let i = 0; i < customConfigRows; i++) {
+      // Penny Drop Algorithm
+      let rowAmount = 0;
+      if (i === customConfigRows - 1) {
+        rowAmount = remainingAmount; // Last row takes all remaining to ensure perfect match
+      } else {
+        rowAmount = Math.round(totalDiscountedFee / customConfigRows);
+        remainingAmount -= rowAmount;
+      }
+
+      newInsts.push({
+        id: `custom-${Date.now()}-${i}`,
+        name: `Installment ${i + 1}`,
+        dueDate: currentDateStr + "T00:00:00.000Z",
+        amount: rowAmount,
+        checked: true,
+        isCustom: true,
+        lateFeeActive: customConfigLateFee,
+        lateFeeType,
+        lateFeeValue,
+        lateFeePerDay,
+        lateFeeGrace,
+      });
+
+      // Calculate next due date
+      const intervalMonths = customConfigInterval === "MONTHLY" ? 1 : customConfigInterval === "BIMONTHLY" ? 2 : 3;
+      const nextDate = addMonths(currentDateStr, intervalMonths);
+      currentDateStr = nextDate.toISOString().split("T")[0];
+    }
+
+    setCustomInstallments(newInsts);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -893,28 +1051,155 @@ export default function ApplicantWorkspace({
                       <span className="font-extrabold uppercase tracking-wider text-[11px]">Billing Controls</span>
                     </h4>
 
-                    {/* Term Selection */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Billing Term / Intake Type
-                      </span>
-                      <Select
-                        value={promoteForm.termType}
-                        onValueChange={(val: any) => handlePromoteChange("termType", val)}
+                    {/* Billing Mode Toggle */}
+                    <div className="flex p-1 bg-slate-100 dark:bg-zinc-950/40 rounded-xl border border-slate-200/50 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => setBillingMode("STANDARD")}
+                        className={`flex-1 py-2 text-[11px] font-bold rounded-lg transition-all ${
+                          billingMode === "STANDARD"
+                            ? "bg-white dark:bg-zinc-900 text-primary shadow-sm"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-zinc-300"
+                        }`}
                       >
-                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
-                          <SelectValue placeholder="Select Term" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="FULL_TERM">Full Term</SelectItem>
-                          <SelectItem value="HALF_TERM">Half Term</SelectItem>
-                          <SelectItem value="SHORT_TERM">Short Term</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        Standard Schedule
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBillingMode("CUSTOM")}
+                        className={`flex-1 py-2 text-[11px] font-bold rounded-lg transition-all ${
+                          billingMode === "CUSTOM"
+                            ? "bg-white dark:bg-zinc-900 text-primary shadow-sm"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-zinc-300"
+                        }`}
+                      >
+                        Custom Schedule
+                      </button>
                     </div>
 
+                    {billingMode === "STANDARD" ? (
+                      /* Term Selection */
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                          Billing Term / Intake Type
+                        </span>
+                        <Select
+                          value={promoteForm.termType}
+                          onValueChange={(val: any) => handlePromoteChange("termType", val)}
+                        >
+                          <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
+                            <SelectValue placeholder="Select Term" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="FULL_TERM">Full Term</SelectItem>
+                            <SelectItem value="HALF_TERM">Half Term</SelectItem>
+                            <SelectItem value="SHORT_TERM">Short Term</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      /* Custom Generator Wizard */
+                      <div className="p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Installments</span>
+                            <input
+                              type="number"
+                              min={1} max={24}
+                              value={customConfigRows}
+                              onChange={(e) => setCustomConfigRows(Number(e.target.value) || 1)}
+                              className="h-10 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Start Date</span>
+                            <input
+                              type="date"
+                              value={customConfigStartDate}
+                              onChange={(e) => setCustomConfigStartDate(e.target.value)}
+                              className="h-10 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Interval</span>
+                          <Select
+                            value={customConfigInterval}
+                            onValueChange={(val: any) => setCustomConfigInterval(val)}
+                          >
+                            <SelectTrigger className="h-10 px-3 bg-white dark:bg-zinc-950 border-slate-200 text-xs font-bold">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="MONTHLY">Monthly</SelectItem>
+                              <SelectItem value="BIMONTHLY">Bi-Monthly (Every 2 Months)</SelectItem>
+                              <SelectItem value="QUARTERLY">Quarterly (Every 3 Months)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="checkbox"
+                            checked={customConfigLateFee}
+                            onChange={(e) => setCustomConfigLateFee(e.target.checked)}
+                            className="rounded text-indigo-500 focus:ring-indigo-500/20"
+                          />
+                          <span className="text-xs font-bold text-slate-600 dark:text-zinc-300">Apply Standard Late Fees?</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={generateCustomInstallments}
+                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-extrabold tracking-wide uppercase transition-colors"
+                        >
+                          Generate Schedule
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Optional Add-ons */}
+                    {classFees.filter(f => f.applicability === "OPTIONAL").length > 0 && (
+                      <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none">
+                          Optional Add-ons
+                        </span>
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                          {classFees.filter(f => f.applicability === "OPTIONAL").map(fee => {
+                            const isSelected = selectedOptionalFees.some(o => o.id === fee.id);
+                            const selectedFee = selectedOptionalFees.find(o => o.id === fee.id);
+                            return (
+                              <div key={fee.id} className={`flex items-center gap-3 p-2 rounded-xl border transition-all ${isSelected ? "border-indigo-200 bg-indigo-50/50 dark:border-indigo-900/50 dark:bg-indigo-900/20" : "border-slate-100 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-900/40"}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => handleOptionalFeeToggle(fee, e.target.checked)}
+                                  className="rounded text-indigo-500 focus:ring-indigo-500/20 w-4 h-4"
+                                />
+                                <div className="flex-1 flex items-center justify-between">
+                                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{fee.name}</span>
+                                  {isSelected ? (
+                                    <div className="flex items-center gap-1 w-24">
+                                      <span className="text-xs font-bold text-slate-400">₹</span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={selectedFee?.amount || ""}
+                                        onChange={(e) => handleOptionalFeeAmountChange(fee.id, Number(e.target.value))}
+                                        className="w-full h-7 px-2 rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-zinc-950 text-xs font-bold text-indigo-700 dark:text-indigo-400 text-right outline-none focus:border-indigo-400"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Scholarship / Discount */}
-                    <div className="flex flex-col gap-1.5 w-full">
+                    <div className="flex flex-col gap-1.5 w-full pt-2">
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                         Scholarship / Discount (%)
                       </span>
@@ -953,33 +1238,68 @@ export default function ApplicantWorkspace({
                     </h4>
 
                     <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin">
-                      {installmentTemplates.map((t) => {
-                        const inst = customInstallments.find((ci) => ci.templateId === t.id) || {
-                          checked: true,
-                          amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
-                        };
+                      {customInstallments.map((inst, index) => {
                         return (
                           <div
-                            key={t.id}
+                            key={inst.id}
                             className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all duration-250 ${
                               inst.checked
                                 ? "bg-white dark:bg-zinc-900/60 border-slate-200 dark:border-zinc-800 shadow-sm"
                                 : "bg-slate-50/40 dark:bg-zinc-950/10 border-slate-100 dark:border-zinc-900 opacity-60"
                             }`}
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-1">
                               <input
                                 type="checkbox"
-                                id={`inst-check-${t.id}`}
+                                id={`inst-check-${inst.id}`}
                                 checked={inst.checked}
-                                onChange={(e) => handleInstallmentCheckChange(t.id, e.target.checked)}
+                                onChange={(e) => {
+                                  const newInsts = [...customInstallments];
+                                  newInsts[index].checked = e.target.checked;
+                                  setCustomInstallments(newInsts);
+                                }}
                                 className="rounded text-primary focus:ring-primary/20 w-4.5 h-4.5 border-slate-300 dark:border-zinc-800"
                               />
-                              <div>
-                                <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{t.name}</span>
-                                <span className="text-[9px] text-slate-400 dark:text-zinc-500 block mt-1">
-                                  Due: {new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                                </span>
+                              <div className="flex flex-col gap-2 flex-1 max-w-[200px]">
+                                {inst.isCustom ? (
+                                  <input 
+                                    type="text" 
+                                    value={inst.name}
+                                    onChange={(e) => {
+                                      const newInsts = [...customInstallments];
+                                      newInsts[index].name = e.target.value;
+                                      setCustomInstallments(newInsts);
+                                    }}
+                                    disabled={!inst.checked}
+                                    className="text-xs font-bold text-slate-700 dark:text-zinc-300 bg-transparent border-b border-slate-200 dark:border-zinc-700 outline-none focus:border-primary px-1 pb-0.5"
+                                  />
+                                ) : (
+                                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300 px-1">{inst.name}</span>
+                                )}
+                                
+                                {inst.isCustom ? (
+                                  <input 
+                                    type="date" 
+                                    value={inst.dueDate.split('T')[0]}
+                                    onChange={(e) => {
+                                      if (!e.target.value) return;
+                                      try {
+                                        const d = new Date(e.target.value);
+                                        if (!isNaN(d.getTime())) {
+                                          const newInsts = [...customInstallments];
+                                          newInsts[index].dueDate = d.toISOString();
+                                          setCustomInstallments(newInsts);
+                                        }
+                                      } catch (err) {}
+                                    }}
+                                    disabled={!inst.checked}
+                                    className="text-[10px] text-slate-500 dark:text-zinc-400 bg-transparent outline-none cursor-pointer"
+                                  />
+                                ) : (
+                                  <span className="text-[9px] text-slate-400 dark:text-zinc-500 block px-1">
+                                    Due: {new Date(inst.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -987,14 +1307,51 @@ export default function ApplicantWorkspace({
                               <BaseCurrencyInput
                                 disabled={!inst.checked}
                                 value={String(inst.amount)}
-                                onChange={(e) => handleInstallmentAmountChange(t.id, Number(e.target.value) || 0)}
-                                className="w-28 h-9 text-xs font-bold bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 text-right text-slate-800 dark:text-zinc-200 outline-none focus:border-primary disabled:opacity-50 transition-all duration-300"
+                                onChange={(e) => {
+                                  const newInsts = [...customInstallments];
+                                  newInsts[index].amount = Number(e.target.value) || 0;
+                                  setCustomInstallments(newInsts);
+                                }}
+                                className="w-24 h-9 text-xs font-bold bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 text-right text-slate-800 dark:text-zinc-200 outline-none focus:border-primary disabled:opacity-50 transition-all duration-300"
                               />
+                              {inst.isCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newInsts = customInstallments.filter((_, i) => i !== index);
+                                    setCustomInstallments(newInsts);
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors ml-1"
+                                >
+                                  <Icon name="delete" size={16} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomInstallments([
+                          ...customInstallments, 
+                          { 
+                            id: `custom-${Date.now()}`, 
+                            name: `Custom Installment ${customInstallments.length + 1}`, 
+                            dueDate: new Date().toISOString(), 
+                            amount: 0, 
+                            checked: true, 
+                            isCustom: true 
+                          }
+                        ]);
+                      }}
+                      className="w-full py-2.5 mt-2 border border-dashed border-primary/30 rounded-xl text-primary text-xs font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Icon name="add_circle" size={16} />
+                      Add Custom Installment
+                    </button>
                   </div>
                 </div>
 

@@ -9,7 +9,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateAcademicYearSchema } from "@/lib/validations/academic-year";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/academic-years/:id — get a single academic year

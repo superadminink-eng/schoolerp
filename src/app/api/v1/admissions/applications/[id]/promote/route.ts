@@ -10,7 +10,7 @@ import crypto from "crypto";
 import { generateUniqueAdmissionNo, generateUniqueInvoiceNo, generateUniqueReceiptNo } from "@/lib/unique-id";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * POST /api/v1/admissions/applications/[id]/promote — Promote shortlisted candidate to active student
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     transactionId,
     installments,
     termType,
+    optionalFees,
   } = body as {
     sectionId: string;
     rollNo?: string;
@@ -47,8 +48,19 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     amountPaid?: number;
     paymentMethod?: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
     transactionId?: string;
-    installments?: { templateId: string; amount: number }[];
+    installments?: { 
+      templateId?: string; 
+      name?: string; 
+      dueDate?: string; 
+      amount: number;
+      lateFeeActive?: boolean;
+      lateFeeType?: "DAILY" | "FIXED" | "PERCENTAGE";
+      lateFeeValue?: number;
+      lateFeePerDay?: number;
+      lateFeeGrace?: number;
+    }[];
     termType?: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
+    optionalFees?: { id: string; amount: number }[];
   };
 
   if (!sectionId) {
@@ -159,6 +171,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           classId: application.classId,
           academicYearId: application.academicYearId,
           termType: termType || "FULL_TERM",
+          OR: [
+            { applicability: "MANDATORY" },
+            { id: { in: optionalFees?.map(f => f.id) || [] } }
+          ]
         },
         include: { feeCategory: { select: { name: true } } },
       });
@@ -167,9 +183,29 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         throw new Error("FEE_STRUCTURE_UNCONFIGURED: No active fee structures found for this class.");
       }
 
+      // Security Check: Ensure all selected optional fees are actually marked as OPTIONAL in DB
+      if (optionalFees && optionalFees.length > 0) {
+        const optionalIds = optionalFees.map(f => f.id);
+        const matchingStructures = feeStructures.filter(fs => optionalIds.includes(fs.id));
+        if (matchingStructures.some(fs => fs.applicability !== "OPTIONAL")) {
+           throw new Error("SECURITY_VIOLATION: Attempted to override a non-optional fee.");
+        }
+      }
+
       // Compute standard annual fees for each category
       const feeCategoriesAnnual = feeStructures.map((fs) => {
-        const base = new Prisma.Decimal(fs.amount);
+        let base = new Prisma.Decimal(fs.amount);
+        let isOverridden = false;
+        
+        // Override amount if OPTIONAL and passed in payload
+        if (fs.applicability === "OPTIONAL" && optionalFees) {
+          const customOpt = optionalFees.find(o => o.id === fs.id);
+          if (customOpt && customOpt.amount >= 0) {
+             base = new Prisma.Decimal(customOpt.amount);
+             isOverridden = true;
+          }
+        }
+        
         let annual = base;
         switch (fs.frequency) {
           case "MONTHLY": annual = base.mul(12); break;
@@ -177,14 +213,32 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           case "SEMI_ANNUAL": annual = base.mul(2); break;
           default: annual = base;
         }
-        return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
+        return { 
+          feeStructureId: fs.id, 
+          name: fs.feeCategory.name, 
+          annual, 
+          applicability: fs.applicability,
+          isOverridden,
+          overriddenBase: base
+        };
       });
 
-      const annualTotal = feeCategoriesAnnual.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+      // Split Mandatory vs Optional for Discount Math
+      const mandatoryTotal = feeCategoriesAnnual.filter(f => f.applicability === "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+      const optionalTotal = feeCategoriesAnnual.filter(f => f.applicability !== "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
+      
       const discountPct = new Prisma.Decimal(discountPercent ?? 0);
       const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
 
-      const totalDiscountedFee = annualTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      // Discount ONLY applies to Mandatory fees! (Discount Leakage Fix)
+      const discountedMandatoryFee = mandatoryTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      
+      const totalDiscountedFee = discountedMandatoryFee.plus(optionalTotal);
+      
+      // Calculate effective discount ratio for the Invoice Items calculation below
+      const annualTotal = mandatoryTotal.plus(optionalTotal);
+      const totalDiscount = mandatoryTotal.minus(discountedMandatoryFee);
+
       const amountPaidDecimal = new Prisma.Decimal(amountPaid ?? 0);
 
       if (amountPaidDecimal.gt(0) && !paymentMethod) {
@@ -198,36 +252,38 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       // 1. Check if installment templates are setup or provided
       let targetInstallments: { name: string; amount: Prisma.Decimal; dueDate: Date; lateFeeActive: boolean; lateFeeType: string; lateFeeValue: Prisma.Decimal; lateFeePerDay: Prisma.Decimal; lateFeeGrace: number }[] = [];
       
-      if (installments) {
+      if (totalDiscountedFee.equals(0)) {
+        // 100% Scholarship - No installments required
+        targetInstallments = [];
+      } else if (installments) {
         if (installments.length === 0) {
           throw new Error("INSTALLMENT_AMOUNT_MISMATCH: At least one fee installment must be selected.");
         }
-        if (installments.some(inst => inst.amount <= 0)) {
-          throw new Error("INSTALLMENT_AMOUNT_MISMATCH: All installment amounts must be greater than zero.");
+        if (installments.some(inst => inst.amount < 0)) {
+          throw new Error("INSTALLMENT_AMOUNT_MISMATCH: Installment amounts cannot be negative.");
         }
-        // Resolve templates matching the IDs passed in request
-        const templateIds = installments.map(i => i.templateId);
-        const matchedTemplates = await tx.feeInstallmentTemplate.findMany({
+        const templateIds = installments.filter(i => i.templateId).map(i => i.templateId as string);
+        const matchedTemplates = templateIds.length > 0 ? await tx.feeInstallmentTemplate.findMany({
           where: { id: { in: templateIds } },
-        });
+        }) : [];
 
         targetInstallments = installments.map(inst => {
-          const temp = matchedTemplates.find(t => t.id === inst.templateId);
+          const temp = inst.templateId ? matchedTemplates.find(t => t.id === inst.templateId) : null;
           return {
-            name: temp?.name || "Installment",
+            name: inst.name || temp?.name || "Custom Installment",
             amount: new Prisma.Decimal(inst.amount),
-            dueDate: temp?.dueDate || new Date(),
-            lateFeeActive: temp?.lateFeeActive || false,
-            lateFeeType: temp?.lateFeeType || "DAILY",
-            lateFeeValue: temp ? new Prisma.Decimal(temp.lateFeeValue) : new Prisma.Decimal(0),
-            lateFeePerDay: temp ? new Prisma.Decimal(temp.lateFeePerDay) : new Prisma.Decimal(0),
-            lateFeeGrace: temp?.lateFeeGrace || 0,
+            dueDate: inst.dueDate ? new Date(inst.dueDate) : (temp?.dueDate || new Date()),
+            lateFeeActive: inst.lateFeeActive ?? (temp?.lateFeeActive || false),
+            lateFeeType: inst.lateFeeType || temp?.lateFeeType || "DAILY",
+            lateFeeValue: new Prisma.Decimal(inst.lateFeeValue ?? (temp ? Number(temp.lateFeeValue) : 0)),
+            lateFeePerDay: new Prisma.Decimal(inst.lateFeePerDay ?? (temp ? Number(temp.lateFeePerDay) : 0)),
+            lateFeeGrace: inst.lateFeeGrace ?? (temp?.lateFeeGrace || 0),
           };
         });
 
         const totalCustomAmount = targetInstallments.reduce((sum, inst) => sum.plus(inst.amount), new Prisma.Decimal(0));
-        if (totalCustomAmount.gt(totalDiscountedFee)) {
-          throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of custom installments (₹${totalCustomAmount}) exceeds the total discounted fee structures (₹${totalDiscountedFee}).`);
+        if (!totalCustomAmount.equals(totalDiscountedFee)) {
+          throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of custom installments (₹${totalCustomAmount}) must exactly match the total onboarding fee (₹${totalDiscountedFee}).`);
         }
       } else {
         // Query standard class templates from DB
@@ -386,6 +442,19 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       await tx.admissionApplication.update({
         where: { id },
         data: { status: "ADMITTED" },
+      });
+
+      // 5. Create StudentFeeAssignment records for recurring billing future-proofing
+      await tx.studentFeeAssignment.createMany({
+        data: feeCategoriesAnnual.map(f => ({
+          organizationId: ctx.organizationId,
+          branchId: application.branchId,
+          studentId: studentRecord.id,
+          feeStructureId: f.feeStructureId,
+          isOptedIn: true,
+          customAmount: f.isOverridden ? f.overriddenBase : null,
+          discountPercent: f.applicability === "MANDATORY" ? discountPercent : null,
+        })),
       });
 
       return studentRecord;

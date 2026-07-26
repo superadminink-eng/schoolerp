@@ -10,7 +10,7 @@ import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateNoticeSchema } from "@/lib/validations/notice";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/notices/:id — retrieve details for a single notice

@@ -9,7 +9,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateSubjectMasterSchema } from "@/lib/validations/subject-master";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/subject-masters/:id — get a single subject master

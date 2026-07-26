@@ -7,7 +7,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * POST /api/v1/admissions/applications/[id]/verify — Verify uploaded documents

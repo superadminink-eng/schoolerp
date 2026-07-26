@@ -9,7 +9,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateDesignationMasterSchema } from "@/lib/validations/designation-master";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/designations/:id — get a single designation

@@ -4,7 +4,7 @@ import { apiSuccess, apiError, apiValidationError, apiNotFound } from "@/lib/api
 import { checkApiPermission, getTenantContext, getUserPermissions } from "@/lib/rbac";
 import { z } from "zod";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 const updateRoleSchema = z.object({
   name: z.string().min(2).max(50).optional(),

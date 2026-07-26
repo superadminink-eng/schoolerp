@@ -15,6 +15,9 @@ export class StudentService {
       amountPaid?: string;
       paymentMethod?: string;
       transactionId?: string;
+      discountAmount?: string;
+      optionalFeeIds?: string[];
+      customInstallments?: any[];
     },
     files: { photo?: File | null; idDocument?: File | null },
     ctx: TenantContext
@@ -131,6 +134,9 @@ export class StudentService {
         await FeeService.createInitialInvoice(tx, created.id, ctx.organizationId, {
           classId: data.classId,
           discountPercent: data.discountPercent ? parseFloat(data.discountPercent) : 0,
+          discountAmount: data.discountAmount ? parseFloat(data.discountAmount) : 0,
+          optionalFeeIds: data.optionalFeeIds || [],
+          customInstallments: data.customInstallments || [],
           amountPaid: data.amountPaid ? parseFloat(data.amountPaid) : 0,
           paymentMethod: data.paymentMethod,
           transactionId: data.transactionId,

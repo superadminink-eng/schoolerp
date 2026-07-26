@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError, apiNotFound } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * GET /api/v1/students/[id]/fees — Retrieve financial fees ledger (invoices & payments) for a student

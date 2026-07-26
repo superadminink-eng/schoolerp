@@ -9,7 +9,7 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 const issueLcSchema = z.object({
   leavingDate: z.string().transform((val) => new Date(val)),

@@ -11,7 +11,7 @@ import {
 } from "@/lib/upload";
 import { logAction } from "@/lib/audit";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 /**
  * Verify that a staff member belongs to the caller's organization (and branch for BRANCH_ADMIN).

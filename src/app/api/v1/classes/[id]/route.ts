@@ -10,7 +10,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateClassSchema } from "@/lib/validations/class";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = any;
 
 const classIncludes = {
   subjects: {
@@ -496,6 +496,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,
+                applicability: fee.applicability,
               },
             });
           } else {
@@ -507,6 +508,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 amount: fee.amount,
                 frequency: "ANNUAL",
                 termType: fee.termType,
+                applicability: fee.applicability,
               },
             });
           }
