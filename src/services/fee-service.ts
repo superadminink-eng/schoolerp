@@ -393,8 +393,9 @@ export class FeeService {
     page: number,
     limit: number
   ) {
+    const tenantWhere = await buildTenantWhere(ctx as any, branchFilter);
     const studentWhere = {
-      ...buildTenantWhere(ctx as any, branchFilter),
+      ...tenantWhere,
       invoices: {
         some: {
           status: { in: ["PENDING", "PARTIAL", "OVERDUE"] as InvoiceStatus[] },
