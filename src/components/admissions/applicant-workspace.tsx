@@ -77,10 +77,11 @@ interface Application {
 }
 
 interface WorkspaceProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   selectedApp: Application | null;
   statusLabels: Record<string, string>;
+  classes?: any[];
+  onApplicantUpdated?: (updatedApp: any) => void;
   hasEntranceTest: boolean;
   classSections: Section[];
   installmentTemplates: InstallmentTemplate[];
@@ -138,10 +139,11 @@ interface WorkspaceProps {
 }
 
 export default function ApplicantWorkspace({
-  open,
-  onOpenChange,
+  onClose,
   selectedApp,
   statusLabels,
+  classes = [],
+  onApplicantUpdated,
   hasEntranceTest,
   classSections,
   installmentTemplates,
@@ -176,6 +178,14 @@ export default function ApplicantWorkspace({
   setSelectedOptionalFees,
 }: WorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"general" | "parents" | "docs">("general");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editForm, setEditForm] = useState<any>(selectedApp);
+
+  useEffect(() => {
+    setEditForm(selectedApp);
+    setIsEditing(false);
+  }, [selectedApp]);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState("");
   const [withdrawLoading, setWithdrawLoading] = useState(false);
@@ -412,11 +422,44 @@ export default function ApplicantWorkspace({
     setCustomInstallments(newInsts);
   };
 
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onApplicantUpdated || !selectedApp) return;
+    
+    setEditLoading(true);
+    try {
+      const response = await fetch(`/api/v1/admissions/applications/${selectedApp.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update application");
+      }
+
+      const updated = await response.json();
+      onApplicantUpdated(updated.data);
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Error updating application:", error);
+      alert("Failed to update application details.");
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl h-[90vh] overflow-hidden flex flex-col p-0 rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800 shadow-2xl">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/20 flex items-center justify-between shrink-0">
+    <div className="w-full min-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden mb-8 animate-in fade-in zoom-in-95 duration-300">
+      {/* Header */}
+      <div className="p-6 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/40 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onClose}
+            className="p-2.5 bg-white dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 rounded-full transition-colors text-slate-600 dark:text-zinc-300 shadow-sm"
+          >
+            <Icon name="arrow_back" size={20} />
+          </button>
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary">
@@ -428,10 +471,11 @@ export default function ApplicantWorkspace({
                 {selectedApp.applicationNo}
               </span>
             </div>
-            <DialogTitle className="text-xl font-bold text-slate-800 dark:text-zinc-100 mt-1.5">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-zinc-100 mt-1.5">
               {selectedApp.firstName} {selectedApp.lastName}
-            </DialogTitle>
+            </h2>
           </div>
+        </div>
           {selectedApp.status !== "ADMITTED" && selectedApp.status !== "REJECTED" && selectedApp.status !== "WITHDRAWN" && onWithdrawApplicant && (
             <Button
               type="button"
@@ -523,130 +567,306 @@ export default function ApplicantWorkspace({
         <div className="flex-1 flex overflow-hidden min-h-0">
           {/* A. Left Pane: Candidate Summary Profile */}
           <div className="w-[26%] min-w-[280px] max-w-[320px] overflow-y-auto p-6 bg-slate-50/50 dark:bg-zinc-950/20 border-r border-slate-200/60 dark:border-zinc-800/80 space-y-6">
-            {/* Tab toggles */}
-            <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-zinc-900 border rounded-xl shrink-0">
-              <button
-                onClick={() => setActiveTab("general")}
-                className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${
-                  activeTab === "general"
-                    ? "bg-white dark:bg-zinc-900 text-primary dark:text-sky-400 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Profile Info
-              </button>
-              <button
-                onClick={() => setActiveTab("parents")}
-                className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${
-                  activeTab === "parents"
-                    ? "bg-white dark:bg-zinc-900 text-primary dark:text-sky-400 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Family Info
-              </button>
+            {/* Tab toggles & Edit Action */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-zinc-900 border rounded-xl shrink-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("general")}
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${
+                    activeTab === "general"
+                      ? "bg-white dark:bg-zinc-900 text-primary dark:text-sky-400 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("parents")}
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${
+                    activeTab === "parents"
+                      ? "bg-white dark:bg-zinc-900 text-primary dark:text-sky-400 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  Family
+                </button>
+              </div>
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="p-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 hover:text-primary transition-colors shrink-0"
+                  title="Edit Profile Information"
+                >
+                  <Icon name="edit" size={16} />
+                </button>
+              )}
             </div>
 
-            {activeTab === "general" ? (
-              <div className="space-y-6">
-                {/* Application details */}
-                <div className="space-y-4">
-                  <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                    <Icon name="assignment" size={14} />
-                    Application Details
-                  </h3>
-                  <div className="space-y-3.5 pl-1">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Class</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.class?.name || "N/A"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Academic Year</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.academicYear?.name || "N/A"}</p>
+            {isEditing ? (
+              <form onSubmit={handleEditSubmit} className="space-y-6">
+                {activeTab === "general" ? (
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
+                      <Icon name="assignment" size={14} /> Application Details
+                    </h3>
+                    <div className="space-y-3 pl-1">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Class</label>
+                        <Select
+                          value={editForm.classId}
+                          onValueChange={(val) => setEditForm((p: any) => ({ ...p, classId: val }))}
+                        >
+                          <SelectTrigger className="h-8 text-xs font-semibold bg-white dark:bg-zinc-950 mt-1">
+                            <SelectValue placeholder="Select Class" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {classes.map((cls) => (
+                              <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">First Name</label>
+                          <input required value={editForm.firstName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, firstName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Last Name</label>
+                          <input required value={editForm.lastName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, lastName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Birth Date</label>
+                        <input required type="date" value={editForm.dateOfBirth ? new Date(editForm.dateOfBirth).toISOString().split('T')[0] : ''} onChange={(e) => setEditForm((p: any) => ({ ...p, dateOfBirth: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gender</label>
+                          <Select value={editForm.gender} onValueChange={(val) => setEditForm((p: any) => ({ ...p, gender: val }))}>
+                            <SelectTrigger className="h-8 text-xs font-semibold bg-white dark:bg-zinc-950 mt-1"><SelectValue /></SelectTrigger>
+                            <SelectContent><SelectItem value="MALE">Male</SelectItem><SelectItem value="FEMALE">Female</SelectItem><SelectItem value="OTHER">Other</SelectItem></SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Blood Group</label>
+                          <input value={editForm.bloodGroup || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, bloodGroup: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Previous School</label>
+                        <input value={editForm.previousSchool || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, previousSchool: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Emergency Contact</label>
+                        <input value={editForm.emergencyContact || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, emergencyContact: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Address</label>
+                          <input required value={editForm.address || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, address: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Pincode</label>
+                          <input required value={editForm.pincode || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, pincode: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Personal details */}
-                <div className="space-y-4">
-                  <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                    <Icon name="person" size={14} />
-                    Personal Details
-                  </h3>
-                  <div className="space-y-3.5 pl-1">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Birth Date</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">
-                        {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </p>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
+                        <Icon name="person" size={14} /> Father's Details
+                      </h3>
+                      <div className="space-y-3 pl-1">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Name</label>
+                          <input value={editForm.fatherName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</label>
+                            <input value={editForm.fatherPhone || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherPhone: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</label>
+                            <input type="email" value={editForm.fatherEmail || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherEmail: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</label>
+                          <input value={editForm.fatherOccupation || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherOccupation: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gender</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.gender}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Residence Address</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 leading-relaxed">
-                        {selectedApp.address}, {selectedApp.pincode}
-                      </p>
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-extrabold text-pink-500 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
+                        <Icon name="person" size={14} className="text-pink-500" /> Mother's Details
+                      </h3>
+                      <div className="space-y-3 pl-1">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Name</label>
+                          <input value={editForm.motherName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</label>
+                            <input value={editForm.motherPhone || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherPhone: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</label>
+                            <input type="email" value={editForm.motherEmail || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherEmail: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</label>
+                          <input value={editForm.motherOccupation || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherOccupation: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
+                
+                <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-end gap-2 sticky bottom-0 bg-slate-50/90 dark:bg-zinc-950/90 py-2 backdrop-blur-sm z-10">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditing(false)} disabled={editLoading}>Cancel</Button>
+                  <Button type="submit" variant="primary" size="sm" loading={editLoading}>Save Changes</Button>
                 </div>
-              </div>
+              </form>
             ) : (
-              <div className="space-y-6">
-                {/* Father profile */}
-                <div className="space-y-4">
-                  <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                    <Icon name="person" size={14} />
-                    Father's Details
-                  </h3>
-                  <div className="space-y-3.5 pl-1">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Father's Name</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherName || "—"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone Number</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherPhone || "—"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email Address</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 truncate">{selectedApp.fatherEmail || "—"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherOccupation || "—"}</p>
+              // READ ONLY VIEW
+              activeTab === "general" ? (
+                <div className="space-y-6">
+                  {/* Application details */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
+                      <Icon name="assignment" size={14} />
+                      Application Details
+                    </h3>
+                    <div className="space-y-3.5 pl-1">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Class</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.class?.name || "N/A"}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Academic Year</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.academicYear?.name || "N/A"}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Previous School</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.previousSchool || "—"}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Mother profile */}
-                <div className="space-y-4">
-                  <h3 className="text-xs font-extrabold text-pink-500 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                    <Icon name="person" size={14} className="text-pink-500" />
-                    Mother's Details
-                  </h3>
-                  <div className="space-y-3.5 pl-1">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Mother's Name</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherName || "—"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone Number</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherPhone || "—"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</span>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherOccupation || "—"}</p>
+                  {/* Personal details */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
+                      <Icon name="person" size={14} />
+                      Personal Details
+                    </h3>
+                    <div className="space-y-3.5 pl-1">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Full Name</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.firstName} {selectedApp.lastName}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Birth Date</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">
+                            {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gender</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.gender}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Blood Group</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.bloodGroup || "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Emergency Phone</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.emergencyContact || "—"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Residence Address</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 leading-relaxed">
+                          {selectedApp.address}, {selectedApp.pincode}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Father profile */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
+                      <Icon name="person" size={14} />
+                      Father's Details
+                    </h3>
+                    <div className="space-y-3.5 pl-1">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Father's Name</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherName || "—"}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherPhone || "—"}</p>
+                        </div>
+                        <div className="overflow-hidden">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 truncate">{selectedApp.fatherEmail || "—"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherOccupation || "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mother profile */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold text-pink-500 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
+                      <Icon name="person" size={14} className="text-pink-500" />
+                      Mother's Details
+                    </h3>
+                    <div className="space-y-3.5 pl-1">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Mother's Name</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherName || "—"}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherPhone || "—"}</p>
+                        </div>
+                        <div className="overflow-hidden">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</span>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 truncate">{selectedApp.motherEmail || "—"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</span>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherOccupation || "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
             )}
           </div>
 
@@ -1043,188 +1263,228 @@ export default function ApplicantWorkspace({
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
                   
                   {/* Left: Billing Controls Card (5 cols) */}
-                  <div className="lg:col-span-5 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/85 shadow-md shadow-slate-100/50 dark:shadow-none space-y-5 transition-all duration-300 hover:shadow-lg">
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
-                      <span className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-                        <Icon name="payments" size={14} />
-                      </span>
-                      <span className="font-extrabold uppercase tracking-wider text-[11px]">Billing Controls</span>
-                    </h4>
+                  {/* Left: Billing Controls Card (5 cols) - LIVE RECEIPT STYLE */}
+                  <div className="lg:col-span-5 flex flex-col relative">
+                    <div className="relative bg-amber-50/40 dark:bg-zinc-900/80 border border-slate-200/60 dark:border-zinc-800 shadow-lg shadow-slate-200/40 dark:shadow-none pb-4 transition-all duration-300">
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400"></div>
+                      
+                      <div className="p-6 pt-8 space-y-6">
+                        <div className="text-center pb-4 border-b-2 border-dashed border-slate-200 dark:border-zinc-700">
+                          <h4 className="font-black uppercase tracking-widest text-slate-800 dark:text-zinc-100 text-sm">
+                            Fee Receipt
+                          </h4>
+                          <p className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mt-1">Live Estimate</p>
+                        </div>
 
-                    {/* Billing Mode Toggle */}
-                    <div className="flex p-1 bg-slate-100 dark:bg-zinc-950/40 rounded-xl border border-slate-200/50 dark:border-zinc-800">
-                      <button
-                        type="button"
-                        onClick={() => setBillingMode("STANDARD")}
-                        className={`flex-1 py-2 text-[11px] font-bold rounded-lg transition-all ${
-                          billingMode === "STANDARD"
-                            ? "bg-white dark:bg-zinc-900 text-primary shadow-sm"
-                            : "text-slate-500 hover:text-slate-800 dark:hover:text-zinc-300"
-                        }`}
-                      >
-                        Standard Schedule
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBillingMode("CUSTOM")}
-                        className={`flex-1 py-2 text-[11px] font-bold rounded-lg transition-all ${
-                          billingMode === "CUSTOM"
-                            ? "bg-white dark:bg-zinc-900 text-primary shadow-sm"
-                            : "text-slate-500 hover:text-slate-800 dark:hover:text-zinc-300"
-                        }`}
-                      >
-                        Custom Schedule
-                      </button>
-                    </div>
+                        {/* Billing Mode Toggle */}
+                        <div className="flex p-1 bg-slate-200/50 dark:bg-zinc-950/50 rounded-lg shadow-inner">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBillingMode("STANDARD");
+                              if (installmentTemplates && installmentTemplates.length > 0) {
+                                setCustomInstallments(
+                                  installmentTemplates.map((t: any) => ({
+                                    id: `template-${t.id}`,
+                                    templateId: t.id,
+                                    name: t.name,
+                                    dueDate: t.dueDate,
+                                    amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
+                                    checked: true,
+                                    isCustom: false,
+                                  }))
+                                );
+                              }
+                            }}
+                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                              billingMode === "STANDARD"
+                                ? "bg-white dark:bg-zinc-800 text-slate-800 dark:text-white shadow-sm border border-slate-200/50 dark:border-zinc-700"
+                                : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
+                            }`}
+                          >
+                            Standard
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBillingMode("CUSTOM");
+                              setCustomInstallments([]);
+                            }}
+                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                              billingMode === "CUSTOM"
+                                ? "bg-white dark:bg-zinc-800 text-slate-800 dark:text-white shadow-sm border border-slate-200/50 dark:border-zinc-700"
+                                : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
+                            }`}
+                          >
+                            Custom
+                          </button>
+                        </div>
 
-                    {billingMode === "STANDARD" ? (
-                      /* Term Selection */
-                      <div className="flex flex-col gap-1.5 w-full">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                          Billing Term / Intake Type
-                        </span>
-                        <Select
-                          value={promoteForm.termType}
-                          onValueChange={(val: any) => handlePromoteChange("termType", val)}
-                        >
-                          <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
-                            <SelectValue placeholder="Select Term" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="FULL_TERM">Full Term</SelectItem>
-                            <SelectItem value="HALF_TERM">Half Term</SelectItem>
-                            <SelectItem value="SHORT_TERM">Short Term</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : (
-                      /* Custom Generator Wizard */
-                      <div className="p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="flex flex-col gap-1.5">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Installments</span>
+                        {billingMode === "STANDARD" ? (
+                          /* Term Selection */
+                          <div className="flex flex-col gap-1.5 w-full">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                              Billing Term / Intake Type
+                            </span>
+                            <Select
+                              value={promoteForm.termType}
+                              onValueChange={(val: any) => handlePromoteChange("termType", val)}
+                            >
+                              <SelectTrigger fullWidth className="h-10 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
+                                <SelectValue placeholder="Select Term" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="FULL_TERM">Full Term</SelectItem>
+                                <SelectItem value="HALF_TERM">Half Term</SelectItem>
+                                <SelectItem value="SHORT_TERM">Short Term</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          /* Custom Generator Wizard */
+                          <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Installments</span>
+                                <input
+                                  type="number"
+                                  min={1} max={24}
+                                  value={customConfigRows}
+                                  onChange={(e) => setCustomConfigRows(Number(e.target.value) || 1)}
+                                  className="h-9 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Start Date</span>
+                                <input
+                                  type="date"
+                                  value={customConfigStartDate}
+                                  onChange={(e) => setCustomConfigStartDate(e.target.value)}
+                                  className="h-9 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Interval</span>
+                              <Select
+                                value={customConfigInterval}
+                                onValueChange={(val: any) => setCustomConfigInterval(val)}
+                              >
+                                <SelectTrigger className="h-9 px-3 bg-slate-50 dark:bg-zinc-900 border-slate-200 text-xs font-bold">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="MONTHLY">Monthly</SelectItem>
+                                  <SelectItem value="BIMONTHLY">Bi-Monthly (Every 2 Months)</SelectItem>
+                                  <SelectItem value="QUARTERLY">Quarterly (Every 3 Months)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center gap-2 pt-1">
+                              <input
+                                type="checkbox"
+                                checked={customConfigLateFee}
+                                onChange={(e) => setCustomConfigLateFee(e.target.checked)}
+                                className="rounded text-indigo-500 focus:ring-indigo-500/20"
+                              />
+                              <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-300">Apply Standard Late Fees?</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={generateCustomInstallments}
+                              className="w-full py-2 bg-slate-800 hover:bg-slate-900 dark:bg-zinc-700 text-white rounded-lg text-[10px] font-extrabold tracking-widest uppercase transition-colors"
+                            >
+                              Generate Schedule
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Optional Add-ons */}
+                        {classFees.filter(f => f.applicability === "OPTIONAL").length > 0 && (
+                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-200/60 dark:border-zinc-800">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none">
+                              Optional Add-ons
+                            </span>
+                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                              {classFees.filter(f => f.applicability === "OPTIONAL").map(fee => {
+                                const isSelected = selectedOptionalFees.some(o => o.id === fee.id);
+                                const selectedFee = selectedOptionalFees.find(o => o.id === fee.id);
+                                return (
+                                  <div key={fee.id} className={`flex items-center gap-3 p-2 rounded-xl border transition-all ${isSelected ? "border-amber-200 bg-white dark:border-amber-900/50 dark:bg-amber-900/20 shadow-sm" : "border-slate-200/60 dark:border-zinc-800 bg-transparent"}`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => handleOptionalFeeToggle(fee, e.target.checked)}
+                                      className="rounded text-amber-500 focus:ring-amber-500/20 w-4 h-4"
+                                    />
+                                    <div className="flex-1 flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{fee.name}</span>
+                                      {isSelected ? (
+                                        <div className="flex items-center gap-1 w-24">
+                                          <span className="text-xs font-bold text-slate-400">₹</span>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            value={selectedFee?.amount || ""}
+                                            onChange={(e) => handleOptionalFeeAmountChange(fee.id, Number(e.target.value))}
+                                            className="w-full h-7 px-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-950 text-xs font-bold text-amber-700 dark:text-amber-400 text-right outline-none focus:border-amber-400"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <span className="text-[10px] font-bold text-slate-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Scholarship / Discount */}
+                        <div className="flex flex-col gap-1.5 w-full pt-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                            Scholarship / Discount (%)
+                          </span>
+                          <div className="relative">
                             <input
                               type="number"
-                              min={1} max={24}
-                              value={customConfigRows}
-                              onChange={(e) => setCustomConfigRows(Number(e.target.value) || 1)}
-                              className="h-10 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
+                              value={String(promoteForm.discountPercent)}
+                              onChange={(e) => handlePromoteChange("discountPercent", e.target.value)}
+                              placeholder="0"
+                              className="w-full h-10 pl-4 pr-8 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
                             />
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Start Date</span>
-                            <input
-                              type="date"
-                              value={customConfigStartDate}
-                              onChange={(e) => setCustomConfigStartDate(e.target.value)}
-                              className="h-10 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
-                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 select-none">%</span>
                           </div>
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Interval</span>
-                          <Select
-                            value={customConfigInterval}
-                            onValueChange={(val: any) => setCustomConfigInterval(val)}
-                          >
-                            <SelectTrigger className="h-10 px-3 bg-white dark:bg-zinc-950 border-slate-200 text-xs font-bold">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="MONTHLY">Monthly</SelectItem>
-                              <SelectItem value="BIMONTHLY">Bi-Monthly (Every 2 Months)</SelectItem>
-                              <SelectItem value="QUARTERLY">Quarterly (Every 3 Months)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <input
-                            type="checkbox"
-                            checked={customConfigLateFee}
-                            onChange={(e) => setCustomConfigLateFee(e.target.checked)}
-                            className="rounded text-indigo-500 focus:ring-indigo-500/20"
-                          />
-                          <span className="text-xs font-bold text-slate-600 dark:text-zinc-300">Apply Standard Late Fees?</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={generateCustomInstallments}
-                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-extrabold tracking-wide uppercase transition-colors"
-                        >
-                          Generate Schedule
-                        </button>
-                      </div>
-                    )}
 
-                    {/* Optional Add-ons */}
-                    {classFees.filter(f => f.applicability === "OPTIONAL").length > 0 && (
-                      <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none">
-                          Optional Add-ons
-                        </span>
-                        <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                          {classFees.filter(f => f.applicability === "OPTIONAL").map(fee => {
-                            const isSelected = selectedOptionalFees.some(o => o.id === fee.id);
-                            const selectedFee = selectedOptionalFees.find(o => o.id === fee.id);
-                            return (
-                              <div key={fee.id} className={`flex items-center gap-3 p-2 rounded-xl border transition-all ${isSelected ? "border-indigo-200 bg-indigo-50/50 dark:border-indigo-900/50 dark:bg-indigo-900/20" : "border-slate-100 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-900/40"}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => handleOptionalFeeToggle(fee, e.target.checked)}
-                                  className="rounded text-indigo-500 focus:ring-indigo-500/20 w-4 h-4"
-                                />
-                                <div className="flex-1 flex items-center justify-between">
-                                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{fee.name}</span>
-                                  {isSelected ? (
-                                    <div className="flex items-center gap-1 w-24">
-                                      <span className="text-xs font-bold text-slate-400">₹</span>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        value={selectedFee?.amount || ""}
-                                        onChange={(e) => handleOptionalFeeAmountChange(fee.id, Number(e.target.value))}
-                                        className="w-full h-7 px-2 rounded-md border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-zinc-950 text-xs font-bold text-indigo-700 dark:text-indigo-400 text-right outline-none focus:border-indigo-400"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs font-bold text-slate-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                        {/* Dues Displays - LCD STYLE */}
+                        <div className="pt-4 border-t-2 border-slate-800 dark:border-zinc-400 border-dashed space-y-3">
+                          <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 dark:text-zinc-400">
+                            <span className="uppercase tracking-widest">Base Fees</span>
+                            <span className="font-mono">₹{formatIndianNumber(baseTotal)}</span>
+                          </div>
+                          {promoteForm.discountPercent > 0 && (
+                            <div className="flex justify-between items-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                              <span className="uppercase tracking-widest">Discount ({promoteForm.discountPercent}%)</span>
+                              <span className="font-mono">-₹{formatIndianNumber(baseTotal - totalDiscountedFee)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-end pt-2">
+                            <span className="uppercase tracking-widest font-black text-slate-800 dark:text-zinc-200 text-xs">Total Due</span>
+                            <span className="font-black text-2xl tracking-tight text-slate-900 dark:text-white font-mono">
+                              ₹{formatIndianNumber(totalDiscountedFee)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    )}
-
-                    {/* Scholarship / Discount */}
-                    <div className="flex flex-col gap-1.5 w-full pt-2">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Scholarship / Discount (%)
-                      </span>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={String(promoteForm.discountPercent)}
-                          onChange={(e) => handlePromoteChange("discountPercent", e.target.value)}
-                          placeholder="0"
-                          className="w-full h-11 pl-4 pr-8 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 select-none">%</span>
-                      </div>
-                    </div>
-
-                    {/* Dues Displays */}
-                    <div className="grid grid-cols-2 gap-4 pt-1">
-                      <div className="p-4 rounded-xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/60 dark:bg-zinc-950/40">
-                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block">Base Dues</span>
-                        <span className="text-base font-extrabold text-slate-700 dark:text-zinc-300 mt-1.5 block">₹{formatIndianNumber(baseTotal)}</span>
-                      </div>
-                      <div className="p-4 rounded-xl border border-primary/20 dark:border-sky-500/20 bg-primary/[0.03] dark:bg-sky-500/[0.02]">
-                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-primary block">Onboarding Total</span>
-                        <span className="text-base font-black text-primary mt-1.5 block">₹{formatIndianNumber(totalDiscountedFee)}</span>
-                      </div>
+                      
+                      {/* Jagged Bottom Edge */}
+                      <div className="absolute -bottom-2 left-0 w-full h-2" style={{
+                        backgroundImage: "linear-gradient(-45deg, transparent 75%, rgba(251, 243, 219, 0.4) 75%), linear-gradient(45deg, transparent 75%, rgba(251, 243, 219, 0.4) 75%)",
+                        backgroundSize: "10px 10px",
+                        backgroundRepeat: "repeat-x"
+                      }}></div>
                     </div>
                   </div>
 
@@ -1449,11 +1709,9 @@ export default function ApplicantWorkspace({
                   </p>
                 </div>
                 <div className="pt-2 flex justify-center gap-3">
-                  <DialogClose asChild>
-                    <Button variant="outlined" className="rounded-xl h-11 px-5">
-                      Dismiss
-                    </Button>
-                  </DialogClose>
+                  <button type="button" onClick={onClose} className="rounded-xl h-11 px-5 font-bold text-xs border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
+                    Dismiss
+                  </button>
                 </div>
               </div>
             )}
@@ -1495,11 +1753,9 @@ export default function ApplicantWorkspace({
                       Reactivate Applicant
                     </Button>
                   )}
-                  <DialogClose asChild>
-                    <Button variant="outlined" className="rounded-xl h-11 px-5 font-bold text-xs">
-                      Dismiss
-                    </Button>
-                  </DialogClose>
+                  <button type="button" onClick={onClose} className="rounded-xl h-11 px-5 font-bold text-xs border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
+                    Dismiss
+                  </button>
                 </div>
               </div>
             )}
@@ -1541,17 +1797,14 @@ export default function ApplicantWorkspace({
                       Reactivate Applicant
                     </Button>
                   )}
-                  <DialogClose asChild>
-                    <Button variant="outlined" className="rounded-xl h-11 px-5 font-bold text-xs">
-                      Dismiss
-                    </Button>
-                  </DialogClose>
+                  <button type="button" onClick={onClose} className="rounded-xl h-11 px-5 font-bold text-xs border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
+                    Dismiss
+                  </button>
                 </div>
               </div>
             )}
           </div>
         </div>
-      </DialogContent>
 
       {/* Withdraw Confirmation Dialog */}
       <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>
@@ -1600,6 +1853,6 @@ export default function ApplicantWorkspace({
           </form>
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </div>
   );
 }

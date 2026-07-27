@@ -92,7 +92,6 @@ export async function GET(req: NextRequest, context: RouteContext) {
           select: {
             feeStructureId: true,
             isOptedIn: true,
-            discountPercent: true,
             discountAmount: true,
             feeStructure: {
               select: {
@@ -132,7 +131,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const totalFeesPaid = Number(invoiceAgg._sum.paidAmount ?? 0);
 
     // Derive classId from enrollment or invoice fee structures
-    let classId: string | null = student.enrollments?.[0]?.section?.class?.id ?? null;
+    let classId: string | null = (student as any).enrollments?.[0]?.section?.class?.id ?? null;
     if (!classId) {
       const invoiceItem = await prisma.invoiceItem.findFirst({
         where: { invoice: { studentId: student.id } },

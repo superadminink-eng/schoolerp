@@ -178,7 +178,8 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   }, [initialData]);
 
   const hasInvoices = useMemo(() => {
-    return initialData?.hasInvoices ?? false;
+    // UI is now fully unlocked. The backend handles field-level smart locking securely.
+    return false;
   }, [initialData]);
 
   // Selected subject master IDs — initialized from initialData so cleanup effect

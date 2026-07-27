@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     sectionId,
     rollNo,
     admissionDate,
-    discountPercent,
+    discountAmount,
     amountPaid,
     paymentMethod,
     transactionId,
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     sectionId: string;
     rollNo?: string;
     admissionDate?: string;
-    discountPercent?: number;
+    discountAmount?: number;
     amountPaid?: number;
     paymentMethod?: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
     transactionId?: string;
@@ -227,17 +227,20 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       const mandatoryTotal = feeCategoriesAnnual.filter(f => f.applicability === "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
       const optionalTotal = feeCategoriesAnnual.filter(f => f.applicability !== "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
       
-      const discountPct = new Prisma.Decimal(discountPercent ?? 0);
-      const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
+      const requestedDiscountAmt = new Prisma.Decimal(discountAmount ?? 0);
 
       // Discount ONLY applies to Mandatory fees! (Discount Leakage Fix)
-      const discountedMandatoryFee = mandatoryTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      // Throw error if discount exceeds mandatory fees to protect third-party vendor ledgers.
+      if (requestedDiscountAmt.gt(mandatoryTotal)) {
+        throw new Error(`DISCOUNT_EXCEEDS_MANDATORY: Flat discount of ₹${requestedDiscountAmt.toFixed(2)} cannot exceed the total mandatory fees (₹${mandatoryTotal.toFixed(2)}). Optional fees cannot be discounted.`);
+      }
       
+      const discountedMandatoryFee = mandatoryTotal.minus(requestedDiscountAmt);
       const totalDiscountedFee = discountedMandatoryFee.plus(optionalTotal);
       
-      // Calculate effective discount ratio for the Invoice Items calculation below
+      // Effective values for Invoice Item allocation
       const annualTotal = mandatoryTotal.plus(optionalTotal);
-      const totalDiscount = mandatoryTotal.minus(discountedMandatoryFee);
+      const totalDiscount = requestedDiscountAmt;
 
       const amountPaidDecimal = new Prisma.Decimal(amountPaid ?? 0);
 
@@ -303,9 +306,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of installment templates (₹${totalTemplateAmount}) does not match the total fee structures (₹${annualTotal}).`);
           }
 
+          const discountMultiplier = annualTotal.equals(0) ? new Prisma.Decimal(1) : totalDiscountedFee.div(annualTotal);
+
           targetInstallments = classTemplates.map(t => ({
             name: t.name,
-            amount: new Prisma.Decimal(t.amount),
+            amount: new Prisma.Decimal(t.amount).mul(discountMultiplier).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
             dueDate: t.dueDate,
             lateFeeActive: t.lateFeeActive,
             lateFeeType: t.lateFeeType,
@@ -321,7 +326,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
           targetInstallments = [{
             name: "Consolidated Annual Fee",
-            amount: annualTotal,
+            amount: totalDiscountedFee,
             dueDate: new Date(),
             lateFeeActive: fallbackTemplate?.lateFeeActive ?? false,
             lateFeeType: fallbackTemplate?.lateFeeType ?? "DAILY",
@@ -336,7 +341,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       for (const inst of targetInstallments) {
         const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
-        const installmentDiscountedTotal = inst.amount.mul(discountMultiplier);
+        const installmentDiscountedTotal = inst.amount;
 
         // Make sure due dates in the past are bumped to today/admission date if desired
         let finalDueDate = new Date(inst.dueDate);
@@ -453,7 +458,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           feeStructureId: f.feeStructureId,
           isOptedIn: true,
           customAmount: f.isOverridden ? f.overriddenBase : null,
-          discountPercent: f.applicability === "MANDATORY" ? discountPercent : null,
+          discountAmount: f.applicability === "MANDATORY" ? discountAmount : null,
         })),
       });
 

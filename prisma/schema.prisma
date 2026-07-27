@@ -400,7 +400,6 @@ model StudentFeeAssignment {
   
   isOptedIn       Boolean      @default(true)
   isWaived        Boolean      @default(false)
-  discountPercent Decimal?     @db.Decimal(5, 2)
   discountAmount  Decimal?     @db.Decimal(10, 2)
   customAmount    Decimal?     @db.Decimal(10, 2)
   

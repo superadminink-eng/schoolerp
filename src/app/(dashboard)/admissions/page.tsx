@@ -1335,8 +1335,55 @@ export default function AdmissionsPage() {
 
   return (
     <div className="flex flex-col h-full space-y-6 overflow-hidden">
-      {/* 1. Header & Branch Switcher */}
-      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 shrink-0">
+      {workspaceOpen ? (
+        <div className="flex-1 overflow-y-auto w-full p-2">
+          <ApplicantWorkspace
+            onClose={() => setWorkspaceOpen(false)}
+            selectedApp={selectedApp}
+            statusLabels={statusLabels}
+            classes={classes}
+            onApplicantUpdated={(updatedApp) => {
+              setSelectedApp(updatedApp);
+              fetchDashboardData();
+            }}
+            hasEntranceTest={!!activeBranch?.hasEntranceTest}
+            classSections={classSections}
+            installmentTemplates={installmentTemplates}
+            customInstallments={customInstallments}
+            setCustomInstallments={setCustomInstallments}
+            billingMode={billingMode}
+            setBillingMode={setBillingMode}
+            customConfigRows={customConfigRows}
+            setCustomConfigRows={setCustomConfigRows}
+            customConfigStartDate={customConfigStartDate}
+            setCustomConfigStartDate={setCustomConfigStartDate}
+            customConfigInterval={customConfigInterval}
+            setCustomConfigInterval={setCustomConfigInterval}
+            customConfigLateFee={customConfigLateFee}
+            setCustomConfigLateFee={setCustomConfigLateFee}
+            promoteForm={promoteForm}
+            setPromoteForm={setPromoteForm}
+            verifyForm={verifyForm}
+            setVerifyForm={setVerifyForm}
+            examForm={examForm}
+            setExamForm={setExamForm}
+            onVerifyDocs={handleVerifyDocuments}
+            onSaveExam={handleSaveExam}
+            onPromote={handlePromote}
+            onWithdrawApplicant={handleWithdrawApplicant}
+            onReactivateApplicant={handleReactivateApplicant}
+            actionLoading={actionLoading}
+            formError={formError}
+            setFormError={setFormError}
+            classFees={classFees}
+            selectedOptionalFees={selectedOptionalFees}
+            setSelectedOptionalFees={setSelectedOptionalFees}
+          />
+        </div>
+      ) : (
+        <>
+          {/* 1. Header & Branch Switcher */}
+          <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 shrink-0">
         <div>
           <Breadcrumb>
             <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
@@ -1573,6 +1620,8 @@ export default function AdmissionsPage() {
           />
         )}
       </div>
+      </>
+      )}
 
       {/* 6. MODALS & WORKSPACES */}
 
@@ -1619,45 +1668,6 @@ export default function AdmissionsPage() {
         }}
       />
 
-      {/* Unified Applicant Workspace Drawer */}
-      <ApplicantWorkspace
-        open={workspaceOpen}
-        onOpenChange={setWorkspaceOpen}
-        selectedApp={selectedApp}
-        statusLabels={statusLabels}
-        hasEntranceTest={!!activeBranch?.hasEntranceTest}
-        classSections={classSections}
-        installmentTemplates={installmentTemplates}
-        customInstallments={customInstallments}
-        setCustomInstallments={setCustomInstallments}
-        billingMode={billingMode}
-        setBillingMode={setBillingMode}
-        customConfigRows={customConfigRows}
-        setCustomConfigRows={setCustomConfigRows}
-        customConfigStartDate={customConfigStartDate}
-        setCustomConfigStartDate={setCustomConfigStartDate}
-        customConfigInterval={customConfigInterval}
-        setCustomConfigInterval={setCustomConfigInterval}
-        customConfigLateFee={customConfigLateFee}
-        setCustomConfigLateFee={setCustomConfigLateFee}
-        promoteForm={promoteForm}
-        setPromoteForm={setPromoteForm}
-        verifyForm={verifyForm}
-        setVerifyForm={setVerifyForm}
-        examForm={examForm}
-        setExamForm={setExamForm}
-        onVerifyDocs={handleVerifyDocuments}
-        onSaveExam={handleSaveExam}
-        onPromote={handlePromote}
-        onWithdrawApplicant={handleWithdrawApplicant}
-        onReactivateApplicant={handleReactivateApplicant}
-        actionLoading={actionLoading}
-        formError={formError}
-        setFormError={setFormError}
-        classFees={classFees}
-        selectedOptionalFees={selectedOptionalFees}
-        setSelectedOptionalFees={setSelectedOptionalFees}
-      />
     </div>
   );
 }

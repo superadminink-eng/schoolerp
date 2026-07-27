@@ -178,42 +178,35 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       }
     }
 
-    // Smart billing lock validation: block base fee/installment amount edits only if invoices exist.
-    const invoiceCount = await prisma.invoiceItem.count({
-      where: { feeStructure: { classId: id } }
-    });
-    const hasInvoices = invoiceCount > 0;
-
-    if (hasInvoices) {
-      if (fees !== undefined) {
-        if (fees.length !== existing.feeStructures.length) {
-          return apiError("CONFLICT", "Cannot add or remove fee structures when invoices have been generated", 409);
-        }
-        for (const fee of fees) {
-          if (fee.id) {
-            const existFee = existing.feeStructures.find(f => f.id === fee.id);
-            if (!existFee || Number(existFee.amount) !== Number(fee.amount) || existFee.feeCategory.id !== fee.feeCategoryId) {
-              return apiError("CONFLICT", "Cannot modify fee structure amounts or categories when invoices have been generated", 409);
-            }
-          } else {
-            return apiError("CONFLICT", "Cannot add new fee structures when invoices have been generated", 409);
+    // Smart Field-Level Billing Lock
+    // We only block modification of amount, feeCategoryId, and termType for existing fee structures
+    // that have already been invoiced. Adding/removing fee structures and editing installments is safe.
+    if (fees !== undefined) {
+      const modifiedFeeIds: string[] = [];
+      for (const fee of fees) {
+        if (fee.id) {
+          const existFee = existing.feeStructures.find(f => f.id === fee.id);
+          if (
+            existFee &&
+            (Number(existFee.amount) !== Number(fee.amount) ||
+              existFee.feeCategoryId !== fee.feeCategoryId ||
+              existFee.termType !== fee.termType)
+          ) {
+            modifiedFeeIds.push(fee.id);
           }
         }
       }
 
-      if (installments !== undefined) {
-        if (installments.length !== existing.feeInstallmentTemplates.length) {
-          return apiError("CONFLICT", "Cannot add or remove installments when invoices have been generated", 409);
-        }
-        for (let i = 0; i < installments.length; i++) {
-          const incoming = installments[i];
-          let match = existing.feeInstallmentTemplates.find(t => t.id === incoming.id);
-          if (!match) {
-            match = existing.feeInstallmentTemplates[i];
-          }
-          if (!match || Number(match.amount) !== Number(incoming.amount) || match.termType !== incoming.termType) {
-            return apiError("CONFLICT", "Cannot modify installment amounts or term types when invoices have been generated", 409);
-          }
+      if (modifiedFeeIds.length > 0) {
+        const invoicedItems = await prisma.invoiceItem.findFirst({
+          where: { feeStructureId: { in: modifiedFeeIds } }
+        });
+        if (invoicedItems) {
+          return apiError(
+            "CONFLICT",
+            "Cannot modify the amount, category, or term type of a fee structure that has already generated invoices.",
+            409
+          );
         }
       }
     }

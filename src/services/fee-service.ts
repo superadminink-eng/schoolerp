@@ -77,7 +77,6 @@ export class FeeService {
           feeStructureId: fs.id,
           isOptedIn: true,
           isWaived: false,
-          discountPercent: isMandatory ? (input.discountPercent || null) : null,
           discountAmount: isMandatory ? (input.discountAmount || null) : null,
         }
       });
@@ -101,14 +100,11 @@ export class FeeService {
     const optionalTotal = feeItems.filter(f => feeStructures.find(fs => fs.id === f.feeStructureId)?.applicability !== "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
     const annualTotal = mandatoryTotal.plus(optionalTotal);
     
-    // Apply discount only to Mandatory Fees (Discount Leakage Fix)
-    const discountPct = new Prisma.Decimal(input.discountPercent ?? 0);
-    const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
-
-    const discountedMandatoryFee = mandatoryTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
-    
-    let totalDiscount = new Prisma.Decimal(input.discountAmount || 0);
-    totalDiscount = totalDiscount.plus(mandatoryTotal.minus(discountedMandatoryFee));
+    const totalDiscount = new Prisma.Decimal(input.discountAmount || 0);
+    if (totalDiscount.gt(mandatoryTotal)) {
+      throw new Error(`DISCOUNT_EXCEEDS_MANDATORY: Discount cannot exceed ${mandatoryTotal}`);
+    }
+    const discountedMandatoryFee = mandatoryTotal.minus(totalDiscount);
 
     const discountedTotal = annualTotal.minus(totalDiscount);
     
@@ -269,16 +265,11 @@ export class FeeService {
     const optionalTotal = feeItems.filter(f => feeStructures.find(fs => fs.id === f.feeStructureId)?.applicability !== "MANDATORY").reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
     const annualTotal = mandatoryTotal.plus(optionalTotal);
 
-    // 4. Apply discount only to Mandatory Fees (Discount Leakage Fix)
-    const discountPct = new Prisma.Decimal(input.discountPercent ?? 0);
-    const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
-
-    // Calculate discounted mandatory fee
-    const discountedMandatoryFee = mandatoryTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
-    
-    // Calculate effective global discount amount
-    let totalDiscount = new Prisma.Decimal(input.discountAmount || 0);
-    totalDiscount = totalDiscount.plus(mandatoryTotal.minus(discountedMandatoryFee));
+    const totalDiscount = new Prisma.Decimal(input.discountAmount || 0);
+    if (totalDiscount.gt(mandatoryTotal)) {
+      throw new Error(`DISCOUNT_EXCEEDS_MANDATORY: Discount cannot exceed ${mandatoryTotal}`);
+    }
+    const discountedMandatoryFee = mandatoryTotal.minus(totalDiscount);
 
     const discountedTotal = annualTotal.minus(totalDiscount);
 
@@ -302,7 +293,6 @@ export class FeeService {
           feeStructureId: fs.id,
           isOptedIn: true,
           isWaived: false,
-          discountPercent: isMandatory ? (input.discountPercent || null) : null,
           discountAmount: isMandatory ? (input.discountAmount || null) : null,
         }
       });
