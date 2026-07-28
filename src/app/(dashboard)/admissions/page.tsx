@@ -241,7 +241,7 @@ export default function AdmissionsPage() {
     sectionId: "",
     rollNo: "",
     admissionDate: new Date().toISOString().split("T")[0],
-    discountPercent: 0,
+    discountAmount: 0,
     amountPaid: 0,
     paymentMethod: "CASH" as "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI",
     transactionId: "",
@@ -352,7 +352,7 @@ export default function AdmissionsPage() {
     }
   }, [permissionsLoading, hasAppAccess, hasInqAccess, activeTab]);
 
-  // Load templates dynamically when selectedApp or termType changes
+  // Load templates and fees dynamically when selectedApp or termType changes
   useEffect(() => {
     if (workspaceOpen && selectedApp && selectedApp.class?.id) {
       const fetchTemplates = async () => {
@@ -367,7 +367,7 @@ export default function AdmissionsPage() {
                 templateId: t.id,
                 name: t.name,
                 dueDate: t.dueDate,
-                amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
+                amount: Number(t.amount) || 0,
                 checked: true,
                 isCustom: false,
               }))
@@ -377,11 +377,23 @@ export default function AdmissionsPage() {
           console.error("Failed to load installment templates.");
         }
       };
+      const fetchFees = async () => {
+        try {
+          const res = await fetch(`/api/v1/classes/${selectedApp.class?.id}/fees?termType=${promoteForm.termType}`);
+          const data = await res.json();
+          if (data.success) {
+            setClassFees(data.data);
+          }
+        } catch {
+          console.error("Failed to load fees.");
+        }
+      };
       fetchTemplates();
+      fetchFees();
     }
   }, [workspaceOpen, selectedApp?.class?.id, promoteForm.termType]);
 
-  // Load sections and fees dynamically when selectedApp changes
+  // Load sections dynamically when selectedApp changes
   useEffect(() => {
     if (workspaceOpen && selectedApp && selectedApp.class?.id) {
       const fetchSections = async () => {
@@ -396,19 +408,7 @@ export default function AdmissionsPage() {
           console.error("Failed to load sections.");
         }
       };
-      const fetchFees = async () => {
-        try {
-          const res = await fetch(`/api/v1/classes/${selectedApp.class?.id}/fees`);
-          const data = await res.json();
-          if (data.success) {
-            setClassFees(data.data);
-          }
-        } catch {
-          console.error("Failed to load fees.");
-        }
-      };
       fetchSections();
-      fetchFees();
     }
   }, [workspaceOpen, selectedApp?.class?.id]);
 
@@ -1225,10 +1225,10 @@ export default function AdmissionsPage() {
       return;
     }
 
-    // 4. Validate Scholarship / Discount Percentage
-    const discount = Number(promoteForm.discountPercent) || 0;
-    if (discount < 0 || discount > 100) {
-      const errMsg = "Discount percent must be between 0% and 100%.";
+    // 4. Validate Scholarship / Discount Amount
+    const discount = Number(promoteForm.discountAmount) || 0;
+    if (discount < 0) {
+      const errMsg = "Discount amount cannot be negative.";
       setFormError(errMsg);
       snackbar.show(errMsg, "error");
       return;
@@ -1243,7 +1243,7 @@ export default function AdmissionsPage() {
     }
 
     const baseTotal = installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0);
-    const totalDiscountedFee = Math.max(0, Math.round(baseTotal * (1 - discount / 100)));
+    const totalDiscountedFee = Math.max(0, baseTotal - discount);
 
     // 6. Validate Upfront Payment
     const amountPaidVal = Number(promoteForm.amountPaid) || 0;
@@ -1273,7 +1273,7 @@ export default function AdmissionsPage() {
       const payload = {
         ...promoteForm,
         amountPaid: Number(promoteForm.amountPaid),
-        discountPercent: Number(promoteForm.discountPercent),
+        discountAmount: Number(promoteForm.discountAmount),
         installments: customInstallments.filter((i) => i.checked),
         optionalFees: selectedOptionalFees,
       };

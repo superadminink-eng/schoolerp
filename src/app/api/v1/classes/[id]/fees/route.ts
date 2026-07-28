@@ -24,8 +24,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return apiError("NOT_FOUND", "Class not found", 404);
     }
 
+    const url = new URL(req.url);
+    const termType = url.searchParams.get("termType");
+
+    const whereClause: any = { classId: id };
+    if (termType) {
+      whereClause.termType = termType;
+    }
+
     const feeStructures = await prisma.feeStructure.findMany({
-      where: { classId: id },
+      where: whereClause,
       include: {
         feeCategory: { select: { name: true } },
       },

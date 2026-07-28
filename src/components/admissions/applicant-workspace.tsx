@@ -101,7 +101,7 @@ interface WorkspaceProps {
     sectionId: string;
     rollNo: string;
     admissionDate: string;
-    discountPercent: number;
+    discountAmount: number;
     amountPaid: number;
     paymentMethod: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
     transactionId: string;
@@ -205,7 +205,14 @@ export default function ApplicantWorkspace({
   }, 0);
 
   const baseTotal = mandatoryTotal + optionalTotal;
-  const totalDiscountedFee = Math.max(0, Math.round(mandatoryTotal * (1 - (promoteForm.discountPercent || 0) / 100))) + optionalTotal;
+  const discountAmt = promoteForm.discountAmount || 0;
+  const totalDiscountedFee = Math.max(0, mandatoryTotal - discountAmt) + optionalTotal;
+
+  const sumOfInstallments = customInstallments.reduce((acc, curr) => acc + (curr.checked ? curr.amount : 0), 0);
+  const isBalanceMismatch = sumOfInstallments !== totalDiscountedFee;
+  const isDiscountInvalid = discountAmt > mandatoryTotal;
+  const isOverpayment = promoteForm.amountPaid > totalDiscountedFee;
+  const isPromoteDisabled = actionLoading || isBalanceMismatch || isDiscountInvalid || isOverpayment;
 
   // Auto-distribute totalDiscountedFee when it changes (due to optional fees or discount)
   useEffect(() => {
@@ -220,10 +227,22 @@ export default function ApplicantWorkspace({
           const isLast = inst.id === checkedInsts[checkedInsts.length - 1].id;
           let rowAmount = 0;
           
+          if (billingMode === "STANDARD" && inst.templateId) {
+             const template = installmentTemplates.find(t => t.id === inst.templateId);
+             if (template && baseTotal > 0) {
+                // Proportional to the template's original amount
+                const proportion = Number(template.amount) / baseTotal;
+                rowAmount = Math.round(totalDiscountedFee * proportion);
+             } else {
+                rowAmount = Math.round(totalDiscountedFee / checkedInsts.length);
+             }
+          } else {
+            rowAmount = Math.round(totalDiscountedFee / checkedInsts.length);
+          }
+
           if (isLast) {
             rowAmount = remaining;
           } else {
-            rowAmount = Math.round(totalDiscountedFee / checkedInsts.length);
             remaining -= rowAmount;
           }
           
@@ -235,7 +254,7 @@ export default function ApplicantWorkspace({
         return isDifferent ? newInsts : prev;
       });
     }
-  }, [totalDiscountedFee, customInstallments.length, setCustomInstallments]);
+  }, [totalDiscountedFee, customInstallments.length, setCustomInstallments, billingMode, installmentTemplates, baseTotal]);
 
   if (!selectedApp) return null;
 
@@ -315,24 +334,7 @@ export default function ApplicantWorkspace({
   const handlePromoteChange = (field: string, value: any) => {
     clearError();
     setPromoteForm((prev: any) => {
-      const next = { ...prev, [field]: value };
-      if (field === "discountPercent") {
-        const discount = Number(value) || 0;
-        setCustomInstallments((insts: CustomInstallment[]) =>
-          insts.map((inst) => {
-            const template = installmentTemplates.find((t) => t.id === inst.templateId);
-            if (template) {
-              const baseAmount = Number(template.amount) || 0;
-              return {
-                ...inst,
-                amount: Math.max(0, Math.round(baseAmount * (1 - discount / 100))),
-              };
-            }
-            return inst;
-          })
-        );
-      }
-      return next;
+      return { ...prev, [field]: value };
     });
   };
 
@@ -1276,8 +1278,28 @@ export default function ApplicantWorkspace({
                           <p className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mt-1">Live Estimate</p>
                         </div>
 
+                        {/* Term Selection (Parent Level) */}
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                            Billing Term / Intake Type
+                          </span>
+                          <Select
+                            value={promoteForm.termType}
+                            onValueChange={(val: any) => handlePromoteChange("termType", val)}
+                          >
+                            <SelectTrigger fullWidth className="h-10 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
+                              <SelectValue placeholder="Select Term" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="FULL_TERM">Full Term</SelectItem>
+                              <SelectItem value="HALF_TERM">Half Term</SelectItem>
+                              <SelectItem value="SHORT_TERM">Short Term</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
                         {/* Billing Mode Toggle */}
-                        <div className="flex p-1 bg-slate-200/50 dark:bg-zinc-950/50 rounded-lg shadow-inner">
+                        <div className="flex p-1 bg-slate-200/50 dark:bg-zinc-950/50 rounded-lg shadow-inner mt-2">
                           <button
                             type="button"
                             onClick={() => {
@@ -1289,7 +1311,7 @@ export default function ApplicantWorkspace({
                                     templateId: t.id,
                                     name: t.name,
                                     dueDate: t.dueDate,
-                                    amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
+                                    amount: Number(t.amount) || 0,
                                     checked: true,
                                     isCustom: false,
                                   }))
@@ -1320,27 +1342,7 @@ export default function ApplicantWorkspace({
                           </button>
                         </div>
 
-                        {billingMode === "STANDARD" ? (
-                          /* Term Selection */
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                              Billing Term / Intake Type
-                            </span>
-                            <Select
-                              value={promoteForm.termType}
-                              onValueChange={(val: any) => handlePromoteChange("termType", val)}
-                            >
-                              <SelectTrigger fullWidth className="h-10 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
-                                <SelectValue placeholder="Select Term" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="FULL_TERM">Full Term</SelectItem>
-                                <SelectItem value="HALF_TERM">Half Term</SelectItem>
-                                <SelectItem value="SHORT_TERM">Short Term</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        ) : (
+                        {billingMode === "CUSTOM" && (
                           /* Custom Generator Wizard */
                           <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-4">
                             <div className="grid grid-cols-2 gap-3">
@@ -1399,10 +1401,32 @@ export default function ApplicantWorkspace({
                           </div>
                         )}
 
+                        {/* Mandatory Fees Summary */}
+                        {classFees.filter(f => f.applicability === "MANDATORY").length > 0 && (
+                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-200/60 dark:border-zinc-800">
+                            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none flex justify-between">
+                              <span>Mandatory Fees</span>
+                              <span className="text-slate-800 dark:text-zinc-200">₹{formatIndianNumber(mandatoryTotal)}</span>
+                            </span>
+                            <div className="space-y-1">
+                              {classFees.filter(f => f.applicability === "MANDATORY").map(fee => {
+                                const mult = fee.frequency === "MONTHLY" ? 12 : fee.frequency === "QUARTERLY" ? 4 : fee.frequency === "SEMI_ANNUAL" ? 2 : 1;
+                                const annualAmount = Number(fee.amount) * mult;
+                                return (
+                                  <div key={fee.id} className="flex justify-between items-center text-sm font-medium text-slate-600 dark:text-zinc-300 px-1">
+                                    <span>{fee.name} <span className="text-[10px] opacity-70">({fee.frequency.toLowerCase()})</span></span>
+                                    <span>₹{formatIndianNumber(annualAmount)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Optional Add-ons */}
                         {classFees.filter(f => f.applicability === "OPTIONAL").length > 0 && (
                           <div className="flex flex-col gap-2 pt-2 border-t border-slate-200/60 dark:border-zinc-800">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none">
+                            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none">
                               Optional Add-ons
                             </span>
                             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
@@ -1418,20 +1442,20 @@ export default function ApplicantWorkspace({
                                       className="rounded text-amber-500 focus:ring-amber-500/20 w-4 h-4"
                                     />
                                     <div className="flex-1 flex items-center justify-between">
-                                      <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{fee.name}</span>
+                                      <span className="text-sm font-bold text-slate-700 dark:text-zinc-300">{fee.name}</span>
                                       {isSelected ? (
                                         <div className="flex items-center gap-1 w-24">
                                           <span className="text-xs font-bold text-slate-400">₹</span>
                                           <input
                                             type="number"
-                                            min={0}
+                                            min={1}
                                             value={selectedFee?.amount || ""}
-                                            onChange={(e) => handleOptionalFeeAmountChange(fee.id, Number(e.target.value))}
-                                            className="w-full h-7 px-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-950 text-xs font-bold text-amber-700 dark:text-amber-400 text-right outline-none focus:border-amber-400"
+                                            onChange={(e) => handleOptionalFeeAmountChange(fee.id, Math.max(1, Number(e.target.value)))}
+                                            className="w-full h-7 px-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-950 text-sm font-bold text-amber-700 dark:text-amber-400 text-right outline-none focus:border-amber-400"
                                           />
                                         </div>
                                       ) : (
-                                        <span className="text-[10px] font-bold text-slate-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
+                                        <span className="text-xs font-bold text-slate-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
                                       )}
                                     </div>
                                   </div>
@@ -1441,41 +1465,51 @@ export default function ApplicantWorkspace({
                           </div>
                         )}
 
-                        {/* Scholarship / Discount */}
-                        <div className="flex flex-col gap-1.5 w-full pt-2">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                            Scholarship / Discount (%)
-                          </span>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              value={String(promoteForm.discountPercent)}
-                              onChange={(e) => handlePromoteChange("discountPercent", e.target.value)}
-                              placeholder="0"
-                              className="w-full h-10 pl-4 pr-8 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
-                            />
-                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 select-none">%</span>
-                          </div>
-                        </div>
-
                         {/* Dues Displays - LCD STYLE */}
-                        <div className="pt-4 border-t-2 border-slate-800 dark:border-zinc-400 border-dashed space-y-3">
-                          <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 dark:text-zinc-400">
-                            <span className="uppercase tracking-widest">Base Fees</span>
-                            <span className="font-mono">₹{formatIndianNumber(baseTotal)}</span>
+                        <div className="pt-4 mt-2 border-t-2 border-slate-800 dark:border-zinc-400 border-dashed space-y-3">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-zinc-400">
+                            <span className="uppercase tracking-widest">Gross Fees</span>
+                            <span className="font-mono text-sm text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(baseTotal)}</span>
                           </div>
-                          {promoteForm.discountPercent > 0 && (
-                            <div className="flex justify-between items-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                              <span className="uppercase tracking-widest">Discount ({promoteForm.discountPercent}%)</span>
-                              <span className="font-mono">-₹{formatIndianNumber(baseTotal - totalDiscountedFee)}</span>
+                          
+                          {/* Inline Discount Input */}
+                          <div className="flex justify-between items-center text-xs font-bold text-emerald-600 dark:text-emerald-400 group">
+                            <span className="uppercase tracking-widest">Flat Discount (-)</span>
+                            <div className="relative w-28">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-500/70 select-none">₹</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={String(promoteForm.discountAmount || "")}
+                                onChange={(e) => handlePromoteChange("discountAmount", Math.max(0, Number(e.target.value)))}
+                                placeholder="0"
+                                className={`w-full h-8 pl-6 pr-2 rounded-lg border ${isDiscountInvalid ? 'border-red-400 bg-red-50 text-red-600' : 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'} text-sm font-mono font-bold text-right focus:outline-none focus:border-emerald-400 transition-all duration-300`}
+                              />
                             </div>
+                          </div>
+                          {isDiscountInvalid && (
+                             <div className="flex justify-end">
+                               <p className="text-[9px] font-bold text-red-500 px-1 -mt-2">Cannot exceed ₹{formatIndianNumber(mandatoryTotal)}</p>
+                             </div>
                           )}
-                          <div className="flex justify-between items-end pt-2">
-                            <span className="uppercase tracking-widest font-black text-slate-800 dark:text-zinc-200 text-xs">Total Due</span>
-                            <span className="font-black text-2xl tracking-tight text-slate-900 dark:text-white font-mono">
+
+                          <div className="flex justify-between items-end pt-2 border-t border-slate-200 dark:border-zinc-800">
+                            <span className="uppercase tracking-widest font-black text-slate-800 dark:text-zinc-200 text-sm">Net Applicable Fee</span>
+                            <span className="font-black text-2xl tracking-tight text-primary dark:text-sky-400 font-mono">
                               ₹{formatIndianNumber(totalDiscountedFee)}
                             </span>
                           </div>
+                          
+                          {/* Installments Balance Checker */}
+                          {customInstallments.length > 0 && isBalanceMismatch && (
+                             <div className="mt-2 p-2 rounded-lg bg-red-50/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 flex justify-between items-center text-[10.5px] font-bold text-red-600 dark:text-red-400">
+                                <span>Installments Total: ₹{formatIndianNumber(sumOfInstallments)}</span>
+                                <span className="flex items-center gap-1">
+                                  <Icon name="error" size={14} />
+                                  Mismatch: {sumOfInstallments > totalDiscountedFee ? "+" : ""}₹{formatIndianNumber(sumOfInstallments - totalDiscountedFee)}
+                                </span>
+                             </div>
+                          )}
                         </div>
                       </div>
                       
@@ -1673,10 +1707,10 @@ export default function ApplicantWorkspace({
                   </div>
                 </div>
 
-                {formError && (
+                {(formError || isOverpayment) && (
                   <div className="p-4 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2.5">
                     <Icon name="warning" size={16} className="text-red-500 shrink-0" />
-                    <span>{formError}</span>
+                    <span>{isOverpayment ? `Amount Paid (₹${formatIndianNumber(promoteForm.amountPaid)}) cannot exceed Net Applicable Fee (₹${formatIndianNumber(totalDiscountedFee)}).` : formError}</span>
                   </div>
                 )}
 
@@ -1686,7 +1720,8 @@ export default function ApplicantWorkspace({
                     variant="filled"
                     icon="school"
                     loading={actionLoading}
-                    className="bg-primary text-white hover:bg-primary/95 rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/15"
+                    disabled={isPromoteDisabled}
+                    className={`rounded-xl h-11 px-6 font-bold shadow-md ${isPromoteDisabled ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none" : "bg-primary text-white hover:bg-primary/95 shadow-primary/15"}`}
                   >
                     Promote Candidate to Student
                   </Button>
