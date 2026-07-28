@@ -1,12 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedImage, UploadError } from "@/lib/upload";
+import { checkApiPermission } from "@/lib/auth/permissions";
+import { getTenantContext } from "@/lib/tenant/context";
 
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    
+    // Auth check
+    const denied = await checkApiPermission(request, "admissions", "registrar_desk");
+    if (denied) return denied;
+
+    const ctx = getTenantContext(request);
+
     const formData = await request.formData();
     const documentType = formData.get("documentType") as string;
     const file = formData.get("file") as File;
@@ -19,7 +29,7 @@ export async function POST(
     }
 
     const application = await prisma.admissionApplication.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         branch: true,
       }

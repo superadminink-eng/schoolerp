@@ -3,11 +3,13 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: Request,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
+    const { token } = await params;
+    
     const appToken = await prisma.applicationToken.findUnique({
-      where: { token: params.token },
+      where: { token },
       include: {
         application: {
           include: {

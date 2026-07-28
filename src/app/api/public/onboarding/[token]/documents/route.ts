@@ -4,11 +4,13 @@ import { saveUploadedImage, UploadError } from "@/lib/upload";
 
 export async function POST(
   request: Request,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
+    const { token } = await params;
+    
     const appToken = await prisma.applicationToken.findUnique({
-      where: { token: params.token },
+      where: { token },
       include: { application: true }
     });
 
