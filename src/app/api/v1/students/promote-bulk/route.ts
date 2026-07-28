@@ -16,7 +16,7 @@ const promoteBulkSchema = z.object({
   studentIds: z.array(z.string()).min(1, "At least one student must be selected"),
   targetSectionId: z.string().min(1, "Target section is required"),
   targetAcademicYearId: z.string().min(1, "Target academic year is required"),
-  discountPercent: z.number().min(0).max(100).default(0),
+  discountAmount: z.number().min(0).max(100).default(0),
   termType: z.enum(["FULL_TERM", "HALF_TERM", "SHORT_TERM"]).optional(),
 });
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const parsed = promoteBulkSchema.safeParse(body);
     if (!parsed.success) return apiValidationError(parsed.error);
 
-    const { studentIds, targetSectionId, targetAcademicYearId, discountPercent, termType } = parsed.data;
+    const { studentIds, targetSectionId, targetAcademicYearId, discountAmount, termType } = parsed.data;
 
     // 1. Verify target section and class exist in caller's organization context
     const targetSection = await prisma.section.findFirst({
@@ -132,10 +132,10 @@ export async function POST(req: NextRequest) {
           });
 
           const annualTotal = annualFees.reduce((acc, item) => acc.plus(item.annual), new Prisma.Decimal(0));
-          const discountPct = new Prisma.Decimal(discountPercent);
-          const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
+          const discountDec = new Prisma.Decimal(discountAmount);
+          const totalDiscountedFee = annualTotal.minus(discountDec).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+          const discountMultiplier = annualTotal.gt(0) ? totalDiscountedFee.div(annualTotal) : new Prisma.Decimal(1);
 
-          // Fetch templates for the resolved term type
           const classTemplates = await tx.feeInstallmentTemplate.findMany({
             where: {
               classId: targetSection.classId,

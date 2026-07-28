@@ -38,7 +38,7 @@ interface PromoteModalProps {
     sectionId: string;
     rollNo: string;
     admissionDate: string;
-    discountPercent: number;
+    discountAmount: number;
     amountPaid: number;
     paymentMethod: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
     transactionId: string;
@@ -68,7 +68,7 @@ export default function PromoteModal({
       const next = { ...prev, [field]: value };
       
       // Auto-recalculate installments on discount change
-      if (field === "discountPercent") {
+      if (field === "discountAmount") {
         const discount = Number(value) || 0;
         setCustomInstallments((insts: CustomInstallment[]) =>
           insts.map((inst, index) => {
@@ -207,8 +207,8 @@ export default function PromoteModal({
                 </label>
                 <input
                   type="number"
-                  value={String(promoteForm.discountPercent)}
-                  onChange={(e) => handleFormChange("discountPercent", e.target.value)}
+                  value={String(promoteForm.discountAmount)}
+                  onChange={(e) => handleFormChange("discountAmount", e.target.value)}
                   placeholder="e.g. 10"
                   className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
                 />

@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     sectionId,
     rollNo,
     admissionDate,
-    discountPercent,
+    discountAmount,
     amountPaid,
     paymentMethod,
     transactionId,
@@ -203,10 +203,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       });
 
       const annualTotal = feeCategoriesAnnual.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
-      const discountPct = new Prisma.Decimal(discountPercent ?? 0);
-      const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
-
-      const totalDiscountedFee = annualTotal.mul(discountMultiplier).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      const discountDec = new Prisma.Decimal(discountAmount ?? 0);
+      const totalDiscountedFee = annualTotal.minus(discountDec).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      const discountMultiplier = annualTotal.gt(0) ? totalDiscountedFee.div(annualTotal) : new Prisma.Decimal(1);
       const amountPaidDecimal = new Prisma.Decimal(amountPaid ?? 0);
 
       if (amountPaidDecimal.gt(0) && !paymentMethod) {

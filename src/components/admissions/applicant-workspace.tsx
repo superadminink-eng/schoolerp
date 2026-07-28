@@ -74,6 +74,9 @@ interface Application {
   verificationNotes: string | null;
   archiveReason?: string | null;
   statusBeforeArchive?: string | null;
+  previousSchool?: string | null;
+  bloodGroup?: string | null;
+  emergencyContact?: string | null;
 }
 
 interface WorkspaceProps {
@@ -734,8 +737,8 @@ export default function ApplicantWorkspace({
                 )}
                 
                 <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-end gap-2 sticky bottom-0 bg-slate-50/90 dark:bg-zinc-950/90 py-2 backdrop-blur-sm z-10">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditing(false)} disabled={editLoading}>Cancel</Button>
-                  <Button type="submit" variant="primary" size="sm" loading={editLoading}>Save Changes</Button>
+                  <Button type="button" variant="outlined" size="sm" onClick={() => setIsEditing(false)} disabled={editLoading}>Cancel</Button>
+                  <Button type="submit" variant="filled" size="sm" loading={editLoading}>Save Changes</Button>
                 </div>
               </form>
             ) : (

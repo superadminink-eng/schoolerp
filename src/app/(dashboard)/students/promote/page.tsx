@@ -61,7 +61,7 @@ export default function BulkPromotionPage() {
   const [targetAcademicYearId, setTargetAcademicYearId] = useState("");
   const [targetSections, setTargetSections] = useState<SectionRecord[]>([]);
 
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountAmount, setdiscountAmount] = useState(0);
   const [termType, setTermType] = useState<string>(""); // Empty string means Inherit Current
 
   // Students registry state
@@ -226,7 +226,7 @@ export default function BulkPromotionPage() {
           studentIds: selectedStudentIds,
           targetSectionId,
           targetAcademicYearId,
-          discountPercent,
+          discountAmount,
           ...(termType ? { termType } : {}),
         }),
       });
@@ -586,8 +586,8 @@ export default function BulkPromotionPage() {
                           type="number"
                           min={0}
                           max={100}
-                          value={discountPercent}
-                          onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                          value={discountAmount}
+                          onChange={(e) => setdiscountAmount(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                           className="w-full h-[40px] rounded-xl border border-outline px-3 pr-8 text-body-md outline-none focus:border-primary bg-white transition-colors font-mono"
                         />
                         <span className="absolute right-3.5 font-bold text-slate-400 text-sm">%</span>

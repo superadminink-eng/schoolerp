@@ -220,10 +220,9 @@ export async function POST(req: NextRequest) {
       });
 
       const annualTotal = feeCategoriesAnnual.reduce((s, f) => s.plus(f.annual), new Prisma.Decimal(0));
-      const discountPct = new Prisma.Decimal(data.discountPercent ?? 0);
-      const discountMultiplier = new Prisma.Decimal(1).minus(discountPct.div(100));
-
-      const totalDiscountedFee = annualTotal.mul(discountMultiplier);
+      const discountDec = new Prisma.Decimal(data.discountAmount ?? 0);
+      const totalDiscountedFee = annualTotal.minus(discountDec).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      const discountMultiplier = annualTotal.gt(0) ? totalDiscountedFee.div(annualTotal) : new Prisma.Decimal(1);
       const amountPaidDecimal = new Prisma.Decimal(data.amountPaid ?? 0);
 
       if (amountPaidDecimal.gt(0) && !data.paymentMethod) {

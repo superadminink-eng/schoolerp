@@ -21,7 +21,6 @@ export interface CustomInstallment {
 
 export interface InitialInvoiceInput {
   classId: string;
-  discountPercent?: number;
   discountAmount?: number;
   optionalFeeIds?: string[];
   customInstallments?: CustomInstallment[];
@@ -217,7 +216,6 @@ export class FeeService {
     organizationId: string,
     input: {
       classId: string;
-      discountPercent?: number;
       discountAmount?: number;
       optionalFeeIds?: string[];
       customInstallments?: CustomInstallment[];

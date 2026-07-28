@@ -9,7 +9,7 @@ export interface PromoteCandidateInput {
   sectionId: string;
   rollNo?: string;
   admissionDate?: string;
-  discountPercent?: number;
+  discountAmount?: number;
   amountPaid?: number;
   paymentMethod?: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
   transactionId?: string;
@@ -144,8 +144,8 @@ export class AdmissionService {
       });
 
       const annualTotal = feeCategoriesAnnual.reduce((sum, f) => sum.plus(f.annual), new Prisma.Decimal(0));
-      const discountPercent = input.discountPercent ?? 0;
-      const discountMultiplier = new Prisma.Decimal(1).minus(new Prisma.Decimal(discountPercent).div(100));
+      const discountAmount = input.discountAmount ?? 0;
+      const discountMultiplier = new Prisma.Decimal(1).minus(new Prisma.Decimal(discountAmount).div(100));
       const totalDiscountedFee = annualTotal.mul(discountMultiplier);
 
       let targetInstallments = [];

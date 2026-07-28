@@ -98,7 +98,6 @@ interface StudentData {
   feeAssignments?: Array<{
     feeStructureId: string;
     isOptedIn: boolean;
-    discountPercent: string | null;
     discountAmount: string | null;
     feeStructure: {
       applicability: string;
@@ -163,7 +162,6 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       branchId: initialData?.branch?.id ?? "",
       classId: initialData?.enrollments?.[0]?.section?.class?.id ?? initialData?.classId ?? "",
       sectionId: initialData?.enrollments?.[0]?.section?.id ?? "",
-      discountPercent: (initialData?.feeAssignments?.find(fa => fa.discountPercent)?.discountPercent) ?? "",
       discountAmount: (initialData?.feeAssignments?.find(fa => fa.discountAmount)?.discountAmount) ?? "",
       optionalFeeIds: initialData?.feeAssignments?.filter(fa => fa.isOptedIn && fa.feeStructure.applicability === "OPTIONAL").map(fa => fa.feeStructureId) ?? [],
       customInstallments: (initialData?.invoices?.map(inv => ({
@@ -182,7 +180,6 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const branchId = watch("branchId");
   const classId = watch("classId");
   const paymentMethod = watch("paymentMethod");
-  const discountPercent = watch("discountPercent");
   const discountAmount = watch("discountAmount");
   const optionalFeeIds = watch("optionalFeeIds");
   const customInstallments = watch("customInstallments");
@@ -262,7 +259,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const prevClassId = useRef(classId);
   useEffect(() => {
     if (prevClassId.current !== undefined && prevClassId.current !== classId) {
-      setValue("discountPercent", "");
+      setValue("discountAmount", "");
       setValue("amountPaid", "");
       setValue("paymentMethod", "");
       setValue("transactionId", "");
@@ -770,7 +767,6 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                   <>
                     <FeeConfiguration 
                       fees={fees}
-                      discountPercent={discountPercent}
                       discountAmount={discountAmount}
                       amountPaid={amountPaid}
                       optionalFeeIds={optionalFeeIds}

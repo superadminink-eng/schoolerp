@@ -232,7 +232,6 @@ export async function POST(req: NextRequest) {
 
     const studentInput = {
       ...data,
-      discountPercent: fields.discountPercent,
       discountAmount: fields.discountAmount,
       optionalFeeIds: data.optionalFeeIds,
       customInstallments: data.customInstallments,

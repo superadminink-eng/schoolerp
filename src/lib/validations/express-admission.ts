@@ -32,7 +32,7 @@ export const expressAdmitSchema = z.object({
   sectionId: z.string().min(1, "Section is required"),
   rollNo: z.string().max(20).optional().or(z.literal("")),
   admissionDate: z.string().optional().or(z.literal("")),
-  discountPercent: z.preprocess(
+  discountAmount: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().min(0, "Discount cannot be negative").max(100, "Discount cannot exceed 100%").optional()
   ),
@@ -83,7 +83,7 @@ export const expressCreateSchema = z.object({
   sectionId: z.string().min(1, "Section is required"),
   rollNo: z.string().max(20).optional().or(z.literal("")),
   admissionDate: z.string().optional().or(z.literal("")),
-  discountPercent: z.preprocess(
+  discountAmount: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().min(0).max(100).optional()
   ),

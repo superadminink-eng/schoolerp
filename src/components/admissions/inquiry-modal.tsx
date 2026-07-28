@@ -58,7 +58,7 @@ export default function InquiryModal({
   const [expressForm, setExpressForm] = useState({
     sectionId: "",
     rollNo: "",
-    discountPercent: 0,
+    discountAmount: 0,
     amountPaid: 0,
     paymentMethod: "CASH",
     transactionId: "",
@@ -80,7 +80,7 @@ export default function InquiryModal({
       inquiryForm.notes !== "" ||
       (expressAdmit && (
         expressForm.rollNo !== "" ||
-        Number(expressForm.discountPercent) !== 0 ||
+        Number(expressForm.discountAmount) !== 0 ||
         Number(expressForm.amountPaid) !== 0
       ))
     );
@@ -114,7 +114,7 @@ export default function InquiryModal({
     setExpressForm({
       sectionId: "",
       rollNo: "",
-      discountPercent: 0,
+      discountAmount: 0,
       amountPaid: 0,
       paymentMethod: "CASH",
       transactionId: "",
@@ -193,7 +193,7 @@ export default function InquiryModal({
       return;
     }
 
-    const discount = Number(expressForm.discountPercent) || 0;
+    const discount = Number(expressForm.discountAmount) || 0;
     if (discount < 0 || discount > 100) {
       snackbar.show("Discount percent must be between 0% and 100%.", "error");
       return;
@@ -644,8 +644,8 @@ export default function InquiryModal({
                         type="number"
                         min="0"
                         max="100"
-                        value={expressForm.discountPercent || ""}
-                        onChange={(e) => handleExpressFieldChange("discountPercent", Number(e.target.value))}
+                        value={expressForm.discountAmount || ""}
+                        onChange={(e) => handleExpressFieldChange("discountAmount", Number(e.target.value))}
                         placeholder="e.g. 15%"
                         className="w-full h-[52px] px-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
                       />

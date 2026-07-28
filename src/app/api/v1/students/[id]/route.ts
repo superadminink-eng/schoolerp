@@ -350,8 +350,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       });
 
       // Handle Fee Updates
-      const { optionalFeeIds, discountPercent, discountAmount, customInstallments } = fields;
-      if (customInstallments || optionalFeeIds || discountPercent !== undefined || discountAmount !== undefined) {
+      const { optionalFeeIds, discountAmount, customInstallments } = fields;
+      if (customInstallments || optionalFeeIds || discountAmount !== undefined) {
         // Find the current classId for the student
         let currentClassId = null;
         if (sectionId && sectionId !== "") {
@@ -370,7 +370,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           try {
             await FeeService.updateStudentFees(tx, id, ctx.organizationId, {
               classId: currentClassId,
-              discountPercent: discountPercent ? parseFloat(discountPercent) : undefined,
               discountAmount: discountAmount ? parseFloat(discountAmount) : undefined,
               optionalFeeIds: optionalFeeIds || [],
               customInstallments: customInstallments ? JSON.parse(customInstallments) : undefined,

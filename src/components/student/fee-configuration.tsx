@@ -25,7 +25,6 @@ export interface CustomInstallment {
 
 interface FeeConfigurationProps {
   fees: FeeInfo[];
-  discountPercent: string;
   discountAmount: string;
   amountPaid: string;
   optionalFeeIds: string[];
@@ -35,7 +34,6 @@ interface FeeConfigurationProps {
 
 export function FeeConfiguration({
   fees,
-  discountPercent,
   discountAmount,
   amountPaid,
   optionalFeeIds,
@@ -75,7 +73,7 @@ export function FeeConfiguration({
   }, [mandatoryFees, optionalFees, optionalFeeIds]);
 
   // Calculate discounts
-  const dPct = parseFloat(discountPercent) || 0;
+  const dPct = 0; // Removed discountPercent
   const dAmt = parseFloat(discountAmount) || 0;
   // Discount is ONLY applied to Mandatory fees to prevent discount leakage
   const totalDiscount = dAmt + (mandatoryTotal * dPct / 100);
@@ -219,13 +217,6 @@ export function FeeConfiguration({
           <p className="text-title-md font-bold text-on-surface">₹{annualTotal.toLocaleString("en-IN")}</p>
         </div>
         <div className="space-y-3">
-          <TextField
-            label="Discount %"
-            type="number"
-            value={discountPercent}
-            onChange={(e) => onUpdate("discountPercent", e.target.value)}
-            fullWidth
-          />
           <CurrencyInput
             label="Flat Discount (₹)"
             value={discountAmount}

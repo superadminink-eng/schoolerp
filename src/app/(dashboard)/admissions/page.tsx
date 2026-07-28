@@ -910,7 +910,7 @@ export default function AdmissionsPage() {
       sectionId: "",
       rollNo: "",
       admissionDate: new Date().toISOString().split("T")[0],
-      discountPercent: 0,
+      discountAmount: 0,
       amountPaid: 0,
       paymentMethod: "CASH",
       transactionId: "",

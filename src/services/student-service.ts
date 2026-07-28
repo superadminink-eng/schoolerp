@@ -11,11 +11,10 @@ export class StudentService {
    */
   static async createStudent(
     data: CreateStudentInput & {
-      discountPercent?: string;
+      discountAmount?: string;
       amountPaid?: string;
       paymentMethod?: string;
       transactionId?: string;
-      discountAmount?: string;
       optionalFeeIds?: string[];
       customInstallments?: any[];
     },
@@ -133,7 +132,6 @@ export class StudentService {
       if (data.classId) {
         await FeeService.createInitialInvoice(tx, created.id, ctx.organizationId, {
           classId: data.classId,
-          discountPercent: data.discountPercent ? parseFloat(data.discountPercent) : 0,
           discountAmount: data.discountAmount ? parseFloat(data.discountAmount) : 0,
           optionalFeeIds: data.optionalFeeIds || [],
           customInstallments: data.customInstallments || [],

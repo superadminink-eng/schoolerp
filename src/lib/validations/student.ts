@@ -93,12 +93,9 @@ export const createStudentSchema = z.object({
   category: z.enum(STUDENT_CATEGORIES).default("GENERAL"),
 
   // Fee collection (optional — only when collecting fees at admission)
-  discountPercent: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().min(0, "Discount cannot be negative").max(100, "Discount cannot exceed 100%").optional()
-  ),
+
   discountAmount: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    (val) => (val === "" || val === null || val === undefined ? undefined : parseFloat(String(val))),
     z.number().min(0, "Discount amount cannot be negative").optional()
   ),
   optionalFeeIds: z.union([
