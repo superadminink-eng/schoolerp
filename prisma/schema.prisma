@@ -1128,6 +1128,7 @@ model AdmissionApplication {
   inquiry            AdmissionInquiry?     @relation(fields: [inquiryId], references: [id])
   organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   documents          ApplicationDocument[]
+  tokens             ApplicationToken[]
   examResult         EntranceExamResult?
 
   @@index([organizationId])
@@ -1150,6 +1151,21 @@ model ApplicationDocument {
 
   @@index([applicationId])
   @@map("application_documents")
+}
+
+model ApplicationToken {
+  id            String               @id @default(cuid())
+  applicationId String
+  token         String               @unique
+  expiresAt     DateTime
+  isConsumed    Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  application   AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([token])
+  @@map("application_tokens")
 }
 
 model EntranceExamResult {

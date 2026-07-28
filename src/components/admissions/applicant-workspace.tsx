@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -193,6 +193,10 @@ export default function ApplicantWorkspace({
   const [withdrawReason, setWithdrawReason] = useState("");
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [reactivateLoading, setReactivateLoading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedDocType, setSelectedDocType] = useState("BIRTH_CERTIFICATE");
+  const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIOUS_MARKSHEET", "OTHER"];
 
   const mandatoryTotal = classFees.length > 0
     ? classFees.filter(f => f.applicability === "MANDATORY").reduce((acc, curr) => {
@@ -313,6 +317,37 @@ export default function ApplicantWorkspace({
     const nextDocs = [...verifyForm.documents];
     nextDocs[index] = { ...nextDocs[index], remarks };
     setVerifyForm((prev: any) => ({ ...prev, documents: nextDocs }));
+  };
+
+  const handleCounselorUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingDoc(true);
+    clearError();
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("documentType", selectedDocType);
+
+    try {
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+         if (fileInputRef.current) fileInputRef.current.value = "";
+         // This will trigger a re-fetch of the application
+         if (onApplicantUpdated) onApplicantUpdated();
+      } else {
+         setFormError?.(data.error?.message || "Failed to upload document");
+      }
+    } catch (err) {
+      setFormError?.("Network error during document upload.");
+    } finally {
+      setUploadingDoc(false);
+    }
   };
 
   // Exam change handlers
@@ -889,7 +924,7 @@ export default function ApplicantWorkspace({
                   {verifyForm.documents.length === 0 ? (
                     <div className="p-6 text-center border border-dashed rounded-2xl text-slate-400 bg-slate-50/50">
                       <Icon name="upload" size={24} className="opacity-40 mb-1" />
-                      <p className="text-xs font-bold">No documents uploaded by applicant.</p>
+                      <p className="text-xs font-bold">No documents uploaded yet.</p>
                       <p className="text-[10px] opacity-60 mt-0.5">Please add internal notes and proceed with Selection or Rejection.</p>
                     </div>
                   ) : (
@@ -953,6 +988,37 @@ export default function ApplicantWorkspace({
                       ))}
                     </div>
                   )}
+
+                  {/* Counselor Upload Section */}
+                  <div className="p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/50 flex flex-col sm:flex-row items-center gap-3">
+                    <select
+                      value={selectedDocType}
+                      onChange={(e) => setSelectedDocType(e.target.value)}
+                      className="h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      {DOC_TYPES.map(dt => (
+                        <option key={dt} value={dt}>{dt.replace(/_/g, " ")}</option>
+                      ))}
+                    </select>
+                    
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleCounselorUpload}
+                      className="hidden"
+                      accept="image/*,.pdf"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingDoc}
+                      className="h-9 px-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                    >
+                      {uploadingDoc ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="cloud_upload" size={14} />}
+                      {uploadingDoc ? "Uploading..." : "Upload Document"}
+                    </button>
+                    <p className="text-[10px] text-slate-400">Add missing documents manually.</p>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-1.5 w-full">
@@ -1261,6 +1327,26 @@ export default function ApplicantWorkspace({
                         className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300"
                       />
                     </div>
+
+                    {/* Term Selection (Parent Level) */}
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Billing Term / Intake Type <span className="text-red-500">*</span>
+                      </span>
+                      <Select
+                        value={promoteForm.termType}
+                        onValueChange={(val: any) => handlePromoteChange("termType", val)}
+                      >
+                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
+                          <SelectValue placeholder="Select Term" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="FULL_TERM">Full Term</SelectItem>
+                          <SelectItem value="HALF_TERM">Half Term</SelectItem>
+                          <SelectItem value="SHORT_TERM">Short Term</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
@@ -1279,26 +1365,6 @@ export default function ApplicantWorkspace({
                             Fee Receipt
                           </h4>
                           <p className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mt-1">Live Estimate</p>
-                        </div>
-
-                        {/* Term Selection (Parent Level) */}
-                        <div className="flex flex-col gap-1.5 w-full">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                            Billing Term / Intake Type
-                          </span>
-                          <Select
-                            value={promoteForm.termType}
-                            onValueChange={(val: any) => handlePromoteChange("termType", val)}
-                          >
-                            <SelectTrigger fullWidth className="h-10 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-200 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
-                              <SelectValue placeholder="Select Term" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="FULL_TERM">Full Term</SelectItem>
-                              <SelectItem value="HALF_TERM">Half Term</SelectItem>
-                              <SelectItem value="SHORT_TERM">Short Term</SelectItem>
-                            </SelectContent>
-                          </Select>
                         </div>
 
                         {/* Billing Mode Toggle */}
@@ -1490,19 +1556,17 @@ export default function ApplicantWorkspace({
                               />
                             </div>
                           </div>
-                          {isDiscountInvalid && (
-                             <div className="flex justify-end">
-                               <p className="text-[9px] font-bold text-red-500 px-1 -mt-2">Cannot exceed ₹{formatIndianNumber(mandatoryTotal)}</p>
-                             </div>
-                          )}
 
-                          <div className="flex justify-between items-end pt-2 border-t border-slate-200 dark:border-zinc-800">
-                            <span className="uppercase tracking-widest font-black text-slate-800 dark:text-zinc-200 text-sm">Net Applicable Fee</span>
-                            <span className="font-black text-2xl tracking-tight text-primary dark:text-sky-400 font-mono">
+                          {/* Final Net Total Payable */}
+                          <div className="flex justify-between items-center pt-3 mt-2 border-t border-slate-200/80 dark:border-zinc-700 px-1">
+                            <span className="text-base font-black text-slate-800 dark:text-zinc-100 uppercase tracking-widest">
+                              Net Total Payable
+                            </span>
+                            <span className="text-xl font-black text-primary dark:text-sky-400">
                               ₹{formatIndianNumber(totalDiscountedFee)}
                             </span>
                           </div>
-                          
+
                           {/* Installments Balance Checker */}
                           {customInstallments.length > 0 && isBalanceMismatch && (
                              <div className="mt-2 p-2 rounded-lg bg-red-50/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 flex justify-between items-center text-[10.5px] font-bold text-red-600 dark:text-red-400">

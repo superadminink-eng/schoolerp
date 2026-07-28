@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/icon";
 // Import Redesigned Modular Components
 import AdmissionsStats from "@/components/admissions/admissions-stats";
 import AdmissionsFilters from "@/components/admissions/admissions-filters";
+import InquiriesInbox from "@/components/admissions/inquiries-inbox";
 import AdmissionsList from "@/components/admissions/admissions-list";
 import AdmissionsPipeline from "@/components/admissions/admissions-pipeline";
 import InquiryModal from "@/components/admissions/inquiry-modal";
@@ -372,9 +373,14 @@ export default function AdmissionsPage() {
                 isCustom: false,
               }))
             );
+          } else {
+            setInstallmentTemplates([]);
+            setCustomInstallments([]);
           }
         } catch {
           console.error("Failed to load installment templates.");
+          setInstallmentTemplates([]);
+          setCustomInstallments([]);
         }
       };
       const fetchFees = async () => {
@@ -383,9 +389,12 @@ export default function AdmissionsPage() {
           const data = await res.json();
           if (data.success) {
             setClassFees(data.data);
+          } else {
+            setClassFees([]);
           }
         } catch {
           console.error("Failed to load fees.");
+          setClassFees([]);
         }
       };
       fetchTemplates();
@@ -1586,15 +1595,21 @@ export default function AdmissionsPage() {
                   </Button>
                 </div>
               </div>
+            ) : activeTab === "inquiries" ? (
+              <InquiriesInbox
+                inquiries={filteredInquiries}
+                canVerifyDocs={canVerifyDocs}
+                onOpenInquiryWorkspace={handleOpenInquiryWorkspace}
+                setAppForm={setAppForm}
+                setApplicationModalOpen={setApplicationModalOpen}
+                schoolName={branches.find(b => b.id === branchFilter)?.name || "Our School"}
+              />
             ) : (
               <AdmissionsPipeline
                 filteredApplications={filteredApplications}
-                filteredInquiries={filteredInquiries}
-                hasInqAccess={hasInqAccess}
                 canVerifyDocs={canVerifyDocs}
                 hasAppAccess={hasAppAccess}
                 onOpenWorkspace={handleOpenWorkspace}
-                onOpenInquiryWorkspace={handleOpenInquiryWorkspace}
                 onVerifyDocsClick={handleOpenWorkspace}
                 onScoreExamClick={handleOpenWorkspace}
                 onPromoteClick={handleOpenWorkspace}

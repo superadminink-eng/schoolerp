@@ -163,6 +163,21 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Generate Magic Link Token for Parent Portal
+      const token = crypto.randomBytes(24).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 14); // Valid for 14 days
+
+      await tx.applicationToken.create({
+        data: {
+          applicationId: created.id,
+          token: token,
+          expiresAt: expiresAt
+        }
+      });
+
+      // TODO: Dispatch SMS/Email to parent with the link: /onboarding/${token}
+
       return created;
     }, { timeout: 15000 });
 
