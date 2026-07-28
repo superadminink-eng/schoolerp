@@ -1,8 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedImage, UploadError } from "@/lib/upload";
-import { checkApiPermission } from "@/lib/auth/permissions";
-import { getTenantContext } from "@/lib/tenant/context";
+import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 
 export async function POST(
   request: NextRequest,
