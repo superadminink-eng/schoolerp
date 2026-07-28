@@ -339,7 +339,7 @@ export default function ApplicantWorkspace({
       if (data.success) {
          if (fileInputRef.current) fileInputRef.current.value = "";
          // This will trigger a re-fetch of the application
-         if (onApplicantUpdated) onApplicantUpdated();
+         if (onApplicantUpdated) onApplicantUpdated(data.application || selectedApp);
       } else {
          setFormError?.(data.error?.message || "Failed to upload document");
       }
