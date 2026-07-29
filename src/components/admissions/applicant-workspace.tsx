@@ -65,6 +65,7 @@ interface Application {
   branch?: { id: string; name: string } | null;
   academicYear?: { id: string; name: string } | null;
   documents?: { id: string; documentType: string; status: "PENDING" | "VERIFIED" | "REJECTED"; remarks: string | null }[] | null;
+  tokens?: { id: string; token: string; expiresAt: string | Date; isConsumed: boolean }[] | null;
   examResult?: { id: string; examDate: string; marksObtained: number | null; maxMarks: number; verdict: string; notes: string | null } | null;
   fatherName: string | null;
   fatherPhone: string | null;
@@ -363,20 +364,70 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
   const [generatingLink, setGeneratingLink] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [magicUploadData, setMagicUploadData] = useState<{ magicUrl: string; whatsappUrl: string } | null>(null);
+  const [magicUploadData, setMagicUploadData] = useState<{
+    magicUrl: string;
+    whatsappUrl: string;
+    isExpired: boolean;
+    daysLeft: number;
+  } | null>(null);
 
-  const handleGenerateMagicLink = async () => {
+  // Auto-load existing token from selectedApp across page refreshes!
+  useEffect(() => {
+    if (selectedApp?.tokens && selectedApp.tokens.length > 0) {
+      const latestToken = selectedApp.tokens[0];
+      const expiresAtDate = new Date(latestToken.expiresAt);
+      const isExpired = new Date() > expiresAtDate;
+
+      const diffMs = expiresAtDate.getTime() - new Date().getTime();
+      const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+      const host = typeof window !== "undefined" ? window.location.host : "localhost:3000";
+      const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+      const magicUrl = `${protocol}//${host}/public/upload-docs/${latestToken.token}`;
+
+      const parentPhone = selectedApp.fatherPhone || selectedApp.motherPhone || "";
+      let cleanPhone = parentPhone.replace(/\D/g, "");
+      if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
+      const studentName = `${selectedApp.firstName} ${selectedApp.lastName}`.trim();
+      const className = selectedApp.class?.name || "";
+
+      const messageText = `Namaste! Please click this secure link to upload missing admission documents for *${studentName}* (${className}) [App No: ${selectedApp.applicationNo}]:\n\n👉 ${magicUrl}\n\nThank you,\n*${selectedApp.branch?.name || "School"} Admissions Desk*`;
+
+      const whatsappUrl = cleanPhone
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
+        : `https://wa.me/?text=${encodeURIComponent(messageText)}`;
+
+      setMagicUploadData({
+        magicUrl,
+        whatsappUrl,
+        isExpired,
+        daysLeft,
+      });
+    } else {
+      setMagicUploadData(null);
+    }
+  }, [selectedApp]);
+
+  const handleGenerateMagicLink = async (forceRenew = false) => {
     if (!selectedApp) return;
     setGeneratingLink(true);
     try {
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/generate-upload-link`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceRenew }),
       });
       const json = await res.json();
       if (json.success) {
+        const expiresAtDate = new Date(json.data.expiresAt);
+        const diffMs = expiresAtDate.getTime() - new Date().getTime();
+        const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
         setMagicUploadData({
           magicUrl: json.data.magicUrl,
           whatsappUrl: json.data.whatsappUrl,
+          isExpired: false,
+          daysLeft,
         });
         setFormError?.(null);
       } else {
@@ -1057,12 +1108,26 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-1.5">
                           <span>Parent Mobile Upload Link</span>
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
-                            WhatsApp Ready
-                          </span>
+                          {magicUploadData ? (
+                            magicUploadData.isExpired ? (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300">
+                                🔴 Expired
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                                🟢 Active ({magicUploadData.daysLeft}d left)
+                              </span>
+                            )
+                          ) : (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                              WhatsApp Ready
+                            </span>
+                          )}
                         </h4>
                         <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                          Send a 1-tap secure link to parents so they can upload documents from their phone.
+                          {magicUploadData?.isExpired
+                            ? "This link has expired after 7 days. Click Renew to issue a fresh link to parents."
+                            : "Send a 1-tap secure link to parents so they can upload documents from their phone."}
                         </p>
                       </div>
                     </div>
@@ -1072,7 +1137,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         <button
                           type="button"
                           disabled={generatingLink}
-                          onClick={handleGenerateMagicLink}
+                          onClick={() => handleGenerateMagicLink(false)}
                           className="h-8 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-900/20"
                         >
                           {generatingLink ? (
@@ -1089,24 +1154,43 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         </button>
                       ) : (
                         <>
+                          {!magicUploadData.isExpired && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={handleCopyMagicLink}
+                                className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-zinc-700"
+                              >
+                                <Icon name={copiedLink ? "check" : "content_copy"} size={14} className={copiedLink ? "text-emerald-500" : ""} />
+                                <span>{copiedLink ? "Copied!" : "Copy Link"}</span>
+                              </button>
+
+                              <a
+                                href={magicUploadData.whatsappUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="h-8 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-900/20"
+                              >
+                                <span>📲</span>
+                                <span>Send WhatsApp</span>
+                              </a>
+                            </>
+                          )}
+
                           <button
                             type="button"
-                            onClick={handleCopyMagicLink}
-                            className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-zinc-700"
+                            disabled={generatingLink}
+                            onClick={() => handleGenerateMagicLink(true)}
+                            className={`h-8 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                              magicUploadData.isExpired
+                                ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/20"
+                                : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700"
+                            }`}
+                            title="Renew and generate a fresh 7-day magic link"
                           >
-                            <Icon name={copiedLink ? "check" : "content_copy"} size={14} className={copiedLink ? "text-emerald-500" : ""} />
-                            <span>{copiedLink ? "Copied!" : "Copy Link"}</span>
+                            <Icon name="sync" size={13} className={generatingLink ? "animate-spin" : ""} />
+                            <span>{magicUploadData.isExpired ? "Renew Link" : "Renew"}</span>
                           </button>
-
-                          <a
-                            href={magicUploadData.whatsappUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="h-8 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-900/20"
-                          >
-                            <span>📲</span>
-                            <span>Send WhatsApp</span>
-                          </a>
                         </>
                       )}
                     </div>

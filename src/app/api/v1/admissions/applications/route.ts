@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
           academicYear: { select: { id: true, name: true } },
           documents: true,
           examResult: true,
+          tokens: { orderBy: { createdAt: "desc" }, take: 1 },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,

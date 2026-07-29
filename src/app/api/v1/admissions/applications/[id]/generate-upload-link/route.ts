@@ -39,17 +39,34 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       return apiError("NOT_FOUND", "Application not found in current scope", 404);
     }
 
-    // 2. Check for active existing token
-    let tokenRecord = await prisma.applicationToken.findFirst({
-      where: {
-        applicationId: id,
-        expiresAt: { gt: new Date() },
-        isConsumed: false,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+
+    const forceRenew = !!body.forceRenew;
+
+    // 2. Check for active existing token unless forceRenew requested
+    let tokenRecord = null;
+
+    if (!forceRenew) {
+      tokenRecord = await prisma.applicationToken.findFirst({
+        where: {
+          applicationId: id,
+          expiresAt: { gt: new Date() },
+          isConsumed: false,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }
 
     if (!tokenRecord) {
+      // Invalidate any old tokens for this application
+      await prisma.applicationToken.updateMany({
+        where: { applicationId: id, isConsumed: false },
+        data: { isConsumed: true },
+      });
+
       const newTokenStr = crypto.randomBytes(32).toString("hex");
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 

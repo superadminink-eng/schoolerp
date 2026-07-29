@@ -66,6 +66,7 @@ interface Application {
   branch?: { id: string; name: string } | null;
   academicYear?: { id: string; name: string } | null;
   documents?: Document[] | null;
+  tokens?: any[] | null;
   examResult?: ExamResult | null;
   fatherName: string | null;
   fatherPhone: string | null;
