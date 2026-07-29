@@ -351,7 +351,7 @@ export default function AdmissionsPage() {
 
   // Load templates and fees dynamically when selectedApp or termType changes
   useEffect(() => {
-    if (workspaceOpen && selectedApp && selectedApp.class?.id) {
+    if (selectedApp && selectedApp.class?.id) {
       const fetchTemplates = async () => {
         try {
           const res = await fetch(`/api/v1/fee-installment-templates?classId=${selectedApp.class?.id || ""}&academicYearId=${selectedApp.academicYear?.id || ""}&termType=${promoteForm.termType}`);
@@ -396,11 +396,11 @@ export default function AdmissionsPage() {
       fetchTemplates();
       fetchFees();
     }
-  }, [workspaceOpen, selectedApp?.class?.id, promoteForm.termType]);
+  }, [selectedApp?.class?.id, promoteForm.termType]);
 
   // Load sections dynamically when selectedApp changes
   useEffect(() => {
-    if (workspaceOpen && selectedApp && selectedApp.class?.id) {
+    if (selectedApp && selectedApp.class?.id) {
       const fetchSections = async () => {
         try {
           const res = await fetch(`/api/v1/classes/${selectedApp.class?.id}/sections`);
@@ -415,7 +415,7 @@ export default function AdmissionsPage() {
       };
       fetchSections();
     }
-  }, [workspaceOpen, selectedApp?.class?.id]);
+  }, [selectedApp?.class?.id]);
 
   // 1. Fetch initial branches and academic years
   useEffect(() => {
@@ -1455,7 +1455,7 @@ export default function AdmissionsPage() {
             selectedAppId={selectedApp?.id || null}
             selectedInqId={selectedInquiry?.id || null}
             onSelectApp={(app) => {
-              setSelectedApp(app);
+              handleOpenWorkspace(app);
               setSelectedInquiry(null);
             }}
             onSelectInquiry={(inq) => {
