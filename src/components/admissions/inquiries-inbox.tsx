@@ -200,11 +200,11 @@ export default function InquiriesInbox({
                 </div>
                 
                 <div className="flex items-center gap-2.5 shrink-0 mt-1">
-                  <Button variant="ghost" size="sm" icon="edit_note" className="h-9 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white rounded-xl" onClick={() => onOpenInquiryWorkspace(selectedInquiry)}>
+                  <Button variant="text" size="sm" icon="edit_note" className="h-9 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white rounded-xl" onClick={() => onOpenInquiryWorkspace(selectedInquiry)}>
                     Add Note
                   </Button>
                   <Button 
-                    variant="outlined" 
+                    variant="text" 
                     size="sm" 
                     icon="forum"
                     onClick={() => handleSendWelcomeWhatsApp(selectedInquiry)}
