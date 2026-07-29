@@ -179,7 +179,7 @@ export default function InquiriesInbox({
           <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-200">
             {/* Unified Sleek Header */}
             <div className="px-8 py-6 border-b border-slate-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md shrink-0 sticky top-0 z-20">
-              <div className="flex justify-between items-start gap-4">
+              <div className="flex flex-col 2xl:flex-row justify-between items-start gap-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
@@ -199,7 +199,7 @@ export default function InquiriesInbox({
                   </h2>
                 </div>
                 
-                <div className="flex items-center gap-2.5 shrink-0 mt-1">
+                <div className="flex flex-wrap items-center gap-2.5 shrink-0 mt-3 2xl:mt-1 w-full 2xl:w-auto">
                   <Button variant="text" size="sm" icon="edit_note" className="h-9 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white rounded-xl" onClick={() => onOpenInquiryWorkspace(selectedInquiry)}>
                     Add Note
                   </Button>
@@ -253,7 +253,7 @@ export default function InquiriesInbox({
             {/* Premium Inner Body */}
             <div className="p-8 flex-1 overflow-y-auto space-y-6">
               
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
                 
                 {/* Island Card: Family Information */}
                 <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-800/60 shadow-sm hover:shadow-md transition-shadow duration-300 p-6">

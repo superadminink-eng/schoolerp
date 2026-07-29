@@ -1,7 +1,8 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { saveUploadedImage, UploadError } from "@/lib/upload";
+import { saveUploadedDocument, deleteUploadedFile, UploadError } from "@/lib/upload";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { logAction } from "@/lib/audit";
 
 export async function POST(
   request: NextRequest,
@@ -10,7 +11,7 @@ export async function POST(
   try {
     const { id } = await params;
     
-    // Auth check
+    // 1. Auth check
     const denied = await checkApiPermission(request, "admissions", "registrar_desk");
     if (denied) return denied;
 
@@ -27,8 +28,17 @@ export async function POST(
       );
     }
 
-    const application = await prisma.admissionApplication.findUnique({
-      where: { id },
+    // 2. Strict Tenant Scope Check (Prevents cross-tenant access)
+    const whereCondition: any = {
+      id,
+      organizationId: ctx.organizationId,
+    };
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+      whereCondition.branchId = ctx.branchId;
+    }
+
+    const application = await prisma.admissionApplication.findFirst({
+      where: whereCondition,
       include: {
         branch: true,
       }
@@ -36,35 +46,26 @@ export async function POST(
 
     if (!application) {
       return NextResponse.json(
-        { success: false, error: { code: "NOT_FOUND", message: "Application not found" } },
+        { success: false, error: { code: "NOT_FOUND", message: "Application not found or unauthorized" } },
         { status: 404 }
       );
     }
 
-    // Upload to local storage for now (with proper multi-tenant path)
     const orgId = application.organizationId;
     const branchId = application.branchId;
     const appId = application.id;
 
-    // Secure path avoiding ID collisions
+    // Secure, multi-tenant path avoiding ID collisions
     const uploadPath = `uploads/${orgId}/${branchId}/applications/${appId}`;
 
-    const uploadResult = await saveUploadedImage(
+    // 3. Save Document (Supports PDF & Images, validates magic bytes)
+    const uploadResult = await saveUploadedDocument(
       file,
       uploadPath,
-      documentType,
-      "document"
+      documentType
     );
 
-    if (uploadResult instanceof UploadError) {
-      console.error("Document upload error:", uploadResult);
-      return NextResponse.json(
-        { success: false, error: { code: "INTERNAL_ERROR", message: uploadResult.message } },
-        { status: 500 }
-      );
-    }
-
-    // Check if a document of this type already exists, if so update it, else create
+    // 4. Check if document exists & clean up orphan file
     const existingDoc = await prisma.applicationDocument.findFirst({
       where: {
         applicationId: appId,
@@ -74,6 +75,11 @@ export async function POST(
 
     let savedDoc;
     if (existingDoc) {
+      // Clean up previous physical file to prevent storage leaks
+      if (existingDoc.filePath && existingDoc.filePath !== uploadResult.filePath) {
+        await deleteUploadedFile(existingDoc.filePath);
+      }
+
       savedDoc = await prisma.applicationDocument.update({
         where: { id: existingDoc.id },
         data: {
@@ -81,7 +87,7 @@ export async function POST(
           filePath: uploadResult.filePath,
           fileSize: uploadResult.fileSize,
           status: "PENDING",
-          remarks: null, // Reset remarks on new upload
+          remarks: null,
         }
       });
     } else {
@@ -97,8 +103,46 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ success: true, data: savedDoc });
+    // 5. Fetch full updated application for instant UI state synchronization
+    const updatedApplication = await prisma.admissionApplication.findUnique({
+      where: { id: appId },
+      include: {
+        academicYear: true,
+        class: true,
+        branch: true,
+        documents: true,
+        examResult: true,
+              }
+    });
+
+    // 6. Log Audit Action for Enterprise Compliance
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: ctx.branchId,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "ADMISSIONS",
+      entityId: appId,
+      details: {
+        documentId: savedDoc.id,
+        documentType: savedDoc.documentType,
+        fileName: savedDoc.fileName,
+        context: "DOCUMENT_CHECKLIST_UPLOAD"
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: savedDoc,
+      application: updatedApplication
+    });
   } catch (error: any) {
+    if (error instanceof UploadError) {
+      return NextResponse.json(
+        { success: false, error: { code: "VALIDATION_ERROR", message: error.message } },
+        { status: 422 }
+      );
+    }
     console.error("Failed to upload document:", error);
     return NextResponse.json(
       { success: false, error: { code: "INTERNAL_ERROR", message: error.message || "Failed to upload document" } },

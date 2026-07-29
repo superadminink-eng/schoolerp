@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } fr
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { DocumentPreviewDialog } from "./document-preview-dialog";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { BaseCurrencyInput } from "@/components/ui/base-currency-input";
 import { formatIndianNumber } from "@/lib/utils-format";
@@ -13,7 +14,11 @@ interface DocumentItem {
   id: string;
   documentType: string;
   status: "PENDING" | "VERIFIED" | "REJECTED";
-  remarks: string;
+  remarks: string | null;
+  fileName?: string;
+  filePath?: string;
+  fileSize?: number;
+  mimeType?: string;
 }
 
 interface Section {
@@ -180,6 +185,7 @@ export default function ApplicantWorkspace({
   selectedOptionalFees = [],
   setSelectedOptionalFees,
 }: WorkspaceProps) {
+  const [workspaceMode, setWorkspaceMode] = useState<"action_desk" | "student_profile">("action_desk");
   const [activeTab, setActiveTab] = useState<"general" | "parents" | "docs">("general");
   const [isEditing, setIsEditing] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -188,6 +194,21 @@ export default function ApplicantWorkspace({
   useEffect(() => {
     setEditForm(selectedApp);
     setIsEditing(false);
+    if (selectedApp && selectedApp.documents && setVerifyForm) {
+      setVerifyForm((prev: any) => ({
+        ...prev,
+        documents: (selectedApp?.documents || []).map((d: any) => ({
+          id: d.id,
+          status: d.status,
+          remarks: d.remarks || "",
+          documentType: d.documentType,
+          fileName: d.fileName,
+          filePath: d.filePath,
+          fileSize: d.fileSize,
+          mimeType: d.mimeType,
+        })),
+      }));
+    }
   }, [selectedApp]);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState("");
@@ -196,7 +217,23 @@ export default function ApplicantWorkspace({
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDocType, setSelectedDocType] = useState("BIRTH_CERTIFICATE");
-  const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIOUS_MARKSHEET", "OTHER"];
+  const [previewDoc, setPreviewDoc] = useState<any>(null);
+  
+const DOCUMENT_META: Record<string, { label: string; badge: "MANDATORY" | "CONDITIONAL" | "ACCEPTED_VARIANTS"; badgeText: string; hint?: string; variants?: string[] }> = {
+  BIRTH_CERTIFICATE: { label: "Birth Certificate", badge: "MANDATORY", badgeText: "🔴 Mandatory" },
+  STUDENT_PHOTO: { label: "Student Photo", badge: "MANDATORY", badgeText: "🔴 Mandatory" },
+  AADHAAR_CARD: { label: "Aadhaar Card", badge: "MANDATORY", badgeText: "🔴 Mandatory" },
+  TRANSFER_CERTIFICATE: { label: "Transfer Certificate", badge: "CONDITIONAL", badgeText: "🟡 Class 2nd+", hint: "Required for Class 2nd & above" },
+  PREVIOUS_MARKSHEET: { label: "Previous Marksheet", badge: "CONDITIONAL", badgeText: "🟡 Class 2nd+", hint: "Required for Class 2nd & above" },
+  ADDRESS_PROOF: {
+    label: "Address Proof",
+    badge: "ACCEPTED_VARIANTS",
+    badgeText: "🟢 Address Proof",
+    variants: ["Aadhaar Card", "Electricity Bill", "Water Bill", "Passport", "Rent Agreement", "Ration Card", "Bank Passbook"]
+  }
+};
+
+const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIOUS_MARKSHEET", "OTHER"];
 
   const mandatoryTotal = classFees.length > 0
     ? classFees.filter(f => f.applicability === "MANDATORY").reduce((acc, curr) => {
@@ -294,7 +331,10 @@ export default function ApplicantWorkspace({
   const handleDocStatusChange = (index: number, status: "PENDING" | "VERIFIED" | "REJECTED") => {
     clearError();
     const nextDocs = [...verifyForm.documents];
-    nextDocs[index] = { ...nextDocs[index], status };
+    const currentStatus = nextDocs[index].status;
+    const finalStatus = currentStatus === status ? "PENDING" : status;
+
+    nextDocs[index] = { ...nextDocs[index], status: finalStatus };
     const allVerified = nextDocs.every((d) => d.status === "VERIFIED");
     const anyRejected = nextDocs.some((d) => d.status === "REJECTED");
     let recommendedNextStatus: typeof verifyForm.nextStatus = "DOCUMENT_VERIFICATION";
@@ -318,6 +358,81 @@ export default function ApplicantWorkspace({
     nextDocs[index] = { ...nextDocs[index], remarks };
     setVerifyForm((prev: any) => ({ ...prev, documents: nextDocs }));
   };
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [deleteConfirmDoc, setDeleteConfirmDoc] = useState<any>(null);
+
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [magicUploadData, setMagicUploadData] = useState<{ magicUrl: string; whatsappUrl: string } | null>(null);
+
+  const handleGenerateMagicLink = async () => {
+    if (!selectedApp) return;
+    setGeneratingLink(true);
+    try {
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/generate-upload-link`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMagicUploadData({
+          magicUrl: json.data.magicUrl,
+          whatsappUrl: json.data.whatsappUrl,
+        });
+        setFormError?.(null);
+      } else {
+        setFormError?.(json.error?.message || "Failed to generate upload link");
+      }
+    } catch {
+      setFormError?.("Failed to generate upload link due to network error.");
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleCopyMagicLink = () => {
+    if (!magicUploadData?.magicUrl) return;
+    navigator.clipboard.writeText(magicUploadData.magicUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const handleDeleteDoc = async (doc: any) => {
+    if (!doc) return;
+    if (!doc.id) {
+      setVerifyForm((prev: any) => ({
+        ...prev,
+        documents: prev.documents.filter((d: any) => d.documentType !== doc.documentType),
+      }));
+      setDeleteConfirmDoc(null);
+      return;
+    }
+    setDeletingDocId(doc.id);
+    clearError();
+
+    try {
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/documents/${doc.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setVerifyForm((prev: any) => ({
+          ...prev,
+          documents: prev.documents.filter((d: any) => d.id !== doc.id),
+        }));
+
+        if (onApplicantUpdated && data.application) {
+          onApplicantUpdated(data.application);
+        }
+        setDeleteConfirmDoc(null);
+      } else {
+        setFormError?.(data.error?.message || "Failed to delete document");
+      }
+    } catch (err) {
+      setFormError?.("Network error during document deletion.");
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
 
   const handleCounselorUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -337,9 +452,25 @@ export default function ApplicantWorkspace({
       });
       const data = await res.json();
       if (data.success) {
-         if (fileInputRef.current) fileInputRef.current.value = "";
-         // This will trigger a re-fetch of the application
-         if (onApplicantUpdated) onApplicantUpdated(data.application || selectedApp);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        
+        const updatedDocs = (data.application?.documents || data.documents || []).map((d: any) => ({
+          id: d.id,
+          status: d.status,
+          remarks: d.remarks || "",
+          documentType: d.documentType,
+          fileName: d.fileName,
+          filePath: d.filePath,
+          fileSize: d.fileSize,
+          mimeType: d.mimeType,
+        }));
+
+        setVerifyForm((prev: any) => ({
+          ...prev,
+          documents: updatedDocs,
+        }));
+
+        if (onApplicantUpdated) onApplicantUpdated(data.application || selectedApp);
       } else {
          setFormError?.(data.error?.message || "Failed to upload document");
       }
@@ -490,555 +621,764 @@ export default function ApplicantWorkspace({
   };
 
   return (
-    <div className="w-full min-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden mb-8 animate-in fade-in zoom-in-95 duration-300">
-      {/* Header */}
-      <div className="p-6 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/40 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onClose}
-            className="p-2.5 bg-white dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 rounded-full transition-colors text-slate-600 dark:text-zinc-300 shadow-sm"
-          >
-            <Icon name="arrow_back" size={20} />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary">
-                {statusLabels[selectedApp.status] || selectedApp.status}
-              </span>
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-300 mx-1"></span>
-              <span className="text-xs font-semibold text-slate-400">Application Number:</span>
-              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-300 border border-slate-200/40">
-                {selectedApp.applicationNo}
-              </span>
-            </div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-zinc-100 mt-1.5">
+    <div className="w-full h-full flex flex-col bg-slate-50/60 dark:bg-zinc-950/40 relative animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+      {/* Header & Stepper Section */}
+      <div className="bg-white dark:bg-zinc-950 border-b border-slate-200/60 dark:border-zinc-800 shrink-0">
+        <div className="px-6 py-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={onClose}
+              className="md:hidden p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+            >
+              <Icon name="arrow_back" size={18} />
+            </button>
+            <h2 className="text-base font-bold text-slate-900 dark:text-zinc-100 truncate max-w-[280px] sm:max-w-[400px]" title={`${selectedApp.firstName} ${selectedApp.lastName}`}>
               {selectedApp.firstName} {selectedApp.lastName}
             </h2>
+            <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-zinc-800/80 px-2.5 py-0.5 rounded border border-slate-200/50 dark:border-zinc-700/50 shrink-0">
+              {selectedApp.applicationNo}
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/50 shrink-0">
+              {statusLabels[selectedApp.status] || selectedApp.status}
+            </span>
           </div>
-        </div>
-          {selectedApp.status !== "ADMITTED" && selectedApp.status !== "REJECTED" && selectedApp.status !== "WITHDRAWN" && onWithdrawApplicant && (
-            <Button
-              type="button"
-              variant="outlined"
-              icon="person_off"
-              className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:border-rose-300 rounded-xl h-10 px-4 text-xs font-bold shrink-0 transition-all duration-300 cursor-pointer"
-              onClick={() => setWithdrawDialogOpen(true)}
-            >
-              Withdraw Application
-            </Button>
-          )}
-        </div>
 
-        {/* Stepper Wizard Horizontal Path */}
-        <div className="p-4 bg-white dark:bg-zinc-900 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-around text-center shrink-0 overflow-x-auto select-none">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-zinc-300">
-            <span className="p-1 px-2.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 border">1</span>
-            <span>Submitted</span>
-          </div>
-          <div className="text-slate-300 dark:text-zinc-700">➔</div>
-          <div className="flex items-center gap-1.5 text-xs font-bold">
-            <span
-              className={`p-1 px-2.5 rounded-full ${
-                selectedApp.status !== "SUBMITTED"
-                  ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 border"
-                  : "bg-primary text-white shadow-md shadow-primary/20"
-              }`}
-            >
-              2
-            </span>
-            <span className={selectedApp.status === "DOCUMENT_VERIFICATION" ? "text-primary dark:text-sky-400 font-extrabold" : "text-slate-500"}>
-              Document Verification
-            </span>
-          </div>
-          {hasEntranceTest && (
-            <>
-              <div className="text-slate-300 dark:text-zinc-700">➔</div>
-              <div className="flex items-center gap-1.5 text-xs font-bold">
-                <span
-                  className={`p-1 px-2.5 rounded-full ${
-                    selectedApp.status === "SHORTLISTED" || selectedApp.status === "ADMITTED"
-                      ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 border"
-                      : selectedApp.status === "TEST_SCHEDULED"
-                      ? "bg-primary text-white shadow-md shadow-primary/20"
-                      : "bg-slate-50 dark:bg-zinc-850 text-slate-400 dark:text-zinc-600 border"
-                  }`}
-                >
-                  3
-                </span>
-                <span className={selectedApp.status === "TEST_SCHEDULED" ? "text-primary dark:text-sky-400 font-extrabold" : "text-slate-500"}>
-                  Entrance Test
-                </span>
-              </div>
-            </>
-          )}
-          <div className="text-slate-300 dark:text-zinc-700">➔</div>
-          <div className="flex items-center gap-1.5 text-xs font-bold">
-            <span
-              className={`p-1 px-2.5 rounded-full ${
-                selectedApp.status === "ADMITTED"
-                  ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 border"
-                  : selectedApp.status === "SHORTLISTED"
-                  ? "bg-primary text-white shadow-md shadow-primary/20"
-                  : "bg-slate-50 dark:bg-zinc-850 text-slate-400 dark:text-zinc-600 border"
-              }`}
-            >
-              {hasEntranceTest ? "4" : "3"}
-            </span>
-            <span className={selectedApp.status === "SHORTLISTED" ? "text-primary dark:text-sky-400 font-extrabold" : "text-slate-500"}>
-              Shortlisted Selection
-            </span>
-          </div>
-          <div className="text-slate-300 dark:text-zinc-700">➔</div>
-          <div className="flex items-center gap-1.5 text-xs font-bold">
-            <span
-              className={`p-1 px-2.5 rounded-full ${
-                selectedApp.status === "ADMITTED" ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20" : "bg-slate-50 dark:bg-zinc-850 text-slate-400 dark:text-zinc-600 border"
-              }`}
-            >
-              {hasEntranceTest ? "5" : "4"}
-            </span>
-            <span className={selectedApp.status === "ADMITTED" ? "text-emerald-600 dark:text-emerald-400 font-extrabold" : "text-slate-500"}>
-              Enrolled (SIS)
-            </span>
-          </div>
-        </div>
-
-        {/* Main Split Body Area */}
-        <div className="flex-1 flex overflow-hidden min-h-0">
-          {/* A. Left Pane: Candidate Summary Profile */}
-          <div className="w-[26%] min-w-[280px] max-w-[320px] overflow-y-auto p-6 bg-slate-50/50 dark:bg-zinc-950/20 border-r border-slate-200/60 dark:border-zinc-800/80 space-y-6">
-            {/* Tab toggles & Edit Action */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-zinc-900 border rounded-xl shrink-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("general")}
-                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${
-                    activeTab === "general"
-                      ? "bg-white dark:bg-zinc-900 text-primary dark:text-sky-400 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Profile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("parents")}
-                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${
-                    activeTab === "parents"
-                      ? "bg-white dark:bg-zinc-900 text-primary dark:text-sky-400 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Family
-                </button>
-              </div>
-              {!isEditing && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="p-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-500 hover:text-primary transition-colors shrink-0"
-                  title="Edit Profile Information"
-                >
-                  <Icon name="edit" size={16} />
-                </button>
-              )}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Silicon Valley Mode Switcher Tabs */}
+            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl border border-slate-200/60 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setWorkspaceMode("action_desk")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  workspaceMode === "action_desk"
+                    ? "bg-white dark:bg-zinc-950 text-primary dark:text-sky-400 shadow-xs"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200"
+                }`}
+              >
+                <Icon name="bolt" size={15} />
+                <span>Stage Action Desk</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkspaceMode("student_profile")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  workspaceMode === "student_profile"
+                    ? "bg-white dark:bg-zinc-950 text-primary dark:text-sky-400 shadow-xs"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200"
+                }`}
+              >
+                <Icon name="person" size={15} />
+                <span>Student Profile & Family</span>
+              </button>
             </div>
 
-            {isEditing ? (
-              <form onSubmit={handleEditSubmit} className="space-y-6">
-                {activeTab === "general" ? (
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                      <Icon name="assignment" size={14} /> Application Details
-                    </h3>
-                    <div className="space-y-3 pl-1">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Class</label>
-                        <Select
-                          value={editForm.classId}
-                          onValueChange={(val) => setEditForm((p: any) => ({ ...p, classId: val }))}
-                        >
-                          <SelectTrigger className="h-8 text-xs font-semibold bg-white dark:bg-zinc-950 mt-1">
-                            <SelectValue placeholder="Select Class" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {classes.map((cls) => (
-                              <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">First Name</label>
-                          <input required value={editForm.firstName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, firstName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Last Name</label>
-                          <input required value={editForm.lastName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, lastName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Birth Date</label>
-                        <input required type="date" value={editForm.dateOfBirth ? new Date(editForm.dateOfBirth).toISOString().split('T')[0] : ''} onChange={(e) => setEditForm((p: any) => ({ ...p, dateOfBirth: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gender</label>
-                          <Select value={editForm.gender} onValueChange={(val) => setEditForm((p: any) => ({ ...p, gender: val }))}>
-                            <SelectTrigger className="h-8 text-xs font-semibold bg-white dark:bg-zinc-950 mt-1"><SelectValue /></SelectTrigger>
-                            <SelectContent><SelectItem value="MALE">Male</SelectItem><SelectItem value="FEMALE">Female</SelectItem><SelectItem value="OTHER">Other</SelectItem></SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Blood Group</label>
-                          <input value={editForm.bloodGroup || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, bloodGroup: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Previous School</label>
-                        <input value={editForm.previousSchool || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, previousSchool: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Emergency Contact</label>
-                        <input value={editForm.emergencyContact || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, emergencyContact: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="col-span-2">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Address</label>
-                          <input required value={editForm.address || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, address: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Pincode</label>
-                          <input required value={editForm.pincode || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, pincode: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                        <Icon name="person" size={14} /> Father's Details
-                      </h3>
-                      <div className="space-y-3 pl-1">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Name</label>
-                          <input value={editForm.fatherName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</label>
-                            <input value={editForm.fatherPhone || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherPhone: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</label>
-                            <input type="email" value={editForm.fatherEmail || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherEmail: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</label>
-                          <input value={editForm.fatherOccupation || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, fatherOccupation: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <h3 className="text-xs font-extrabold text-pink-500 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                        <Icon name="person" size={14} className="text-pink-500" /> Mother's Details
-                      </h3>
-                      <div className="space-y-3 pl-1">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Name</label>
-                          <input value={editForm.motherName || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherName: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</label>
-                            <input value={editForm.motherPhone || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherPhone: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</label>
-                            <input type="email" value={editForm.motherEmail || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherEmail: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</label>
-                          <input value={editForm.motherOccupation || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, motherOccupation: e.target.value }))} className="w-full h-8 px-2 text-xs rounded-lg border mt-1" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-end gap-2 sticky bottom-0 bg-slate-50/90 dark:bg-zinc-950/90 py-2 backdrop-blur-sm z-10">
-                  <Button type="button" variant="outlined" size="sm" onClick={() => setIsEditing(false)} disabled={editLoading}>Cancel</Button>
-                  <Button type="submit" variant="filled" size="sm" loading={editLoading}>Save Changes</Button>
-                </div>
-              </form>
-            ) : (
-              // READ ONLY VIEW
-              activeTab === "general" ? (
-                <div className="space-y-6">
-                  {/* Application details */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                      <Icon name="assignment" size={14} />
-                      Application Details
-                    </h3>
-                    <div className="space-y-3.5 pl-1">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Class</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.class?.name || "N/A"}</p>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Academic Year</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.academicYear?.name || "N/A"}</p>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Previous School</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.previousSchool || "—"}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Personal details */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                      <Icon name="person" size={14} />
-                      Personal Details
-                    </h3>
-                    <div className="space-y-3.5 pl-1">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Full Name</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.firstName} {selectedApp.lastName}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Birth Date</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">
-                            {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "long",
-                              year: "numeric",
-                            })}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gender</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.gender}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Blood Group</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.bloodGroup || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Emergency Phone</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.emergencyContact || "—"}</p>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Residence Address</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 leading-relaxed">
-                          {selectedApp.address}, {selectedApp.pincode}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Father profile */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-extrabold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                      <Icon name="person" size={14} />
-                      Father's Details
-                    </h3>
-                    <div className="space-y-3.5 pl-1">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Father's Name</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherName || "—"}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherPhone || "—"}</p>
-                        </div>
-                        <div className="overflow-hidden">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 truncate">{selectedApp.fatherEmail || "—"}</p>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.fatherOccupation || "—"}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Mother profile */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-extrabold text-pink-500 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
-                      <Icon name="person" size={14} className="text-pink-500" />
-                      Mother's Details
-                    </h3>
-                    <div className="space-y-3.5 pl-1">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Mother's Name</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherName || "—"}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Phone</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherPhone || "—"}</p>
-                        </div>
-                        <div className="overflow-hidden">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</span>
-                          <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5 truncate">{selectedApp.motherEmail || "—"}</p>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Occupation</span>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{selectedApp.motherOccupation || "—"}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
+            {selectedApp.status !== "ADMITTED" && selectedApp.status !== "REJECTED" && selectedApp.status !== "WITHDRAWN" && onWithdrawApplicant && (
+              <button
+                type="button"
+                onClick={() => setWithdrawDialogOpen(true)}
+                className="text-xs font-semibold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0"
+                title="Withdraw Application"
+              >
+                <Icon name="person_off" size={14} />
+                <span className="hidden sm:inline">Withdraw</span>
+              </button>
             )}
           </div>
+        </div>
 
-          {/* B. Right Pane: Process Actions Desk (Dynamic Stage Wizards) */}
-          <div className="w-[74%] flex-1 overflow-y-auto p-6 min-h-0 bg-slate-50/10 dark:bg-zinc-900/10">
-            {/* WIZARD: DOCUMENT CHECK (Submitted or Document Verification stages) */}
-            {(selectedApp.status === "SUBMITTED" || selectedApp.status === "DOCUMENT_VERIFICATION") && (
-              <form onSubmit={onVerifyDocs} className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
-                    <Icon name="check_circle" size={16} className="text-amber-500" />
-                    Document Checklist Review
-                  </h3>
+        {/* Stepper Pipeline (Visible in Action Desk Mode) */}
+        {workspaceMode === "action_desk" && (
+          <div className="px-6 py-2.5 bg-slate-50/60 dark:bg-zinc-900/40 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 shrink-0 overflow-x-auto select-none">
+            <div className="flex items-center gap-2 text-xs font-semibold shrink-0">
+              <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
+              <span className="text-slate-700 dark:text-zinc-300 font-bold">Submitted</span>
+            </div>
 
-                  {verifyForm.documents.length === 0 ? (
-                    <div className="p-6 text-center border border-dashed rounded-2xl text-slate-400 bg-slate-50/50">
-                      <Icon name="upload" size={24} className="opacity-40 mb-1" />
-                      <p className="text-xs font-bold">No documents uploaded yet.</p>
-                      <p className="text-[10px] opacity-60 mt-0.5">Please add internal notes and proceed with Selection or Rejection.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {verifyForm.documents.map((doc, index) => (
-                        <div
-                          key={doc.id}
-                          className="p-3 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/10 dark:bg-zinc-950/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className="p-2 rounded-xl bg-white dark:bg-zinc-900 border text-slate-500 dark:text-zinc-400">
-                              <Icon name="menu_book" size={14} />
-                            </span>
-                            <div>
-                              <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                                {doc.documentType}
-                              </span>
-                              <div className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">
-                                Status: <strong className={
-                                  doc.status === "VERIFIED"
-                                    ? "text-emerald-600 dark:text-emerald-400"
-                                    : doc.status === "REJECTED"
-                                    ? "text-red-500"
-                                    : "text-amber-500"
-                                }>{doc.status}</strong>
-                              </div>
-                            </div>
-                          </div>
+            <div className="h-0.5 flex-1 bg-slate-200 dark:bg-zinc-800 min-w-[20px] max-w-[60px]" />
 
-                          <div className="flex flex-wrap items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="Remarks..."
-                              value={doc.remarks}
-                              onChange={(e) => handleDocRemarksChange(index, e.target.value)}
-                              className="w-40 h-8 px-3.5 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all"
-                            />
+            <div className="flex items-center gap-2 text-xs font-semibold shrink-0">
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                selectedApp.status !== "SUBMITTED"
+                  ? "bg-emerald-500 text-white"
+                  : "bg-primary text-white ring-2 ring-primary/20"
+              }`}>
+                {selectedApp.status !== "SUBMITTED" ? "✓" : "2"}
+              </span>
+              <span className={selectedApp.status === "DOCUMENT_VERIFICATION" ? "text-primary dark:text-sky-400 font-bold" : "text-slate-500"}>
+                Doc Verification
+              </span>
+            </div>
 
-                            <div className="flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-zinc-900 rounded-xl border">
-                              <button
-                                type="button"
-                                onClick={() => handleDocStatusChange(index, "VERIFIED")}
-                                className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-0.5 ${
-                                  doc.status === "VERIFIED" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-700"
-                                }`}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDocStatusChange(index, "REJECTED")}
-                                className={`p-1 px-2 rounded-lg text-[10px] font-bold flex items-center gap-0.5 ${
-                                  doc.status === "REJECTED" ? "bg-red-500 text-white shadow-sm" : "text-slate-400 hover:text-slate-700"
-                                }`}
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            {hasEntranceTest && (
+              <>
+                <div className="h-0.5 flex-1 bg-slate-200 dark:bg-zinc-800 min-w-[20px] max-w-[60px]" />
+                <div className="flex items-center gap-2 text-xs font-semibold shrink-0">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    selectedApp.status === "SHORTLISTED" || selectedApp.status === "ADMITTED"
+                      ? "bg-emerald-500 text-white"
+                      : selectedApp.status === "TEST_SCHEDULED"
+                      ? "bg-primary text-white ring-2 ring-primary/20"
+                      : "bg-slate-200 dark:bg-zinc-800 text-slate-400"
+                  }`}>
+                    3
+                  </span>
+                  <span className={selectedApp.status === "TEST_SCHEDULED" ? "text-primary dark:text-sky-400 font-bold" : "text-slate-500"}>
+                    Entrance Test
+                  </span>
+                </div>
+              </>
+            )}
 
-                  {/* Counselor Upload Section */}
-                  <div className="p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/50 flex flex-col sm:flex-row items-center gap-3">
-                    <select
-                      value={selectedDocType}
-                      onChange={(e) => setSelectedDocType(e.target.value)}
-                      className="h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      {DOC_TYPES.map(dt => (
-                        <option key={dt} value={dt}>{dt.replace(/_/g, " ")}</option>
-                      ))}
-                    </select>
-                    
+            <div className="h-0.5 flex-1 bg-slate-200 dark:bg-zinc-800 min-w-[20px] max-w-[60px]" />
+
+            <div className="flex items-center gap-2 text-xs font-semibold shrink-0">
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                selectedApp.status === "ADMITTED"
+                  ? "bg-emerald-500 text-white"
+                  : selectedApp.status === "SHORTLISTED"
+                  ? "bg-primary text-white ring-2 ring-primary/20"
+                  : "bg-slate-200 dark:bg-zinc-800 text-slate-400"
+              }`}>
+                {hasEntranceTest ? "4" : "3"}
+              </span>
+              <span className={selectedApp.status === "SHORTLISTED" ? "text-primary dark:text-sky-400 font-bold" : "text-slate-500"}>
+                Shortlisted
+              </span>
+            </div>
+
+            <div className="h-0.5 flex-1 bg-slate-200 dark:bg-zinc-800 min-w-[20px] max-w-[60px]" />
+
+            <div className="flex items-center gap-2 text-xs font-semibold shrink-0">
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                selectedApp.status === "ADMITTED" ? "bg-emerald-600 text-white" : "bg-slate-200 dark:bg-zinc-800 text-slate-400"
+              }`}>
+                {hasEntranceTest ? "5" : "4"}
+              </span>
+              <span className={selectedApp.status === "ADMITTED" ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-slate-500"}>
+                Enrolled
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Main View Area */}
+      <div className="flex-1 overflow-y-auto min-h-0 bg-white dark:bg-zinc-950 p-6">
+        {workspaceMode === "student_profile" ? (
+          <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-300">
+            {isEditing ? (
+              <form onSubmit={handleEditSubmit} className="space-y-6 bg-white dark:bg-zinc-950 p-6 border border-slate-200/80 dark:border-zinc-800 rounded-2xl shadow-xs">
+                <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-800">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 flex items-center gap-2">
+                    <Icon name="edit" size={16} className="text-primary" />
+                    Edit Student & Family Details
+                  </h4>
+                  <span className="text-[11px] text-slate-400">Update candidate information</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">First Name *</label>
                     <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleCounselorUpload}
-                      className="hidden"
-                      accept="image/*,.pdf"
+                      type="text"
+                      required
+                      value={editForm.firstName || ""}
+                      onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                      className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingDoc}
-                      className="h-9 px-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Last Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editForm.lastName || ""}
+                      onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                      className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={editForm.dateOfBirth ? new Date(editForm.dateOfBirth).toISOString().split('T')[0] : ""}
+                      onChange={(e) => setEditForm({ ...editForm, dateOfBirth: e.target.value })}
+                      className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Gender</label>
+                    <select
+                      value={editForm.gender || "MALE"}
+                      onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
+                      className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     >
-                      {uploadingDoc ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="cloud_upload" size={14} />}
-                      {uploadingDoc ? "Uploading..." : "Upload Document"}
-                    </button>
-                    <p className="text-[10px] text-slate-400">Add missing documents manually.</p>
+                      <option value="MALE">MALE</option>
+                      <option value="FEMALE">FEMALE</option>
+                      <option value="OTHER">OTHER</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Blood Group</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. O+, A+"
+                      value={editForm.bloodGroup || ""}
+                      onChange={(e) => setEditForm({ ...editForm, bloodGroup: e.target.value })}
+                      className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Emergency Contact</label>
+                    <input
+                      type="text"
+                      placeholder="10-digit Mobile"
+                      value={editForm.emergencyContact || ""}
+                      onChange={(e) => setEditForm({ ...editForm, emergencyContact: e.target.value })}
+                      className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5 w-full">
-                  <span className="text-[11px] font-black tracking-wider uppercase text-slate-500 dark:text-slate-400 px-0.5 select-none">
-                    Clerk Review Verification Notes
-                  </span>
+                {/* Family Details Edit */}
+                <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 space-y-4">
+                  <h5 className="text-xs font-bold text-slate-700 dark:text-zinc-300">Family Information</h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl border border-slate-100 dark:border-zinc-800 bg-slate-50/30 space-y-3">
+                      <span className="text-[10px] font-bold uppercase text-primary">Father Details</span>
+                      <input
+                        type="text"
+                        placeholder="Father Name"
+                        value={editForm.fatherName || ""}
+                        onChange={(e) => setEditForm({ ...editForm, fatherName: e.target.value })}
+                        className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Father Phone"
+                        value={editForm.fatherPhone || ""}
+                        onChange={(e) => setEditForm({ ...editForm, fatherPhone: e.target.value })}
+                        className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Father Email"
+                        value={editForm.fatherEmail || ""}
+                        onChange={(e) => setEditForm({ ...editForm, fatherEmail: e.target.value })}
+                        className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+                      />
+                    </div>
+
+                    <div className="p-4 rounded-xl border border-slate-100 dark:border-zinc-800 bg-slate-50/30 space-y-3">
+                      <span className="text-[10px] font-bold uppercase text-pink-500">Mother Details</span>
+                      <input
+                        type="text"
+                        placeholder="Mother Name"
+                        value={editForm.motherName || ""}
+                        onChange={(e) => setEditForm({ ...editForm, motherName: e.target.value })}
+                        className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Mother Phone"
+                        value={editForm.motherPhone || ""}
+                        onChange={(e) => setEditForm({ ...editForm, motherPhone: e.target.value })}
+                        className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Mother Email"
+                        value={editForm.motherEmail || ""}
+                        onChange={(e) => setEditForm({ ...editForm, motherEmail: e.target.value })}
+                        className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                  <label className="text-[10px] font-bold uppercase text-slate-400">Residential Address</label>
                   <textarea
                     rows={2}
-                    value={verifyForm.verificationNotes}
-                    onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, verificationNotes: e.target.value }))}
-                    placeholder="Record mismatches or requests for re-upload..."
-                    className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none"
+                    placeholder="Full Address..."
+                    value={editForm.address || ""}
+                    onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                    className="w-full p-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                   />
                 </div>
 
-                <div className="p-4 rounded-2xl border border-primary/10 bg-primary/[0.02] dark:bg-sky-500/[0.01] space-y-3.5">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                    Next Stage Transition
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 h-10 text-xs font-bold rounded-xl border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <Button
+                    type="submit"
+                    variant="filled"
+                    loading={editLoading}
+                    icon="check"
+                    className="bg-primary text-white hover:bg-primary/95 rounded-xl h-10 px-5 font-bold shadow-md shadow-primary/15 cursor-pointer"
+                  >
+                    Save Profile Changes
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              /* SMART 2-COLUMN ALL-IN-ONE VIEW (NO HERO CARD & NO EXTRA CLICKS!) */
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* LEFT CARD (7/12 = 60%): Student Personal & Academic Details */}
+                <div className="lg:col-span-7 bg-white dark:bg-zinc-950 p-6 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-800">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+                      <Icon name="person" size={16} className="text-primary" />
+                      Student Personal & Academic Details
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditForm(selectedApp);
+                        setIsEditing(true);
+                      }}
+                      className="px-3 py-1.5 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-slate-700 dark:text-zinc-300 hover:text-primary transition-colors flex items-center gap-1.5 text-xs font-bold shadow-2xs cursor-pointer"
+                    >
+                      <Icon name="edit" size={14} />
+                      <span>Edit Profile</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Name</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">{selectedApp.firstName} {selectedApp.lastName}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Class</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">{selectedApp.class?.name || "N/A"}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Academic Year</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">{selectedApp.academicYear?.name || "N/A"}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Birth Date</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">
+                        {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gender</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">{selectedApp.gender || "Not specified"}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Blood Group</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">{selectedApp.bloodGroup || "Not specified"}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 dark:border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Emergency Contact</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">{selectedApp.emergencyContact || "Not specified"}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Residential Address</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100 mt-1">
+                        {[selectedApp.address, selectedApp.pincode].filter(Boolean).join(", ") || "Not specified"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT CARD (5/12 = 40%): Family & Guardian Information */}
+                <div className="lg:col-span-5 bg-white dark:bg-zinc-950 p-6 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 shadow-xs space-y-5">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
+                    <Icon name="family_restroom" size={16} className="text-emerald-600" />
+                    Family & Guardian Information
+                  </h4>
+
+                  <div className="space-y-4">
+                    {/* Father */}
+                    <div className="p-3.5 rounded-xl bg-slate-50/50 dark:bg-zinc-900/40 border border-slate-200/50 dark:border-zinc-800 space-y-1.5">
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">Father Details</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">{selectedApp.fatherName || "Not specified"}</p>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-3 flex-wrap">
+                        {selectedApp.fatherPhone && <span>📞 {selectedApp.fatherPhone}</span>}
+                        {selectedApp.fatherEmail && <span>✉️ {selectedApp.fatherEmail}</span>}
+                      </div>
+                    </div>
+
+                    {/* Mother */}
+                    <div className="p-3.5 rounded-xl bg-slate-50/50 dark:bg-zinc-900/40 border border-slate-200/50 dark:border-zinc-800 space-y-1.5">
+                      <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider block">Mother Details</span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">{selectedApp.motherName || "Not specified"}</p>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-3 flex-wrap">
+                        {selectedApp.motherPhone && <span>📞 {selectedApp.motherPhone}</span>}
+                        {selectedApp.motherEmail && <span>✉️ {selectedApp.motherEmail}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* WIZARD: DOCUMENT CHECK (Submitted or Document Verification stages) */}
+            {(selectedApp.status === "SUBMITTED" || selectedApp.status === "DOCUMENT_VERIFICATION") && (
+              <form onSubmit={onVerifyDocs} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
+                {/* LEFT COLUMN: Documents Manager (60% width) */}
+                <div className="lg:col-span-7 space-y-4 bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 shadow-xs">
+                  <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-800">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2">
+                        <Icon name="check_circle" size={18} className="text-amber-500" />
+                        Document Verification Checklist
+                      </h3>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 rounded-full border border-slate-200/50">
+                      {verifyForm.documents.length} File(s) Uploaded
+                    </span>
+                  </div>
+
+                  {/* WhatsApp Parent Upload Action Bar */}
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-blue-950/40 border border-emerald-200/60 dark:border-emerald-800/60 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
+                        📲
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-1.5">
+                          <span>Parent Mobile Upload Link</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                            WhatsApp Ready
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                          Send a 1-tap secure link to parents so they can upload documents from their phone.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!magicUploadData ? (
+                        <button
+                          type="button"
+                          disabled={generatingLink}
+                          onClick={handleGenerateMagicLink}
+                          className="h-8 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-900/20"
+                        >
+                          {generatingLink ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Generating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Icon name="share" size={14} />
+                              <span>Generate Link</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleCopyMagicLink}
+                            className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-zinc-700"
+                          >
+                            <Icon name={copiedLink ? "check" : "content_copy"} size={14} className={copiedLink ? "text-emerald-500" : ""} />
+                            <span>{copiedLink ? "Copied!" : "Copy Link"}</span>
+                          </button>
+
+                          <a
+                            href={magicUploadData.whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-8 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-900/20"
+                          >
+                            <span>📲</span>
+                            <span>Send WhatsApp</span>
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Uploaded Documents List */}
+                  {verifyForm.documents.length === 0 ? (
+                    <div className="p-8 text-center border border-dashed rounded-2xl text-slate-400 bg-slate-50/50 dark:bg-zinc-900/30">
+                      <Icon name="cloud_upload" size={28} className="opacity-40 mb-1.5" />
+                      <p className="text-xs font-bold text-slate-700 dark:text-zinc-300">No documents uploaded yet.</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Select a mandatory document below to upload.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {verifyForm.documents.map((doc, index) => {
+                        const meta = DOCUMENT_META[doc.documentType] || { label: doc.documentType, badgeText: "Document" };
+                        const isPdf = doc.filePath?.toLowerCase().endsWith(".pdf");
+
+                        return (
+                          <div
+                            key={doc.id || doc.documentType}
+                            className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800/90 shadow-xs hover:border-slate-300 dark:hover:border-zinc-700 hover:shadow-md transition-all duration-200 group"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              {/* Left Meta & Status */}
+                              <div className="flex items-start gap-3 min-w-0">
+                                <span className={`p-2.5 rounded-xl border shrink-0 mt-0.5 ${
+                                  isPdf 
+                                    ? "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border-rose-100 dark:border-rose-900/40"
+                                    : "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 border-blue-100 dark:border-blue-900/40"
+                                }`}>
+                                  <Icon name={isPdf ? "picture_as_pdf" : "image"} size={20} />
+                                </span>
+
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-xs font-bold text-slate-900 dark:text-zinc-100 truncate">
+                                      {meta.label}
+                                    </h4>
+
+                                    {/* Badge Pill */}
+                                    {meta.badge === "MANDATORY" && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/50">
+                                        Mandatory
+                                      </span>
+                                    )}
+                                    {meta.badge === "CONDITIONAL" && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/50">
+                                        Class 2nd+
+                                      </span>
+                                    )}
+                                    {meta.badge === "ACCEPTED_VARIANTS" && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/50">
+                                        Address Proof
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 dark:text-zinc-500 mt-1">
+                                    <span className="flex items-center gap-1">
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        doc.status === "VERIFIED"
+                                          ? "bg-emerald-500 shadow-xs shadow-emerald-500/50"
+                                          : doc.status === "REJECTED"
+                                          ? "bg-rose-500 shadow-xs shadow-rose-500/50"
+                                          : "bg-amber-500 shadow-xs shadow-amber-500/50 animate-pulse"
+                                      }`} />
+                                      <strong className={`font-bold ${
+                                        doc.status === "VERIFIED"
+                                          ? "text-emerald-600 dark:text-emerald-400"
+                                          : doc.status === "REJECTED"
+                                          ? "text-rose-600 dark:text-rose-400"
+                                          : "text-amber-600 dark:text-amber-400"
+                                      }`}>
+                                        {doc.status}
+                                      </strong>
+                                    </span>
+
+                                    {doc.fileName && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="truncate max-w-[140px] text-slate-500 dark:text-zinc-400 font-mono text-[10px]">{doc.fileName}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Action Cluster */}
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                {doc.filePath && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewDoc(doc)}
+                                    className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-primary transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                    title="Preview uploaded document"
+                                  >
+                                    <Icon name="visibility" size={13} />
+                                    <span>Preview</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDocType(doc.documentType);
+                                    fileInputRef.current?.click();
+                                  }}
+                                  className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                  title="Replace file with a new upload"
+                                >
+                                  <Icon name="sync" size={13} />
+                                  <span>Change</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmDoc(doc)}
+                                  disabled={deletingDocId === doc.id}
+                                  className="h-8 w-8 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center justify-center cursor-pointer shrink-0"
+                                  title="Delete document"
+                                >
+                                  <Icon name="delete" size={15} />
+                                </button>
+
+                                {/* Approve / Reject Segmented Switch */}
+                                <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-zinc-800/80 rounded-xl border border-slate-200/60 dark:border-zinc-700/60">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDocStatusChange(index, "VERIFIED")}
+                                    title={doc.status === "VERIFIED" ? "Click to reset status to Pending" : "Approve document"}
+                                    className={`h-6 px-2.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                      doc.status === "VERIFIED" 
+                                        ? "bg-emerald-600 text-white shadow-sm" 
+                                        : "text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                    }`}
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDocStatusChange(index, "REJECTED")}
+                                    title={doc.status === "REJECTED" ? "Click to reset status to Pending" : "Reject document"}
+                                    className={`h-6 px-2.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                      doc.status === "REJECTED" 
+                                        ? "bg-rose-600 text-white shadow-sm" 
+                                        : "text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                    }`}
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Remarks Input Sub-Bar */}
+                            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60">
+                              <input
+                                type="text"
+                                placeholder="Add verification remarks or mismatch note..."
+                                value={doc.remarks || ""}
+                                onChange={(e) => handleDocRemarksChange(index, e.target.value)}
+                                className="w-full h-8 px-3 text-xs rounded-xl border border-slate-200/80 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/50 focus:bg-white dark:focus:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20 text-slate-800 dark:text-zinc-200 transition-all placeholder:text-slate-400"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* SMART UPLOAD SECTION: Auto-filter already uploaded & verified documents */}
+                  {(() => {
+                    // Filter out documents that are already uploaded and VERIFIED
+                    const availableDocTypes = DOC_TYPES.filter(type => {
+                      const existing = verifyForm.documents.find((d: any) => d.documentType === type);
+                      return !existing || existing.status === "REJECTED";
+                    });
+
+                    if (availableDocTypes.length === 0) {
+                      return (
+                        <div className="p-3.5 rounded-xl border border-emerald-200/60 bg-emerald-50/40 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                          <Icon name="check_circle" size={18} className="text-emerald-600 shrink-0" />
+                          <span>✨ All required checklist documents have been uploaded.</span>
+                        </div>
+                      );
+                    }
+
+                    const activeMeta = DOCUMENT_META[selectedDocType] || { label: selectedDocType, badgeText: "Document" };
+
+                    return (
+                      <div className="pt-2 border-t border-slate-100 dark:border-zinc-800 space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Upload Missing Document
+                        </span>
+                        <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-900/20 flex flex-col sm:flex-row items-center gap-3">
+                          <div className="flex-1 w-full">
+                            <Select
+                              value={selectedDocType}
+                              onValueChange={(val) => setSelectedDocType(val)}
+                            >
+                              <SelectTrigger className="w-full h-10 px-3.5 text-xs rounded-xl border-slate-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 font-medium focus:ring-2 focus:ring-primary/20 shadow-2xs">
+                                <SelectValue placeholder="Select Document Type..." />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900 p-1">
+                                {availableDocTypes.map((type) => {
+                                  const meta = DOCUMENT_META[type] || { label: type, badgeText: "" };
+                                  return (
+                                    <SelectItem key={type} value={type} className="rounded-xl text-xs py-2.5 cursor-pointer focus:bg-slate-100 dark:focus:bg-zinc-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full ${
+                                          meta.badge === "MANDATORY"
+                                            ? "bg-rose-500"
+                                            : meta.badge === "CONDITIONAL"
+                                            ? "bg-amber-500"
+                                            : "bg-emerald-500"
+                                        }`} />
+                                        <span className="font-bold text-slate-800 dark:text-zinc-200">{meta.label}</span>
+                                        {meta.badgeText && (
+                                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 ml-auto">({meta.badgeText})</span>
+                                        )}
+                                      </div>
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleCounselorUpload}
+                            className="hidden"
+                            accept="image/*,.pdf"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingDoc}
+                            className="h-9 px-4 rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-2 hover:bg-primary/95 transition-colors disabled:opacity-50 shrink-0 cursor-pointer shadow-md shadow-primary/10"
+                          >
+                            {uploadingDoc ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="cloud_upload" size={15} />}
+                            {uploadingDoc ? "Uploading..." : "Upload File"}
+                          </button>
+                        </div>
+
+                        {/* Helper info for Address Proof Variants */}
+                        {activeMeta.variants && (
+                          <div className="p-2.5 rounded-lg bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 text-[11px] text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                            <Icon name="info" size={14} className="shrink-0 mt-0.5" />
+                            <span>
+                              <strong>Accepted Address Proofs:</strong> {activeMeta.variants.join(", ")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* RIGHT COLUMN: Action & Decision Panel (40% width) */}
+                <div className="lg:col-span-5 space-y-4 bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 shadow-xs">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
+                    <Icon name="gavel" size={18} className="text-primary" />
+                    Verification Decision
+                  </h3>
+
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      Next Stage Transition
+                    </label>
                     <Select
                       value={verifyForm.nextStatus}
                       onValueChange={(val: any) => setVerifyForm((prev: any) => ({ ...prev, nextStatus: val }))}
@@ -1053,21 +1393,20 @@ export default function ApplicantWorkspace({
                         <SelectItem value="REJECTED">Reject Applicant</SelectItem>
                       </SelectContent>
                     </Select>
-                    <div className="text-[11px] text-slate-400 dark:text-zinc-500 flex items-center pl-1 font-semibold">
-                      <span>
-                        {verifyForm.nextStatus === "TEST_SCHEDULED"
-                          ? "✨ Promotes candidate to Entrance Exam scheduling."
-                          : verifyForm.nextStatus === "SHORTLISTED"
-                          ? "✨ Shortlists candidate for Registrar promotion."
-                          : verifyForm.nextStatus === "REJECTED"
-                          ? "⚠️ Moves candidate to archives as Rejected."
-                          : "✨ Holds candidate at Verification Stage."}
-                      </span>
-                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium pt-1">
+                      {verifyForm.nextStatus === "TEST_SCHEDULED"
+                        ? "✨ Promotes candidate to Entrance Exam scheduling."
+                        : verifyForm.nextStatus === "SHORTLISTED"
+                        ? "✨ Shortlists candidate for Registrar promotion."
+                        : verifyForm.nextStatus === "REJECTED"
+                        ? "⚠️ Moves candidate to archives as Rejected."
+                        : "✨ Holds candidate at Verification Stage."}
+                    </p>
                   </div>
+
                   {verifyForm.nextStatus === "REJECTED" && (
-                    <div className="flex flex-col gap-1.5 mt-3">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                         Rejection Reason <span className="text-red-500">*</span>
                       </span>
                       <textarea
@@ -1080,25 +1419,38 @@ export default function ApplicantWorkspace({
                       />
                     </div>
                   )}
-                </div>
 
-                {formError && (
-                  <div className="p-4 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2.5">
-                    <Icon name="warning" size={16} className="text-red-500 shrink-0" />
-                    <span>{formError}</span>
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      Verification Notes
+                    </span>
+                    <textarea
+                      rows={3}
+                      value={verifyForm.verificationNotes}
+                      onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, verificationNotes: e.target.value }))}
+                      placeholder="Record mismatches or requests for re-upload..."
+                      className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none"
+                    />
                   </div>
-                )}
 
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button
-                    type="submit"
-                    variant="filled"
-                    icon="check"
-                    loading={actionLoading}
-                    className="bg-primary text-white hover:bg-primary/95 rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/15"
-                  >
-                    Save Verification Details
-                  </Button>
+                  {formError && (
+                    <div className="p-3 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                      <Icon name="warning" size={16} className="text-red-500 shrink-0" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <Button
+                      type="submit"
+                      variant="filled"
+                      icon="check"
+                      loading={actionLoading}
+                      className="w-full bg-primary text-white hover:bg-primary/95 rounded-xl h-11 font-bold shadow-md shadow-primary/15"
+                    >
+                      Save Verification Details
+                    </Button>
+                  </div>
                 </div>
               </form>
             )}
@@ -1112,7 +1464,6 @@ export default function ApplicantWorkspace({
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                  {/* Test Date */}
                   <div className="flex flex-col gap-1.5 w-full">
                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                       Test Date <span className="text-red-500">*</span>
@@ -1126,7 +1477,6 @@ export default function ApplicantWorkspace({
                     />
                   </div>
 
-                  {/* Maximum Marks */}
                   <div className="flex flex-col gap-1.5 w-full">
                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                       Maximum Marks <span className="text-red-500">*</span>
@@ -1141,62 +1491,53 @@ export default function ApplicantWorkspace({
                     />
                   </div>
 
-                  {/* Marks Obtained */}
                   <div className="flex flex-col gap-1.5 w-full">
                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                       Marks Obtained
                     </label>
                     <input
                       type="number"
-                      value={examForm.marksObtained}
+                      value={examForm.marksObtained !== null ? String(examForm.marksObtained) : ""}
                       onChange={(e) => handleExamChange("marksObtained", e.target.value)}
-                      placeholder="Leave blank if pending"
+                      placeholder="e.g. 85"
                       className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
                     />
                   </div>
                 </div>
 
-                {/* Verdict Grid */}
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                    Evaluation Verdict
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                      { id: "PASS", name: "Pass", icon: "check_circle", activeBg: "bg-emerald-600 text-white shadow-md shadow-emerald-600/10", borderClass: "border-emerald-100 text-emerald-700 bg-emerald-50/10 hover:bg-emerald-50/30" },
-                      { id: "FAIL", name: "Fail", icon: "cancel", activeBg: "bg-red-500 text-white shadow-md shadow-red-500/10", borderClass: "border-red-100 text-red-700 bg-red-50/10 hover:bg-red-50/30" },
-                      { id: "BORDERLINE", name: "Borderline", icon: "warning", activeBg: "bg-amber-500 text-white shadow-md shadow-amber-500/10", borderClass: "border-amber-100 text-amber-700 bg-amber-50/10 hover:bg-amber-50/30" },
-                      { id: "PENDING", name: "Pending", icon: "lock_reset", activeBg: "bg-slate-500 text-white shadow-md shadow-slate-500/10", borderClass: "border-slate-100 text-slate-600 bg-slate-50/10 hover:bg-slate-50/30" }
-                    ].map((v) => {
-                      const isActive = examForm.verdict === v.id;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => handleExamChange("verdict", v.id)}
-                          className={`p-3 border rounded-2xl flex flex-col items-center justify-center text-center gap-1 font-bold text-[11px] transition-all duration-300 ${
-                            isActive ? v.activeBg : v.borderClass
-                          }`}
-                        >
-                          <Icon name={v.icon} size={16} className={isActive ? "text-white" : ""} />
-                          <span>{v.name}</span>
-                        </button>
-                      );
-                    })}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      Exam Verdict / Status <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={examForm.verdict}
+                      onValueChange={(val: any) => handleExamChange("verdict", val)}
+                    >
+                      <SelectTrigger fullWidth className="h-12 rounded-xl border-slate-200 dark:border-zinc-800 text-sm font-semibold">
+                        <SelectValue placeholder="Select Verdict" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PASSED">Passed (Recommend for Shortlist)</SelectItem>
+                        <SelectItem value="FAILED">Failed</SelectItem>
+                        <SelectItem value="PENDING">Pending Evaluation</SelectItem>
+                        <SelectItem value="ABSENT">Absent</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </div>
 
-                <div className="flex flex-col gap-1.5 w-full">
-                  <span className="text-[11px] font-black tracking-wider uppercase text-slate-500 dark:text-slate-400 px-0.5 select-none">
-                    Evaluator Comments
-                  </span>
-                  <textarea
-                    rows={2}
-                    value={examForm.notes}
-                    onChange={(e) => handleExamChange("notes", e.target.value)}
-                    placeholder="Record interview notes, behavior observations..."
-                    className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none"
-                  />
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      Evaluator Notes
+                    </label>
+                    <input
+                      type="text"
+                      value={examForm.notes}
+                      onChange={(e) => handleExamChange("notes", e.target.value)}
+                      placeholder="Observation during test..."
+                      className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    />
+                  </div>
                 </div>
 
                 <div className="p-4 rounded-2xl border border-primary/10 bg-primary/[0.02] dark:bg-sky-500/[0.01] space-y-3.5">
@@ -1212,36 +1553,21 @@ export default function ApplicantWorkspace({
                         <SelectValue placeholder="Select Next Stage" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="TEST_SCHEDULED">Keep at Entrance Exam (Pending)</SelectItem>
-                        <SelectItem value="SHORTLISTED">Promote to Shortlisted Desk (Passed)</SelectItem>
-                        <SelectItem value="REJECTED">Move to Rejected Archives (Failed)</SelectItem>
+                        <SelectItem value="TEST_SCHEDULED">Keep at Entrance Exam (Hold)</SelectItem>
+                        <SelectItem value="SHORTLISTED">Shortlist Candidate (Pass)</SelectItem>
+                        <SelectItem value="REJECTED">Reject Candidate (Fail)</SelectItem>
                       </SelectContent>
                     </Select>
                     <div className="text-[11px] text-slate-400 dark:text-zinc-500 flex items-center pl-1 font-semibold">
                       <span>
                         {examForm.applicationStatus === "SHORTLISTED"
-                          ? "✨ Promotes candidate to final Registrar Desk selection."
+                          ? "✨ Promotes candidate to Shortlisted status."
                           : examForm.applicationStatus === "REJECTED"
-                          ? "⚠️ Moves candidate to archives as Rejected."
-                          : "✨ Holds candidate under exam evaluations."}
+                          ? "⚠️ Rejects candidate based on exam performance."
+                          : "✨ Keeps candidate at Entrance Exam stage."}
                       </span>
                     </div>
                   </div>
-                  {(examForm.applicationStatus === "REJECTED" || examForm.verdict === "FAIL") && (
-                    <div className="flex flex-col gap-1.5 mt-3">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Rejection Reason <span className="text-red-500">*</span>
-                      </span>
-                      <textarea
-                        rows={2}
-                        required
-                        value={examForm.archiveReason || ""}
-                        onChange={(e) => handleExamChange("archiveReason", e.target.value)}
-                        placeholder="Specify why the applicant is being rejected..."
-                        className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none font-semibold"
-                      />
-                    </div>
-                  )}
                 </div>
 
                 {formError && (
@@ -1251,7 +1577,7 @@ export default function ApplicantWorkspace({
                   </div>
                 )}
 
-                <div className="flex justify-end pt-2">
+                <div className="flex justify-end gap-3 pt-2">
                   <Button
                     type="submit"
                     variant="filled"
@@ -1259,525 +1585,79 @@ export default function ApplicantWorkspace({
                     loading={actionLoading}
                     className="bg-primary text-white hover:bg-primary/95 rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/15"
                   >
-                    Save Exam Scorecard
+                    Save Exam Result
                   </Button>
                 </div>
               </form>
             )}
 
-            {/* WIZARD: PROMOTION (SHORTLISTED) */}
+            {/* WIZARD: SHORTLISTED */}
             {selectedApp.status === "SHORTLISTED" && (
-              <form onSubmit={onPromote} className="space-y-7 pr-1">
-                
-                {/* 1. Academic Placement Card */}
-                <div className="p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/85 shadow-md shadow-slate-100/50 dark:shadow-none space-y-5 transition-all duration-300 hover:shadow-lg">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
-                    <span className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400">
-                      <Icon name="assignment" size={14} />
-                    </span>
-                    <span className="font-extrabold uppercase tracking-wider text-[11px]">Academic Placement Settings</span>
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {/* Section Select */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Class Division (Section) <span className="text-red-500">*</span>
-                      </span>
-                      <Select
-                        value={promoteForm.sectionId}
-                        onValueChange={(val) => handlePromoteChange("sectionId", val)}
-                      >
-                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
-                          <SelectValue placeholder="Select Section" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {classSections.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              Section {s.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+              <form onSubmit={onPromote} className="space-y-6">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
+                  <Icon name="school" size={16} className="text-emerald-500" />
+                  Shortlist Selection & Fee Allocation
+                </h3>
 
-                    {/* Roll No */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Roll Number (Optional)
-                      </span>
-                      <input
-                        type="text"
-                        value={promoteForm.rollNo}
-                        onChange={(e) => handlePromoteChange("rollNo", e.target.value)}
-                        placeholder="e.g. 101"
-                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300"
-                      />
-                    </div>
-
-                    {/* Admission Date */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Admission Date <span className="text-red-500">*</span>
-                      </span>
-                      <input
-                        type="date"
-                        required
-                        value={promoteForm.admissionDate}
-                        onChange={(e) => handlePromoteChange("admissionDate", e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300"
-                      />
-                    </div>
-
-                    {/* Term Selection (Parent Level) */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Billing Term / Intake Type <span className="text-red-500">*</span>
-                      </span>
-                      <Select
-                        value={promoteForm.termType}
-                        onValueChange={(val: any) => handlePromoteChange("termType", val)}
-                      >
-                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:ring-4 focus:ring-primary/10 transition-all duration-300">
-                          <SelectValue placeholder="Select Term" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="FULL_TERM">Full Term</SelectItem>
-                          <SelectItem value="HALF_TERM">Half Term</SelectItem>
-                          <SelectItem value="SHORT_TERM">Short Term</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
+                  <Icon name="info" size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                  <div className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
+                    <p className="font-bold text-amber-700 dark:text-amber-400">Class Section & Fee Allocation</p>
+                    <p className="mt-0.5">Assign section, roll number, and confirm fee installments to promote candidate to Enrolled Student Status.</p>
                   </div>
                 </div>
 
-                {/* 2. Billing & Installments Side-by-Side Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
-                  
-                  {/* Left: Billing Controls Card (5 cols) */}
-                  {/* Left: Billing Controls Card (5 cols) - LIVE RECEIPT STYLE */}
-                  <div className="lg:col-span-5 flex flex-col relative">
-                    <div className="relative bg-amber-50/40 dark:bg-zinc-900/80 border border-slate-200/60 dark:border-zinc-800 shadow-lg shadow-slate-200/40 dark:shadow-none pb-4 transition-all duration-300">
-                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400"></div>
-                      
-                      <div className="p-6 pt-8 space-y-6">
-                        <div className="text-center pb-4 border-b-2 border-dashed border-slate-200 dark:border-zinc-700">
-                          <h4 className="font-black uppercase tracking-widest text-slate-800 dark:text-zinc-100 text-sm">
-                            Fee Receipt
-                          </h4>
-                          <p className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mt-1">Live Estimate</p>
-                        </div>
-
-                        {/* Billing Mode Toggle */}
-                        <div className="flex p-1 bg-slate-200/50 dark:bg-zinc-950/50 rounded-lg shadow-inner mt-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBillingMode("STANDARD");
-                              if (installmentTemplates && installmentTemplates.length > 0) {
-                                setCustomInstallments(
-                                  installmentTemplates.map((t: any) => ({
-                                    id: `template-${t.id}`,
-                                    templateId: t.id,
-                                    name: t.name,
-                                    dueDate: t.dueDate,
-                                    amount: Number(t.amount) || 0,
-                                    checked: true,
-                                    isCustom: false,
-                                  }))
-                                );
-                              }
-                            }}
-                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
-                              billingMode === "STANDARD"
-                                ? "bg-white dark:bg-zinc-800 text-slate-800 dark:text-white shadow-sm border border-slate-200/50 dark:border-zinc-700"
-                                : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
-                            }`}
-                          >
-                            Standard
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBillingMode("CUSTOM");
-                              setCustomInstallments([]);
-                            }}
-                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
-                              billingMode === "CUSTOM"
-                                ? "bg-white dark:bg-zinc-800 text-slate-800 dark:text-white shadow-sm border border-slate-200/50 dark:border-zinc-700"
-                                : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"
-                            }`}
-                          >
-                            Custom
-                          </button>
-                        </div>
-
-                        {billingMode === "CUSTOM" && (
-                          /* Custom Generator Wizard */
-                          <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="flex flex-col gap-1.5">
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Installments</span>
-                                <input
-                                  type="number"
-                                  min={1} max={24}
-                                  value={customConfigRows}
-                                  onChange={(e) => setCustomConfigRows(Number(e.target.value) || 1)}
-                                  className="h-9 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
-                                />
-                              </div>
-                              <div className="flex flex-col gap-1.5">
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Start Date</span>
-                                <input
-                                  type="date"
-                                  value={customConfigStartDate}
-                                  onChange={(e) => setCustomConfigStartDate(e.target.value)}
-                                  className="h-9 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 text-xs font-bold text-slate-800 outline-none focus:border-indigo-400"
-                                />
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Interval</span>
-                              <Select
-                                value={customConfigInterval}
-                                onValueChange={(val: any) => setCustomConfigInterval(val)}
-                              >
-                                <SelectTrigger className="h-9 px-3 bg-slate-50 dark:bg-zinc-900 border-slate-200 text-xs font-bold">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="MONTHLY">Monthly</SelectItem>
-                                  <SelectItem value="BIMONTHLY">Bi-Monthly (Every 2 Months)</SelectItem>
-                                  <SelectItem value="QUARTERLY">Quarterly (Every 3 Months)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center gap-2 pt-1">
-                              <input
-                                type="checkbox"
-                                checked={customConfigLateFee}
-                                onChange={(e) => setCustomConfigLateFee(e.target.checked)}
-                                className="rounded text-indigo-500 focus:ring-indigo-500/20"
-                              />
-                              <span className="text-[11px] font-bold text-slate-600 dark:text-zinc-300">Apply Standard Late Fees?</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={generateCustomInstallments}
-                              className="w-full py-2 bg-slate-800 hover:bg-slate-900 dark:bg-zinc-700 text-white rounded-lg text-[10px] font-extrabold tracking-widest uppercase transition-colors"
-                            >
-                              Generate Schedule
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Mandatory Fees Summary */}
-                        {classFees.filter(f => f.applicability === "MANDATORY").length > 0 && (
-                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-200/60 dark:border-zinc-800">
-                            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none flex justify-between">
-                              <span>Mandatory Fees</span>
-                              <span className="text-slate-800 dark:text-zinc-200">₹{formatIndianNumber(mandatoryTotal)}</span>
-                            </span>
-                            <div className="space-y-1">
-                              {classFees.filter(f => f.applicability === "MANDATORY").map(fee => {
-                                const mult = fee.frequency === "MONTHLY" ? 12 : fee.frequency === "QUARTERLY" ? 4 : fee.frequency === "SEMI_ANNUAL" ? 2 : 1;
-                                const annualAmount = Number(fee.amount) * mult;
-                                return (
-                                  <div key={fee.id} className="flex justify-between items-center text-sm font-medium text-slate-600 dark:text-zinc-300 px-1">
-                                    <span>{fee.name} <span className="text-[10px] opacity-70">({fee.frequency.toLowerCase()})</span></span>
-                                    <span>₹{formatIndianNumber(annualAmount)}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Optional Add-ons */}
-                        {classFees.filter(f => f.applicability === "OPTIONAL").length > 0 && (
-                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-200/60 dark:border-zinc-800">
-                            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 select-none">
-                              Optional Add-ons
-                            </span>
-                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                              {classFees.filter(f => f.applicability === "OPTIONAL").map(fee => {
-                                const isSelected = selectedOptionalFees.some(o => o.id === fee.id);
-                                const selectedFee = selectedOptionalFees.find(o => o.id === fee.id);
-                                return (
-                                  <div key={fee.id} className={`flex items-center gap-3 p-2 rounded-xl border transition-all ${isSelected ? "border-amber-200 bg-white dark:border-amber-900/50 dark:bg-amber-900/20 shadow-sm" : "border-slate-200/60 dark:border-zinc-800 bg-transparent"}`}>
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) => handleOptionalFeeToggle(fee, e.target.checked)}
-                                      className="rounded text-amber-500 focus:ring-amber-500/20 w-4 h-4"
-                                    />
-                                    <div className="flex-1 flex items-center justify-between">
-                                      <span className="text-sm font-bold text-slate-700 dark:text-zinc-300">{fee.name}</span>
-                                      {isSelected ? (
-                                        <div className="flex items-center gap-1 w-24">
-                                          <span className="text-xs font-bold text-slate-400">₹</span>
-                                          <input
-                                            type="number"
-                                            min={1}
-                                            value={selectedFee?.amount || ""}
-                                            onChange={(e) => handleOptionalFeeAmountChange(fee.id, Math.max(1, Number(e.target.value)))}
-                                            className="w-full h-7 px-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-950 text-sm font-bold text-amber-700 dark:text-amber-400 text-right outline-none focus:border-amber-400"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <span className="text-xs font-bold text-slate-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Dues Displays - LCD STYLE */}
-                        <div className="pt-4 mt-2 border-t-2 border-slate-800 dark:border-zinc-400 border-dashed space-y-3">
-                          <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-zinc-400">
-                            <span className="uppercase tracking-widest">Gross Fees</span>
-                            <span className="font-mono text-sm text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(baseTotal)}</span>
-                          </div>
-                          
-                          {/* Inline Discount Input */}
-                          <div className="flex justify-between items-center text-xs font-bold text-emerald-600 dark:text-emerald-400 group">
-                            <span className="uppercase tracking-widest">Flat Discount (-)</span>
-                            <div className="relative w-28">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-500/70 select-none">₹</span>
-                              <input
-                                type="number"
-                                min={0}
-                                value={String(promoteForm.discountAmount || "")}
-                                onChange={(e) => handlePromoteChange("discountAmount", Math.max(0, Number(e.target.value)))}
-                                placeholder="0"
-                                className={`w-full h-8 pl-6 pr-2 rounded-lg border ${isDiscountInvalid ? 'border-red-400 bg-red-50 text-red-600' : 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'} text-sm font-mono font-bold text-right focus:outline-none focus:border-emerald-400 transition-all duration-300`}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Final Net Total Payable */}
-                          <div className="flex justify-between items-center pt-3 mt-2 border-t border-slate-200/80 dark:border-zinc-700 px-1">
-                            <span className="text-base font-black text-slate-800 dark:text-zinc-100 uppercase tracking-widest">
-                              Net Total Payable
-                            </span>
-                            <span className="text-xl font-black text-primary dark:text-sky-400">
-                              ₹{formatIndianNumber(totalDiscountedFee)}
-                            </span>
-                          </div>
-
-                          {/* Installments Balance Checker */}
-                          {customInstallments.length > 0 && isBalanceMismatch && (
-                             <div className="mt-2 p-2 rounded-lg bg-red-50/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 flex justify-between items-center text-[10.5px] font-bold text-red-600 dark:text-red-400">
-                                <span>Installments Total: ₹{formatIndianNumber(sumOfInstallments)}</span>
-                                <span className="flex items-center gap-1">
-                                  <Icon name="error" size={14} />
-                                  Mismatch: {sumOfInstallments > totalDiscountedFee ? "+" : ""}₹{formatIndianNumber(sumOfInstallments - totalDiscountedFee)}
-                                </span>
-                             </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Jagged Bottom Edge */}
-                      <div className="absolute -bottom-2 left-0 w-full h-2" style={{
-                        backgroundImage: "linear-gradient(-45deg, transparent 75%, rgba(251, 243, 219, 0.4) 75%), linear-gradient(45deg, transparent 75%, rgba(251, 243, 219, 0.4) 75%)",
-                        backgroundSize: "10px 10px",
-                        backgroundRepeat: "repeat-x"
-                      }}></div>
-                    </div>
-                  </div>
-
-                  {/* Right: Installments Schedule Card (7 cols) */}
-                  <div className="lg:col-span-7 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/85 shadow-md shadow-slate-100/50 dark:shadow-none space-y-5 transition-all duration-300 hover:shadow-lg">
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
-                      <span className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
-                        <Icon name="receipt_long" size={14} />
-                      </span>
-                      <span className="font-extrabold uppercase tracking-wider text-[11px]">Fee Installments Schedule</span>
-                    </h4>
-
-                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin">
-                      {customInstallments.map((inst, index) => {
-                        return (
-                          <div
-                            key={inst.id}
-                            className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all duration-250 ${
-                              inst.checked
-                                ? "bg-white dark:bg-zinc-900/60 border-slate-200 dark:border-zinc-800 shadow-sm"
-                                : "bg-slate-50/40 dark:bg-zinc-950/10 border-slate-100 dark:border-zinc-900 opacity-60"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3 flex-1">
-                              <input
-                                type="checkbox"
-                                id={`inst-check-${inst.id}`}
-                                checked={inst.checked}
-                                onChange={(e) => {
-                                  const newInsts = [...customInstallments];
-                                  newInsts[index].checked = e.target.checked;
-                                  setCustomInstallments(newInsts);
-                                }}
-                                className="rounded text-primary focus:ring-primary/20 w-4.5 h-4.5 border-slate-300 dark:border-zinc-800"
-                              />
-                              <div className="flex flex-col gap-2 flex-1 max-w-[200px]">
-                                {inst.isCustom ? (
-                                  <input 
-                                    type="text" 
-                                    value={inst.name}
-                                    onChange={(e) => {
-                                      const newInsts = [...customInstallments];
-                                      newInsts[index].name = e.target.value;
-                                      setCustomInstallments(newInsts);
-                                    }}
-                                    disabled={!inst.checked}
-                                    className="text-xs font-bold text-slate-700 dark:text-zinc-300 bg-transparent border-b border-slate-200 dark:border-zinc-700 outline-none focus:border-primary px-1 pb-0.5"
-                                  />
-                                ) : (
-                                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300 px-1">{inst.name}</span>
-                                )}
-                                
-                                {inst.isCustom ? (
-                                  <input 
-                                    type="date" 
-                                    value={inst.dueDate.split('T')[0]}
-                                    onChange={(e) => {
-                                      if (!e.target.value) return;
-                                      try {
-                                        const d = new Date(e.target.value);
-                                        if (!isNaN(d.getTime())) {
-                                          const newInsts = [...customInstallments];
-                                          newInsts[index].dueDate = d.toISOString();
-                                          setCustomInstallments(newInsts);
-                                        }
-                                      } catch (err) {}
-                                    }}
-                                    disabled={!inst.checked}
-                                    className="text-[10px] text-slate-500 dark:text-zinc-400 bg-transparent outline-none cursor-pointer"
-                                  />
-                                ) : (
-                                  <span className="text-[9px] text-slate-400 dark:text-zinc-500 block px-1">
-                                    Due: {new Date(inst.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-400">₹</span>
-                              <BaseCurrencyInput
-                                disabled={!inst.checked}
-                                value={String(inst.amount)}
-                                onChange={(e) => {
-                                  const newInsts = [...customInstallments];
-                                  newInsts[index].amount = Number(e.target.value) || 0;
-                                  setCustomInstallments(newInsts);
-                                }}
-                                className="w-24 h-9 text-xs font-bold bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 text-right text-slate-800 dark:text-zinc-200 outline-none focus:border-primary disabled:opacity-50 transition-all duration-300"
-                              />
-                              {inst.isCustom && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newInsts = customInstallments.filter((_, i) => i !== index);
-                                    setCustomInstallments(newInsts);
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors ml-1"
-                                >
-                                  <Icon name="delete" size={16} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomInstallments([
-                          ...customInstallments, 
-                          { 
-                            id: `custom-${Date.now()}`, 
-                            name: `Custom Installment ${customInstallments.length + 1}`, 
-                            dueDate: new Date().toISOString(), 
-                            amount: 0, 
-                            checked: true, 
-                            isCustom: true 
-                          }
-                        ]);
-                      }}
-                      className="w-full py-2.5 mt-2 border border-dashed border-primary/30 rounded-xl text-primary text-xs font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      Assign Section <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={promoteForm.sectionId}
+                      onValueChange={(val: any) => handlePromoteChange("sectionId", val)}
                     >
-                      <Icon name="add_circle" size={16} />
-                      Add Custom Installment
-                    </button>
+                      <SelectTrigger fullWidth className="h-12 rounded-xl border-slate-200 dark:border-zinc-800 text-sm font-semibold">
+                        <SelectValue placeholder="Select Section" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classSections.map((sec) => (
+                          <SelectItem key={sec.id} value={sec.id}>Section {sec.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      Roll Number
+                    </label>
+                    <input
+                      type="text"
+                      value={promoteForm.rollNo}
+                      onChange={(e) => handlePromoteChange("rollNo", e.target.value)}
+                      placeholder="e.g. 101"
+                      className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                      Admission Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={promoteForm.admissionDate}
+                      onChange={(e) => handlePromoteChange("admissionDate", e.target.value)}
+                      className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    />
                   </div>
                 </div>
 
-                {/* 3. Upfront Payment Summary Drawer */}
-                <div className="p-5 rounded-2xl border border-slate-100 dark:border-zinc-800 bg-slate-50/20 dark:bg-zinc-950/20 space-y-4">
-                  <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5 border-b pb-2.5 border-slate-100 dark:border-zinc-800">
-                    <Icon name="payments" size={15} className="text-emerald-500" />
-                    Upfront Payment Processing
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                    {/* Amount Paid Now */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Amount Paid Now
-                      </span>
-                      <BaseCurrencyInput
-                        value={String(promoteForm.amountPaid)}
-                        onChange={(e) => handlePromoteChange("amountPaid", e.target.value)}
-                        placeholder="e.g. 5000"
-                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                      />
-                    </div>
-
-                    {/* Payment Method */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Payment Method
-                      </span>
-                      <Select
-                        value={promoteForm.paymentMethod}
-                        onValueChange={(val: any) => handlePromoteChange("paymentMethod", val)}
-                      >
-                        <SelectTrigger fullWidth className="h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:ring-2 focus:ring-primary/20">
-                          <SelectValue placeholder="Select Method" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="CASH">Cash Payment</SelectItem>
-                          <SelectItem value="UPI">UPI Transfer</SelectItem>
-                          <SelectItem value="ONLINE">Online Portal</SelectItem>
-                          <SelectItem value="CHEQUE">Bank Cheque</SelectItem>
-                          <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Transaction ID */}
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                        Transaction ID
-                      </span>
-                      <input
-                        type="text"
-                        value={promoteForm.transactionId}
-                        onChange={(e) => handlePromoteChange("transactionId", e.target.value)}
-                        placeholder="e.g. TXN987654"
-                        className="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {(formError || isOverpayment) && (
+                {formError && (
                   <div className="p-4 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2.5">
                     <Icon name="warning" size={16} className="text-red-500 shrink-0" />
-                    <span>{isOverpayment ? `Amount Paid (₹${formatIndianNumber(promoteForm.amountPaid)}) cannot exceed Net Applicable Fee (₹${formatIndianNumber(totalDiscountedFee)}).` : formError}</span>
+                    <span>{formError}</span>
                   </div>
                 )}
 
@@ -1785,35 +1665,30 @@ export default function ApplicantWorkspace({
                   <Button
                     type="submit"
                     variant="filled"
-                    icon="school"
+                    icon="check"
                     loading={actionLoading}
                     disabled={isPromoteDisabled}
-                    className={`rounded-xl h-11 px-6 font-bold shadow-md ${isPromoteDisabled ? "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none" : "bg-primary text-white hover:bg-primary/95 shadow-primary/15"}`}
+                    className="bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl h-11 px-6 font-bold shadow-md shadow-emerald-600/15"
                   >
-                    Promote Candidate to Student
+                    Confirm Admission & Enroll Candidate
                   </Button>
                 </div>
               </form>
             )}
 
-            {/* STATUS: ADMITTED / ENROLLED (Success State) */}
+            {/* WIZARD: ADMITTED */}
             {selectedApp.status === "ADMITTED" && (
-              <div className="py-10 text-center space-y-6">
-                <span className="inline-flex items-center justify-center p-5 rounded-full bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 shadow-sm animate-pulse">
+              <div className="py-10 text-center space-y-6 animate-in fade-in duration-300">
+                <span className="inline-flex items-center justify-center p-5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-200/50 shadow-sm">
                   <Icon name="check_circle" size={48} />
                 </span>
                 <div className="space-y-2 max-w-md mx-auto">
                   <h3 className="text-xl font-bold text-slate-800 dark:text-zinc-100">
-                    Candidate Enrolled Successfully!
+                    Candidate Successfully Enrolled!
                   </h3>
                   <p className="text-sm text-slate-500 dark:text-zinc-400 leading-relaxed">
-                    Student profile has been initialized in the Student Information System (SIS). They can now log in, receive daily attendance records, and generate financial ledgers.
+                    This candidate is now a fully registered student in Student Information System (SIS).
                   </p>
-                </div>
-                <div className="pt-2 flex justify-center gap-3">
-                  <button type="button" onClick={onClose} className="rounded-xl h-11 px-5 font-bold text-xs border border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
-                    Dismiss
-                  </button>
                 </div>
               </div>
             )}
@@ -1821,20 +1696,20 @@ export default function ApplicantWorkspace({
             {/* STATUS: REJECTED */}
             {selectedApp.status === "REJECTED" && (
               <div className="py-10 text-center space-y-6">
-                <span className="inline-flex items-center justify-center p-5 rounded-full bg-red-50 dark:bg-red-950/20 text-red-500 border border-red-100 shadow-sm">
+                <span className="inline-flex items-center justify-center p-5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 border border-red-200/50 shadow-sm">
                   <Icon name="cancel" size={48} />
                 </span>
                 <div className="space-y-2 max-w-md mx-auto">
                   <h3 className="text-xl font-bold text-slate-800 dark:text-zinc-100">
-                    Candidate Rejected
+                    Application Rejected
                   </h3>
                   <p className="text-sm text-slate-500 dark:text-zinc-400 leading-relaxed">
-                    This applicant did not pass evaluation parameters or document checks. They are stored in the admissions archives logs.
+                    This candidate application was rejected during processing.
                   </p>
                 </div>
                 {selectedApp.archiveReason && (
-                  <div className="max-w-md mx-auto p-4 rounded-2xl bg-rose-500/5 border border-rose-500/10 text-left space-y-1">
-                    <span className="block text-[9px] font-extrabold uppercase tracking-wider text-rose-500 select-none">
+                  <div className="max-w-md mx-auto p-4 rounded-2xl bg-red-500/5 border border-red-500/10 text-left space-y-1">
+                    <span className="block text-[9px] font-extrabold uppercase tracking-wider text-red-500 select-none">
                       Reason for Rejection
                     </span>
                     <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300 leading-relaxed">
@@ -1906,7 +1781,8 @@ export default function ApplicantWorkspace({
               </div>
             )}
           </div>
-        </div>
+        )}
+      </div>
 
       {/* Withdraw Confirmation Dialog */}
       <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>
@@ -1955,6 +1831,46 @@ export default function ApplicantWorkspace({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmDoc} onOpenChange={(open) => !open && setDeleteConfirmDoc(null)}>
+        <DialogContent className="max-w-[380px] rounded-3xl bg-white dark:bg-zinc-900 p-6 border border-slate-100 dark:border-zinc-800 shadow-2xl focus:outline-none">
+          <div className="space-y-4 text-center">
+            <span className="inline-flex items-center justify-center p-3 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 border border-rose-200/50 shadow-2xs">
+              <Icon name="delete_forever" size={28} />
+            </span>
+            <div className="space-y-1">
+              <DialogTitle className="text-base font-bold text-slate-900 dark:text-zinc-100">
+                Delete Document File?
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                Are you sure you want to delete <strong className="text-slate-800 dark:text-zinc-200">{deleteConfirmDoc?.documentType?.replace(/_/g, " ")}</strong>? The file will be removed from storage and restored to the dropdown.
+              </DialogDescription>
+            </div>
+
+            <div className="flex justify-center gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={() => setDeleteConfirmDoc(null)}
+                className="rounded-xl h-10 px-4 font-bold text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                loading={deletingDocId === deleteConfirmDoc?.id}
+                onClick={() => handleDeleteDoc(deleteConfirmDoc)}
+                className="rounded-xl h-10 px-5 font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white border-0 shadow-sm shadow-rose-600/20"
+              >
+                Delete File
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <DocumentPreviewDialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)} document={previewDoc} />
     </div>
   );
 }

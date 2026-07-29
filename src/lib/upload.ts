@@ -1,6 +1,7 @@
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
+import crypto from "crypto";
 
 /**
  * Zero-dependency magic byte validation for JPEG, PNG, and WebP images.
@@ -38,13 +39,34 @@ export function isValidImageMagicBytes(buffer: Buffer): boolean {
   return false;
 }
 
+/**
+ * Magic byte validation for PDF files (%PDF- / 25 50 44 46).
+ */
+export function isValidPdfMagicBytes(buffer: Buffer): boolean {
+  if (buffer.length < 4) return false;
+  return (
+    buffer[0] === 0x25 && // %
+    buffer[1] === 0x50 && // P
+    buffer[2] === 0x44 && // D
+    buffer[3] === 0x46    // F
+  );
+}
+
 export const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
 ] as const;
 
-export const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+export const ALLOWED_DOCUMENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+export const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB for images
+export const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10MB for documents/PDFs
 
 export type ImagePurpose = "photo" | "document";
 
@@ -145,15 +167,6 @@ async function deleteViaProxy(relativePath: string): Promise<void> {
 
 /**
  * Validate, optimize, and save an uploaded image.
- *
- * If UPLOAD_PROXY_URL is set, sends the processed buffer to the cPanel PHP proxy.
- * Otherwise, writes to the local filesystem (dev mode).
- *
- * @param file    - The uploaded File object
- * @param subDir  - Subdirectory under uploads base, e.g. "uploads/staff-documents"
- * @param prefix  - Filename prefix, e.g. the staff ID
- * @param purpose - "photo" (400px max) or "document" (1200px max)
- * @returns       - { fileName, filePath, fileSize, mimeType }
  */
 export async function saveUploadedImage(
   file: File,
@@ -174,20 +187,18 @@ export async function saveUploadedImage(
 
   if (file.size > MAX_IMAGE_SIZE) {
     throw new UploadError(
-      `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum: 2MB`
+      `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum: 5MB`
     );
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  // Enforce magic bytes verification to prevent header spoofing
   if (!isValidImageMagicBytes(buffer)) {
     throw new UploadError(
       "File content validation failed. The file structure is not a valid JPEG, PNG, or WebP image."
     );
   }
 
-  // Optimize with Sharp — resize and convert to WebP
   const maxDim = purpose === "photo" ? 400 : 1200;
   const processedBuffer = await sharp(buffer)
     .resize({
@@ -199,14 +210,13 @@ export async function saveUploadedImage(
     .webp({ quality: 80 })
     .toBuffer();
 
-  const fileName = `${prefix}_${Date.now()}.webp`;
+  const randToken = crypto.randomBytes(4).toString("hex");
+  const fileName = `${prefix}_${Date.now()}_${randToken}.webp`;
   const filePath = path.join(subDir, fileName).replace(/\\/g, "/");
 
   if (process.env.UPLOAD_PROXY_URL) {
-    // Production: send to cPanel via HTTP proxy
     await uploadViaProxy(processedBuffer, filePath);
   } else {
-    // Local dev: write to public/ folder
     const absoluteDir = path.join(process.cwd(), "public", subDir);
     await mkdir(absoluteDir, { recursive: true });
     await writeFile(path.join(absoluteDir, fileName), processedBuffer);
@@ -221,15 +231,104 @@ export async function saveUploadedImage(
 }
 
 /**
+ * Validate and save an uploaded document (supporting both PDF and Images).
+ * Supports up to 10MB PDFs and 5MB Images with zero collision.
+ */
+export async function saveUploadedDocument(
+  file: File,
+  subDir: string,
+  prefix: string
+): Promise<{
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+}> {
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+  if (!isPdf && !ALLOWED_IMAGE_TYPES.includes(file.type as (typeof ALLOWED_IMAGE_TYPES)[number])) {
+    throw new UploadError(
+      `Invalid file type "${file.type}". Allowed: PDF, JPEG, PNG, WebP`
+    );
+  }
+
+  if (file.size > MAX_DOCUMENT_SIZE) {
+    throw new UploadError(
+      `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum: 10MB`
+    );
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const randToken = crypto.randomBytes(4).toString("hex");
+
+  if (isPdf) {
+    if (!isValidPdfMagicBytes(buffer)) {
+      throw new UploadError(
+        "File content validation failed. The file structure is not a valid PDF document."
+      );
+    }
+
+    const fileName = `${prefix}_${Date.now()}_${randToken}.pdf`;
+    const filePath = path.join(subDir, fileName).replace(/\\/g, "/");
+
+    if (process.env.UPLOAD_PROXY_URL) {
+      await uploadViaProxy(buffer, filePath);
+    } else {
+      const absoluteDir = path.join(process.cwd(), "public", subDir);
+      await mkdir(absoluteDir, { recursive: true });
+      await writeFile(path.join(absoluteDir, fileName), buffer);
+    }
+
+    return {
+      fileName,
+      filePath,
+      fileSize: buffer.length,
+      mimeType: "application/pdf",
+    };
+  } else {
+    // Process image with Sharp optimization
+    if (!isValidImageMagicBytes(buffer)) {
+      throw new UploadError(
+        "File content validation failed. The file structure is not a valid image."
+      );
+    }
+
+    const processedBuffer = await sharp(buffer)
+      .resize({
+        width: 1600,
+        height: 1600,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 85 })
+      .toBuffer();
+
+    const fileName = `${prefix}_${Date.now()}_${randToken}.webp`;
+    const filePath = path.join(subDir, fileName).replace(/\\/g, "/");
+
+    if (process.env.UPLOAD_PROXY_URL) {
+      await uploadViaProxy(processedBuffer, filePath);
+    } else {
+      const absoluteDir = path.join(process.cwd(), "public", subDir);
+      await mkdir(absoluteDir, { recursive: true });
+      await writeFile(path.join(absoluteDir, fileName), processedBuffer);
+    }
+
+    return {
+      fileName,
+      filePath,
+      fileSize: processedBuffer.length,
+      mimeType: "image/webp",
+    };
+  }
+}
+
+/**
  * Delete an uploaded file.
- *
- * If UPLOAD_PROXY_URL is set, sends a DELETE request to the cPanel PHP proxy.
- * Otherwise, deletes from the local filesystem (dev mode).
- *
- * @param relativePath - Path relative to uploads base, e.g. "uploads/staff-documents/abc_123.webp"
  */
 export async function deleteUploadedFile(relativePath: string): Promise<void> {
   try {
+    if (!relativePath) return;
     if (process.env.UPLOAD_PROXY_URL) {
       await deleteViaProxy(relativePath);
     } else {

@@ -11,13 +11,13 @@ import { Icon } from "@/components/ui/icon";
 // Import Redesigned Modular Components
 import AdmissionsStats from "@/components/admissions/admissions-stats";
 import { AdmissionsSearch, AdmissionsGlobalActions, AdmissionsDataToggles } from "@/components/admissions/admissions-filters";
-import InquiriesInbox from "@/components/admissions/inquiries-inbox";
 import AdmissionsList from "@/components/admissions/admissions-list";
-import AdmissionsPipeline from "@/components/admissions/admissions-pipeline";
 import InquiryModal from "@/components/admissions/inquiry-modal";
 import ApplicationModal from "@/components/admissions/application-modal";
 import InquiryWorkspace from "@/components/admissions/inquiry-workspace";
 import ApplicantWorkspace from "@/components/admissions/applicant-workspace";
+import { UnifiedInboxList } from "@/components/admissions/unified-inbox-list";
+import { InquiryDetailPane } from "@/components/admissions/inquiry-detail-pane";
 
 interface Branch {
   id: string;
@@ -89,7 +89,7 @@ interface FollowUp {
   conversationNotes: string;
   nextFollowUpDate: string | null;
   statusReached: string;
-  counselorId: string;
+  counselorId?: string;
 }
 
 interface Inquiry {
@@ -159,11 +159,6 @@ export default function AdmissionsPage() {
   // Inquiry Workspace controllers
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
   const [inquiryWorkspaceOpen, setInquiryWorkspaceOpen] = useState(false);
-  const [followUpForm, setFollowUpForm] = useState({
-    conversationNotes: "",
-    nextFollowUpDate: "",
-    statusReached: "INQUIRY",
-  });
 
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -479,6 +474,11 @@ export default function AdmissionsPage() {
   // 2. Fetch classes whenever branch changes
   useEffect(() => {
     if (!branchFilter) return;
+    
+    // Reset selected candidates when switching branches to prevent cross-school data leaks
+    setSelectedApp(null);
+    setSelectedInquiry(null);
+
     async function loadClasses() {
       try {
         const res = await fetch(`/api/v1/classes?branchId=${branchFilter}`);
@@ -848,41 +848,13 @@ export default function AdmissionsPage() {
   // Inquiry Workspace Panel Handlers
   const handleOpenInquiryWorkspace = (inq: Inquiry) => {
     setSelectedInquiry(inq);
-    setFollowUpForm({
-      conversationNotes: "",
-      nextFollowUpDate: "",
-      statusReached: inq.status,
-    });
     setInquiryWorkspaceOpen(true);
   };
 
-  const handleCreateFollowUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedInquiry) return;
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/v1/admissions/inquiries/${selectedInquiry.id}/follow-ups`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(followUpForm),
-      });
-      const data = await res.json();
-      if (data.success) {
-        snackbar.show("Follow-up log saved successfully.", "success");
-        setFollowUpForm((prev) => ({
-          ...prev,
-          conversationNotes: "",
-          nextFollowUpDate: "",
-        }));
-        fetchDashboardData();
-        setInquiryWorkspaceOpen(false);
-      } else {
-        snackbar.show(data.error?.message || "Failed to log follow-up.", "error");
-      }
-    } catch {
-      snackbar.show("Network error.", "error");
-    } finally {
-      setActionLoading(false);
+  const handleInquiryUpdated = (updatedInquiry: Inquiry) => {
+    setInquiries((prev) => prev.map((inq) => inq.id === updatedInquiry.id ? updatedInquiry : inq));
+    if (selectedInquiry?.id === updatedInquiry.id) {
+      setSelectedInquiry(updatedInquiry);
     }
   };
 
@@ -891,15 +863,28 @@ export default function AdmissionsPage() {
     setSelectedApp(app);
     setFormError(null);
     const docs = app.documents || [];
+    const allVerified = docs.length > 0 && docs.every((d: any) => d.status === "VERIFIED");
+    const anyRejected = docs.some((d: any) => d.status === "REJECTED");
+    let initialNextStatus: "DOCUMENT_VERIFICATION" | "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED" = "DOCUMENT_VERIFICATION";
+    if (anyRejected) {
+      initialNextStatus = "REJECTED";
+    } else if (allVerified) {
+      initialNextStatus = activeBranch?.hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED";
+    }
+
     setVerifyForm({
-      documents: docs.map((d) => ({
+      documents: docs.map((d: any) => ({
         id: d.id,
         status: d.status,
         remarks: d.remarks || "",
         documentType: d.documentType,
+        fileName: d.fileName,
+        filePath: d.filePath,
+        fileSize: d.fileSize,
+        mimeType: d.mimeType,
       })),
       verificationNotes: app.verificationNotes || "",
-      nextStatus: activeBranch?.hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED",
+      nextStatus: initialNextStatus,
       archiveReason: app.archiveReason || "",
     });
 
@@ -1343,312 +1328,216 @@ export default function AdmissionsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full space-y-6 overflow-hidden">
-      {workspaceOpen ? (
-        <div className="flex-1 overflow-y-auto w-full p-2">
-          <ApplicantWorkspace
-            onClose={() => setWorkspaceOpen(false)}
-            selectedApp={selectedApp}
-            statusLabels={statusLabels}
-            classes={classes}
-            onApplicantUpdated={(updatedApp) => {
-              setSelectedApp(updatedApp);
-              fetchDashboardData();
-            }}
-            hasEntranceTest={!!activeBranch?.hasEntranceTest}
-            classSections={classSections}
-            installmentTemplates={installmentTemplates}
-            customInstallments={customInstallments}
-            setCustomInstallments={setCustomInstallments}
-            billingMode={billingMode}
-            setBillingMode={setBillingMode}
-            customConfigRows={customConfigRows}
-            setCustomConfigRows={setCustomConfigRows}
-            customConfigStartDate={customConfigStartDate}
-            setCustomConfigStartDate={setCustomConfigStartDate}
-            customConfigInterval={customConfigInterval}
-            setCustomConfigInterval={setCustomConfigInterval}
-            customConfigLateFee={customConfigLateFee}
-            setCustomConfigLateFee={setCustomConfigLateFee}
-            promoteForm={promoteForm}
-            setPromoteForm={setPromoteForm}
-            verifyForm={verifyForm}
-            setVerifyForm={setVerifyForm}
-            examForm={examForm}
-            setExamForm={setExamForm}
-            onVerifyDocs={handleVerifyDocuments}
-            onSaveExam={handleSaveExam}
-            onPromote={handlePromote}
-            onWithdrawApplicant={handleWithdrawApplicant}
-            onReactivateApplicant={handleReactivateApplicant}
-            actionLoading={actionLoading}
-            formError={formError}
-            setFormError={setFormError}
-            classFees={classFees}
-            selectedOptionalFees={selectedOptionalFees}
-            setSelectedOptionalFees={setSelectedOptionalFees}
-          />
-        </div>
-      ) : (
-        <>
-          {/* ========================================= */}
-          {/* 1. THE SILICON VALLEY TOOLBAR (Unified) */}
-          {/* ========================================= */}
-          <div className="relative overflow-hidden flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 w-full bg-slate-50/80 dark:bg-zinc-900/50 p-2 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 mb-4 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] mt-1">
-            
-            {/* Subtle Gradient background for that premium feel */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/5 pointer-events-none"></div>
-            
-            {/* Left Group: Identity, Tabs, Search */}
-            <div className="flex flex-wrap xl:flex-nowrap items-center gap-3 flex-1 relative z-10">
-              
-              {/* Compact Title Segment */}
-              <div className="flex items-center pl-2 pr-1 shrink-0">
-                <div className="w-2 h-2 rounded-full bg-primary mr-2 shadow-[0_0_8px_rgba(0,100,255,0.6)] animate-pulse"></div>
-                <h1 className="text-[15px] font-black tracking-tight text-slate-800 dark:text-zinc-100 uppercase">Pipeline</h1>
-              </div>
-
-              <div className="hidden xl:block w-px h-6 bg-slate-200 dark:bg-zinc-700 mx-1 shrink-0"></div>
-
-              {/* Context Switcher Tabs */}
-              <div className="hidden sm:inline-flex items-center p-0.5 bg-white/60 dark:bg-zinc-900/80 border border-slate-200/60 dark:border-zinc-800/60 rounded-xl shadow-inner relative h-9 shrink-0">
-                <div className={`absolute left-0.5 top-0.5 bottom-0.5 w-[calc(50%-2px)] bg-white dark:bg-zinc-800 rounded-lg shadow-sm border border-slate-200/50 dark:border-zinc-700/50 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${activeTab === "inquiries" ? "translate-x-full" : "translate-x-0"}`}></div>
-
-                {hasAppAccess && (
-                  <button
-                    onClick={() => { setActiveTab("applications"); setStageFilter("ALL"); }}
-                    className={`relative z-10 flex items-center justify-center gap-1.5 px-3 h-full text-[11px] font-bold rounded-lg transition-colors duration-300 w-28 ${activeTab === "applications" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-200"}`}
-                  >
-                    <Icon name="app_registration" size={14} className={activeTab === "applications" ? "text-primary" : ""} />
-                    Applications
-                  </button>
-                )}
-                {hasInqAccess && (
-                  <button
-                    onClick={() => { setActiveTab("inquiries"); setStageFilter("ALL"); }}
-                    className={`relative z-10 flex items-center justify-center gap-1.5 px-3 h-full text-[11px] font-bold rounded-lg transition-colors duration-300 w-28 ${activeTab === "inquiries" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-200"}`}
-                  >
-                    <Icon name="group_add" size={14} className={activeTab === "inquiries" ? "text-sky-500" : ""} />
-                    Inquiries
-                  </button>
-                )}
-              </div>
-
-              <div className="hidden md:block w-px h-6 bg-slate-200 dark:bg-zinc-700 mx-1 shrink-0"></div>
-
-              {/* Local Data Search */}
-              <div className="flex-1 max-w-[280px]">
-                <AdmissionsSearch
-                  activeTab={activeTab}
-                  classFilter={classFilter}
-                  setClassFilter={setClassFilter}
-                  classes={classes}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  includeArchives={includeArchives}
-                  setIncludeArchives={setIncludeArchives}
-                  includeAppliedInquiries={includeAppliedInquiries}
-                  setIncludeAppliedInquiries={setIncludeAppliedInquiries}
-                  hasInqAccess={hasInqAccess}
-                  canVerifyDocs={canVerifyDocs}
-                  hasDemoData={hasDemoData}
-                  isClearingDemo={isClearingDemo}
-                  onClearDemoClick={handleClearDemoData}
-                  onNewInquiryClick={() => {}}
-                  onNewApplicationClick={() => {}}
-                />
-              </div>
-
-              {hasActiveFilters && (
-                <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl shadow-sm shrink-0">
-                  <Icon name="filter_alt" size={14} className="text-amber-600 animate-pulse" />
-                  <span className="text-[10px] font-bold text-amber-700">Active</span>
-                  <div className="w-px h-3 bg-amber-200 mx-1"></div>
-                  <button onClick={handleResetFilters} className="text-[10px] font-black uppercase text-red-600 hover:text-red-700">Clear</button>
-                </div>
-              )}
-            </div>
-
-            {/* Right Group: Filters, View, Global Actions */}
-            <div className="flex flex-wrap items-center gap-2 shrink-0 relative z-10 xl:justify-end">
-              <AdmissionsDataToggles
-                activeTab={activeTab}
-                classFilter={classFilter}
-                setClassFilter={setClassFilter}
-                classes={classes}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                includeArchives={includeArchives}
-                setIncludeArchives={setIncludeArchives}
-                includeAppliedInquiries={includeAppliedInquiries}
-                setIncludeAppliedInquiries={setIncludeAppliedInquiries}
-                hasInqAccess={hasInqAccess}
-                canVerifyDocs={canVerifyDocs}
-                hasDemoData={hasDemoData}
-                isClearingDemo={isClearingDemo}
-                onClearDemoClick={handleClearDemoData}
-                onNewInquiryClick={() => {}}
-                onNewApplicationClick={() => {}}
-              />
-
-              <div className="flex items-center p-0.5 bg-white/80 dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-xl h-10 shadow-[0_1px_3px_rgb(0,0,0,0.05)] shrink-0">
-                <button
-                  onClick={() => setViewMode("board")}
-                  className={`px-3 h-full rounded-lg transition-all duration-200 flex items-center justify-center ${viewMode === "board" ? "bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-white shadow-sm ring-1 ring-black/5" : "text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"}`}
-                  title="Board View"
-                >
-                  <Icon name="dashboard" size={16} />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`px-3 h-full rounded-lg transition-all duration-200 flex items-center justify-center ${viewMode === "list" ? "bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-white shadow-sm ring-1 ring-black/5" : "text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300"}`}
-                  title="List View"
-                >
-                  <Icon name="format_list_bulleted" size={16} />
-                </button>
-              </div>
-
-              <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-zinc-700 mx-1 shrink-0"></div>
-
-              <AdmissionsGlobalActions
-                activeTab={activeTab}
-                classFilter={classFilter}
-                setClassFilter={setClassFilter}
-                classes={classes}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                includeArchives={includeArchives}
-                setIncludeArchives={setIncludeArchives}
-                includeAppliedInquiries={includeAppliedInquiries}
-                setIncludeAppliedInquiries={setIncludeAppliedInquiries}
-                hasInqAccess={hasInqAccess}
-                canVerifyDocs={canVerifyDocs}
-                hasDemoData={hasDemoData}
-                isClearingDemo={isClearingDemo}
-                onClearDemoClick={handleClearDemoData}
-                onNewInquiryClick={() => {
-                  if (classes.length === 0) {
-                    snackbar.show("Please create classes first.", "warning");
-                    return;
-                  }
-                  setInquiryForm((prev) => ({ ...prev, classAppliedId: classes[0].id }));
-                  setInquiryModalOpen(true);
-                }}
-                onNewApplicationClick={() => {
-                  if (classes.length === 0) {
-                    snackbar.show("Please create classes first.", "warning");
-                    return;
-                  }
-                  setAppForm((prev) => ({ ...prev, classId: classes[0].id }));
-                  setApplicationModalOpen(true);
-                }}
-              />
-            </div>
+    <div className="flex flex-col h-[calc(100vh-6rem)] min-h-[600px] space-y-3 overflow-hidden bg-slate-50/30 dark:bg-zinc-950/30">
+      
+      {/* 1. THE SILICON VALLEY TOOLBAR (Unified) */}
+      <div className="relative overflow-hidden flex flex-col xl:flex-row xl:items-center justify-between gap-3 w-full bg-slate-50/80 dark:bg-zinc-900/50 p-2 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] mt-1">
+        
+        {/* Subtle Gradient background for that premium feel */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/5 pointer-events-none"></div>
+        
+        {/* Left Group: Identity, Search */}
+        <div className="flex flex-wrap xl:flex-nowrap items-center gap-3 flex-1 relative z-10">
+          
+          {/* Compact Title Segment */}
+          <div className="flex items-center pl-2 pr-1 shrink-0">
+            <div className="w-2 h-2 rounded-full bg-primary mr-2 shadow-[0_0_8px_rgba(0,100,255,0.6)] animate-pulse"></div>
+            <h1 className="text-[15px] font-black tracking-tight text-slate-800 dark:text-zinc-100 uppercase">Inbox</h1>
           </div>
 
-          {/* ========================================= */}
-          {/* 2. THE PIPELINE STATS BOARD               */}
-          {/* ========================================= */}
-          <div className="shrink-0 px-1 py-1 w-full mb-1 border-b border-slate-200/50 dark:border-zinc-800/50 pb-3">
-            <AdmissionsStats
-              stats={stats}
-              hasInqAccess={hasInqAccess}
-              hasAppAccess={hasAppAccess}
-              hasEntranceTest={!!activeBranch?.hasEntranceTest}
+          <div className="hidden xl:block w-px h-6 bg-slate-200 dark:bg-zinc-700 mx-1 shrink-0"></div>
+
+          {/* Local Data Search */}
+          <div className="flex-1 max-w-[350px]">
+            <AdmissionsSearch
               activeTab={activeTab}
-              stageFilter={stageFilter}
-              onStageClick={handleStageClick}
+              classFilter={classFilter}
+              setClassFilter={setClassFilter}
+              classes={classes}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              includeArchives={includeArchives}
+              setIncludeArchives={setIncludeArchives}
+              includeAppliedInquiries={includeAppliedInquiries}
+              setIncludeAppliedInquiries={setIncludeAppliedInquiries}
+              hasInqAccess={hasInqAccess}
+              canVerifyDocs={canVerifyDocs}
+              hasDemoData={hasDemoData}
+              isClearingDemo={isClearingDemo}
+              onClearDemoClick={handleClearDemoData}
+              onNewInquiryClick={() => {}}
+              onNewApplicationClick={() => {}}
             />
           </div>
 
-      {/* 5. Main Desk Workspace rendering */}
-      <div className="flex-1 overflow-hidden min-h-0">
-        {viewMode === "board" ? (
-          <div className="h-full overflow-y-auto space-y-4">
-            {includeArchives && activeTab === "applications" && (
-              <div className="mx-1 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-2.5 text-xs font-bold text-amber-800 dark:text-amber-400">
-                <Icon name="warning" size={16} className="text-amber-600 shrink-0" />
-                <span>Archives (Admitted, Rejected, Withdrawn) are only visible in List View. Switch to List View to manage archived candidates.</span>
-              </div>
-            )}
-            {isDatabaseEmpty ? (
-              <div className="max-w-4xl mx-auto py-10 space-y-8 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 p-8 rounded-3xl">
-                <div className="text-center space-y-2 p-6 bg-gradient-to-br from-primary/10 to-teal-50/50 border border-primary/10 rounded-3xl shadow-sm">
-                  <span className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary text-white mb-2 shadow-elevation-1">
-                    <Icon name="school" size={32} />
-                  </span>
-                  <h2 className="text-headline-sm font-extrabold text-slate-800">
-                    Welcome to Admissions Overview Control Desk
-                  </h2>
-                  <p className="text-body-md text-slate-600 max-w-xl mx-auto">
-                    Manage prospective student inquiries, documents verification, aptitude entrance testing, and official SIS enrollments in a single, visual workspace.
-                  </p>
-                </div>
-                <div className="p-6 bg-slate-50 border border-dashed rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
-                  <div className="text-center md:text-left space-y-1">
-                    <h4 className="font-bold text-sm text-slate-800 flex items-center gap-1.5 justify-center md:justify-start">
-                      <Icon name="sparkles" size={16} className="text-primary" />
-                      Explore with Sandbox Demo Data
-                    </h4>
-                    <p className="text-xs text-slate-500 max-w-md">
-                      Click the button below to generate 4 mock candidate pipeline records at various stages (submitted, verification, test, and shortlist).
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="filled"
-                    icon="cpu"
-                    loading={isGeneratingDemo}
-                    className="bg-primary text-white shrink-0 shadow-elevation-1 py-2.5 px-5"
-                    onClick={handleGenerateDemoData}
-                  >
-                    {isGeneratingDemo ? "Creating Demo..." : "⚡ Generate Demo Pipeline"}
-                  </Button>
-                </div>
-              </div>
-            ) : activeTab === "inquiries" ? (
-              <InquiriesInbox
-                inquiries={filteredInquiries}
-                canVerifyDocs={canVerifyDocs}
-                onOpenInquiryWorkspace={handleOpenInquiryWorkspace}
-                setAppForm={setAppForm}
-                setApplicationModalOpen={setApplicationModalOpen}
-                schoolName={branches.find(b => b.id === branchFilter)?.name || "Our School"}
-              />
-            ) : (
-              <AdmissionsPipeline
-                filteredApplications={filteredApplications}
-                canVerifyDocs={canVerifyDocs}
-                hasAppAccess={hasAppAccess}
-                onOpenWorkspace={handleOpenWorkspace}
-                onVerifyDocsClick={handleOpenWorkspace}
-                onScoreExamClick={handleOpenWorkspace}
-                onPromoteClick={handleOpenWorkspace}
-                setAppForm={setAppForm}
-                setApplicationModalOpen={setApplicationModalOpen}
-              />
-            )}
-          </div>
-        ) : (
-          <AdmissionsList
+          {hasActiveFilters && (
+            <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl shadow-sm shrink-0">
+              <Icon name="filter_alt" size={14} className="text-amber-600 animate-pulse" />
+              <span className="text-[10px] font-bold text-amber-700">Active</span>
+              <div className="w-px h-3 bg-amber-200 mx-1"></div>
+              <button onClick={handleResetFilters} className="text-[10px] font-black uppercase text-red-600 hover:text-red-700">Clear</button>
+            </div>
+          )}
+        </div>
+
+        {/* Right Group: Filters, View, Global Actions */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0 relative z-10 xl:justify-end">
+          <AdmissionsDataToggles
             activeTab={activeTab}
-            filteredApplications={filteredApplications}
-            filteredInquiries={filteredInquiries}
-            statusLabels={statusLabels}
-            isDatabaseEmpty={isDatabaseEmpty}
+            classFilter={classFilter}
+            setClassFilter={setClassFilter}
+            classes={classes}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            includeArchives={includeArchives}
+            setIncludeArchives={setIncludeArchives}
+            includeAppliedInquiries={includeAppliedInquiries}
+            setIncludeAppliedInquiries={setIncludeAppliedInquiries}
             hasInqAccess={hasInqAccess}
             canVerifyDocs={canVerifyDocs}
-            onOpenWorkspace={handleOpenWorkspace}
-            onOpenInquiryWorkspace={handleOpenInquiryWorkspace}
-            onResetFilters={handleResetFilters}
-            setAppForm={setAppForm}
-            setApplicationModalOpen={setApplicationModalOpen}
+            hasDemoData={hasDemoData}
+            isClearingDemo={isClearingDemo}
+            onClearDemoClick={handleClearDemoData}
+            onNewInquiryClick={() => {}}
+            onNewApplicationClick={() => {}}
           />
-        )}
-      </div>
-      </>
-      )}
 
+          <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-zinc-700 mx-1 shrink-0"></div>
+
+          <AdmissionsGlobalActions
+            activeTab={activeTab}
+            classFilter={classFilter}
+            setClassFilter={setClassFilter}
+            classes={classes}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            includeArchives={includeArchives}
+            setIncludeArchives={setIncludeArchives}
+            includeAppliedInquiries={includeAppliedInquiries}
+            setIncludeAppliedInquiries={setIncludeAppliedInquiries}
+            hasInqAccess={hasInqAccess}
+            canVerifyDocs={canVerifyDocs}
+            hasDemoData={hasDemoData}
+            isClearingDemo={isClearingDemo}
+            onClearDemoClick={handleClearDemoData}
+            onNewInquiryClick={() => {
+              if (classes.length === 0) {
+                snackbar.show("Please create classes first.", "warning");
+                return;
+              }
+              setInquiryForm((prev) => ({ ...prev, classAppliedId: classes[0].id }));
+              setInquiryModalOpen(true);
+            }}
+            onNewApplicationClick={() => {
+              if (classes.length === 0) {
+                snackbar.show("Please create classes first.", "warning");
+                return;
+              }
+              setAppForm((prev) => ({ ...prev, classId: classes[0].id }));
+              setApplicationModalOpen(true);
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 2. THE MASTER-DETAIL WORKSPACE */}
+      <div className="flex-1 flex overflow-hidden min-h-0 border border-slate-200/60 dark:border-zinc-800/60 rounded-2xl shadow-sm bg-white dark:bg-zinc-950">
+        
+        {/* LEFT PANE - MASTER LIST */}
+        <div className={`w-full md:w-[380px] lg:w-[400px] shrink-0 border-r border-slate-200/60 dark:border-zinc-800/60 flex flex-col ${selectedApp || selectedInquiry ? 'hidden md:flex' : 'flex'}`}>
+          <UnifiedInboxList 
+            applications={filteredApplications}
+            inquiries={filteredInquiries}
+            activeTab={activeTab}
+            stageFilter={stageFilter}
+            onStageClick={handleStageClick}
+            selectedAppId={selectedApp?.id || null}
+            selectedInqId={selectedInquiry?.id || null}
+            onSelectApp={(app) => {
+              setSelectedApp(app);
+              setSelectedInquiry(null);
+            }}
+            onSelectInquiry={(inq) => {
+              setSelectedInquiry(inq);
+              setSelectedApp(null);
+            }}
+            stats={stats}
+            hasInqAccess={hasInqAccess}
+            hasAppAccess={hasAppAccess}
+            hasEntranceTest={!!activeBranch?.hasEntranceTest}
+          />
+        </div>
+
+        {/* RIGHT PANE - DETAIL WORKSPACE */}
+        <div className={`flex-1 flex flex-col min-w-0 relative ${!selectedApp && !selectedInquiry ? 'hidden md:flex' : 'flex'}`}>
+          {selectedApp ? (
+            <ApplicantWorkspace
+              onClose={() => setSelectedApp(null)}
+              selectedApp={selectedApp}
+              statusLabels={statusLabels}
+              classes={classes}
+              onApplicantUpdated={(updatedApp) => {
+                setSelectedApp(updatedApp);
+                fetchDashboardData();
+              }}
+              hasEntranceTest={!!activeBranch?.hasEntranceTest}
+              classSections={classSections}
+              installmentTemplates={installmentTemplates}
+              customInstallments={customInstallments}
+              setCustomInstallments={setCustomInstallments}
+              billingMode={billingMode}
+              setBillingMode={setBillingMode}
+              customConfigRows={customConfigRows}
+              setCustomConfigRows={setCustomConfigRows}
+              customConfigStartDate={customConfigStartDate}
+              setCustomConfigStartDate={setCustomConfigStartDate}
+              customConfigInterval={customConfigInterval}
+              setCustomConfigInterval={setCustomConfigInterval}
+              customConfigLateFee={customConfigLateFee}
+              setCustomConfigLateFee={setCustomConfigLateFee}
+              promoteForm={promoteForm}
+              setPromoteForm={setPromoteForm}
+              verifyForm={verifyForm}
+              setVerifyForm={setVerifyForm}
+              examForm={examForm}
+              setExamForm={setExamForm}
+              onVerifyDocs={handleVerifyDocuments}
+              onSaveExam={handleSaveExam}
+              onPromote={handlePromote}
+              onWithdrawApplicant={handleWithdrawApplicant}
+              onReactivateApplicant={handleReactivateApplicant}
+              actionLoading={actionLoading}
+              formError={formError}
+              setFormError={setFormError}
+              classFees={classFees}
+              selectedOptionalFees={selectedOptionalFees}
+              setSelectedOptionalFees={setSelectedOptionalFees}
+            />
+          ) : selectedInquiry ? (
+            <InquiryDetailPane
+              selectedInquiry={selectedInquiry}
+              canVerifyDocs={canVerifyDocs}
+              onOpenInquiryWorkspace={handleOpenInquiryWorkspace}
+              setAppForm={setAppForm}
+              setApplicationModalOpen={setApplicationModalOpen}
+              schoolName={branches.find(b => b.id === branchFilter)?.name || "Our School"}
+              onClose={() => setSelectedInquiry(null)}
+              onInquiryUpdated={handleInquiryUpdated}
+              hasAppAccess={hasAppAccess}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-50/50 dark:bg-zinc-950/20">
+              <div className="w-20 h-20 mb-5 rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800/50 shadow-sm flex items-center justify-center relative">
+                <Icon name="inbox" size={36} className="text-slate-300 dark:text-zinc-700" />
+              </div>
+              <p className="text-lg font-extrabold tracking-tight text-slate-700 dark:text-zinc-300">Unified Admissions Inbox</p>
+              <p className="text-xs mt-2 text-slate-400 max-w-[280px] text-center leading-relaxed">
+                Select a candidate from the left to view their complete 360° profile and take action.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
       {/* 6. MODALS & WORKSPACES */}
 
       {/* Inquiry Creation Modal */}
@@ -1684,9 +1573,6 @@ export default function AdmissionsPage() {
         open={inquiryWorkspaceOpen}
         onOpenChange={setInquiryWorkspaceOpen}
         selectedInquiry={selectedInquiry}
-        followUpForm={followUpForm}
-        setFollowUpForm={setFollowUpForm}
-        onSubmitFollowUp={handleCreateFollowUp}
         loading={actionLoading}
         onSuccess={() => {
           fetchDashboardData();

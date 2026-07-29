@@ -63,14 +63,30 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         }
       }
 
+      // Fetch all current documents for this application to enforce status guardrail
+      const allDocs = await tx.applicationDocument.findMany({
+        where: { applicationId: id },
+      });
+
+      const hasPending = allDocs.some((d) => d.status === "PENDING");
+      const hasRejected = allDocs.some((d) => d.status === "REJECTED");
+
+      let finalStatus = applicationStatus || application.status;
+      if (hasRejected) {
+        finalStatus = "REJECTED";
+      } else if (hasPending || allDocs.length === 0) {
+        // Guardrail: Cannot promote to SHORTLISTED or TEST_SCHEDULED if documents are pending or missing
+        if (finalStatus === "SHORTLISTED" || finalStatus === "TEST_SCHEDULED") {
+          finalStatus = "DOCUMENT_VERIFICATION";
+        }
+      }
+
       // Update application fields (status, verificationNotes)
       const dataToUpdate: Record<string, any> = {};
-      if (applicationStatus) {
-        dataToUpdate.status = applicationStatus;
-        if (applicationStatus === "REJECTED") {
-          dataToUpdate.statusBeforeArchive = application.status;
-          dataToUpdate.archiveReason = archiveReason || null;
-        }
+      dataToUpdate.status = finalStatus;
+      if (finalStatus === "REJECTED") {
+        dataToUpdate.statusBeforeArchive = application.status;
+        dataToUpdate.archiveReason = archiveReason || null;
       }
       if (verificationNotes !== undefined) {
         dataToUpdate.verificationNotes = verificationNotes;

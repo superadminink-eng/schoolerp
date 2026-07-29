@@ -38,7 +38,7 @@ export function AdmissionsSearch({
   setSearchQuery,
 }: FiltersProps) {
   return (
-    <div className="flex items-center bg-white dark:bg-zinc-900 rounded-xl shadow-[0_1px_3px_rgb(0,0,0,0.1)] border border-slate-200/80 dark:border-zinc-800 h-10 w-full max-w-[200px] xl:max-w-[280px] overflow-hidden transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50 shrink-0">
+    <div className="flex items-center bg-white dark:bg-zinc-900 rounded-xl shadow-[0_1px_3px_rgb(0,0,0,0.1)] border border-slate-200/80 dark:border-zinc-800 h-10 w-full max-w-full sm:max-w-[240px] xl:max-w-[280px] overflow-hidden transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50">
       <Icon name="search" size={16} className="text-slate-400 ml-2.5 shrink-0" />
       <input
         type="text"
