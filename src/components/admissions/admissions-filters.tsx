@@ -1,15 +1,15 @@
 "use client";
 
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { SearchBar } from "@/components/ui/search-bar";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 
 interface ClassItem {
   id: string;
   name: string;
 }
 
-interface FiltersProps {
+export interface FiltersProps {
   activeTab: "applications" | "inquiries";
   classFilter: string;
   setClassFilter: (val: string) => void;
@@ -29,17 +29,78 @@ interface FiltersProps {
   onClearDemoClick: () => void;
 }
 
-export default function AdmissionsFilters({
+export function AdmissionsSearch({
   activeTab,
   classFilter,
   setClassFilter,
   classes,
   searchQuery,
   setSearchQuery,
+}: FiltersProps) {
+  return (
+    <div className="flex items-center bg-white dark:bg-zinc-900 rounded-xl shadow-[0_1px_3px_rgb(0,0,0,0.1)] border border-slate-200/80 dark:border-zinc-800 h-10 w-full max-w-[200px] xl:max-w-[280px] overflow-hidden transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50 shrink-0">
+      <Icon name="search" size={16} className="text-slate-400 ml-2.5 shrink-0" />
+      <input
+        type="text"
+        placeholder="Search..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="flex-1 bg-transparent h-full px-2 text-sm font-medium text-slate-800 dark:text-zinc-200 outline-none placeholder:text-slate-400 min-w-0"
+      />
+      
+      {activeTab === "applications" && (
+        <>
+          <div className="w-px h-5 bg-slate-200 dark:bg-zinc-800 shrink-0 mx-1"></div>
+          <div className="shrink-0 w-28">
+            <Select value={classFilter} onValueChange={setClassFilter}>
+              <SelectTrigger className="h-10 border-none bg-transparent hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-none shadow-none text-xs font-bold text-slate-600 dark:text-zinc-400 focus:ring-0 px-2">
+                <SelectValue placeholder="All Grades" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL" className="font-bold text-xs">All Grades</SelectItem>
+                {classes.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="text-xs">
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function AdmissionsDataToggles({
+  activeTab,
   includeArchives,
   setIncludeArchives,
   includeAppliedInquiries,
   setIncludeAppliedInquiries,
+}: FiltersProps) {
+  return (
+    <div className="flex items-center gap-2 px-3 h-10 bg-white dark:bg-zinc-900 rounded-xl shadow-[0_1px_3px_rgb(0,0,0,0.1)] border border-slate-200/80 dark:border-zinc-800 shrink-0">
+      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+        {activeTab === "applications" ? "Archives" : "Converted"}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        onClick={() => activeTab === "applications" ? setIncludeArchives(!includeArchives) : setIncludeAppliedInquiries(!includeAppliedInquiries)}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
+          (activeTab === "applications" ? includeArchives : includeAppliedInquiries) ? "bg-primary" : "bg-slate-300 dark:bg-zinc-700"
+        }`}
+      >
+        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition duration-200 shadow-sm ${
+          (activeTab === "applications" ? includeArchives : includeAppliedInquiries) ? "translate-x-4.5" : "translate-x-1"
+        }`} />
+      </button>
+    </div>
+  );
+}
+
+export function AdmissionsGlobalActions({
   hasInqAccess,
   canVerifyDocs,
   onNewInquiryClick,
@@ -49,108 +110,40 @@ export default function AdmissionsFilters({
   onClearDemoClick,
 }: FiltersProps) {
   return (
-    <div className="flex flex-col space-y-4 p-6 rounded-[24px] bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800/40 shadow-sm md:flex-row md:items-end md:space-y-0 md:justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-4 flex-1">
-        {/* Grade filter */}
-        {activeTab === "applications" && (
-          <div className="w-52 shrink-0">
-            <label className="block text-[11px] font-bold tracking-wider uppercase text-slate-400 dark:text-zinc-500 mb-1.5">
-              Applied Grade
-            </label>
-            <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger fullWidth className="h-11 rounded-xl border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 hover:bg-slate-50 dark:hover:bg-zinc-900 text-sm font-semibold">
-                <SelectValue placeholder="All Classes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Grades</SelectItem>
-                {classes.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+    <div className="flex items-center gap-2 shrink-0">
+      {hasDemoData && (
+        <Button
+          variant="outlined"
+          icon="delete_sweep"
+          loading={isClearingDemo}
+          onClick={onClearDemoClick}
+          className="h-9 rounded-xl font-bold border-red-200 text-red-600 hover:bg-red-50 text-xs px-3"
+        >
+          Clear
+        </Button>
+      )}
+      
+      {hasInqAccess && (
+        <Button
+          variant="tonal"
+          icon="add"
+          onClick={onNewInquiryClick}
+          className="h-9 rounded-xl font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-4 shadow-sm"
+        >
+          Inquiry
+        </Button>
+      )}
 
-        {/* Search bar */}
-        <div className="flex-1 min-w-[280px]">
-          <label className="block text-[11px] font-bold tracking-wider uppercase text-slate-400 dark:text-zinc-500 mb-1.5">
-            Search Candidate
-          </label>
-          <div className="relative group">
-            <SearchBar
-              placeholder={
-                activeTab === "applications"
-                  ? "Search by candidate name, application No, parent..."
-                  : "Search by inquirer name, parent name, phone..."
-              }
-              value={searchQuery}
-              onChange={setSearchQuery}
-              className="h-11 rounded-xl border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 group-focus-within:border-primary transition-all duration-300"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Action switches and Add buttons */}
-      <div className="flex flex-wrap items-center gap-3 self-end md:self-auto shrink-0">
-        {/* Archives / Converted Toggle */}
-        {activeTab === "applications" ? (
-          <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-600 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-800/40 border border-slate-100 dark:border-zinc-800/60 px-4 py-3 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
-            <input
-              type="checkbox"
-              checked={includeArchives}
-              onChange={(e) => setIncludeArchives(e.target.checked)}
-              className="rounded text-primary border-slate-300 dark:border-zinc-700 focus:ring-primary w-4.5 h-4.5 transition-all"
-            />
-            Show Archives
-          </label>
-        ) : (
-          <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-600 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-800/40 border border-slate-100 dark:border-zinc-800/60 px-4 py-3 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
-            <input
-              type="checkbox"
-              checked={includeAppliedInquiries}
-              onChange={(e) => setIncludeAppliedInquiries(e.target.checked)}
-              className="rounded text-primary border-slate-300 dark:border-zinc-700 focus:ring-primary w-4.5 h-4.5 transition-all"
-            />
-            Show Converted
-          </label>
-        )}
-
-        {/* Action Buttons */}
-        {hasDemoData && (
-          <Button
-            variant="outlined"
-            icon="delete"
-            loading={isClearingDemo}
-            onClick={onClearDemoClick}
-            className="h-11 rounded-xl font-bold border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-950/40 dark:text-red-400 dark:hover:bg-red-950/20 px-5 text-sm"
-          >
-            Clear Demo
-          </Button>
-        )}
-        {hasInqAccess && (
-          <Button
-            variant="tonal"
-            icon="group_add"
-            onClick={onNewInquiryClick}
-            className="h-11 rounded-xl font-bold px-5 text-sm"
-          >
-            New Inquiry
-          </Button>
-        )}
-        {canVerifyDocs && (
-          <Button
-            variant="filled"
-            icon="add"
-            onClick={onNewApplicationClick}
-            className="h-11 rounded-xl font-bold bg-primary text-white hover:bg-primary/95 px-5 text-sm shadow-md shadow-primary/15"
-          >
-            New Application
-          </Button>
-        )}
-      </div>
+      {canVerifyDocs && (
+        <Button
+          variant="filled"
+          icon="rocket_launch"
+          onClick={onNewApplicationClick}
+          className="h-9 rounded-xl font-bold bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 text-xs px-4 shadow-sm"
+        >
+          New App
+        </Button>
+      )}
     </div>
   );
 }

@@ -1,0 +1,334 @@
+"use client";
+
+import React, { useState } from "react";
+import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
+
+interface Inquiry {
+  id: string;
+  studentName: string;
+  parentName: string;
+  parentPhone: string;
+  parentEmail: string;
+  status: string;
+  createdAt: string;
+  dateOfBirth: string;
+  gender: string;
+  notes: string | null;
+  source: string;
+  classApplied?: { id: string; name: string } | null;
+}
+
+interface InquiriesInboxProps {
+  inquiries: Inquiry[];
+  canVerifyDocs: boolean;
+  onOpenInquiryWorkspace: (inq: Inquiry) => void;
+  setAppForm: (val: any) => void;
+  setApplicationModalOpen: (val: boolean) => void;
+  schoolName?: string;
+}
+
+export default function InquiriesInbox({
+  inquiries,
+  canVerifyDocs,
+  onOpenInquiryWorkspace,
+  setAppForm,
+  setApplicationModalOpen,
+  schoolName = "our school",
+}: InquiriesInboxProps) {
+  const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
+
+  // Helper to generate deterministic avatar colors
+  const getAvatarColor = (name: string) => {
+    const colors = [
+      "bg-blue-100 text-blue-700", "bg-emerald-100 text-emerald-700",
+      "bg-violet-100 text-violet-700", "bg-amber-100 text-amber-700",
+      "bg-pink-100 text-pink-700", "bg-sky-100 text-sky-700"
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
+  };
+
+  // Helper to format WhatsApp message globally
+  const handleSendWelcomeWhatsApp = (inq: Inquiry) => {
+    if (!inq.parentPhone) {
+      alert("No parent phone number provided for this inquiry.");
+      return;
+    }
+
+    // Keep only digits and '+'
+    let phone = inq.parentPhone.replace(/[^+\d]/g, "");
+    
+    // Smart Country Code handling
+    if (phone.length === 10 && !phone.startsWith("+")) {
+      phone = "91" + phone; // Fallback to 91 only if strictly 10 digits without code
+    } else if (phone.startsWith("+")) {
+      phone = phone.substring(1); // Remove '+' for wa.me link
+    }
+
+    const classNameText = inq.classApplied ? ` in *${inq.classApplied.name}*` : "";
+    const message = `✨ *Welcome to ${schoolName}!* ✨\n\nHi *${inq.parentName}*,\nThank you for showing interest in securing a bright future for *${inq.studentName}*${classNameText}. 🎓\n\nTo fast-track your admission process, please keep these documents ready for your campus visit:\n\n📄 *Birth Certificate*\n🪪 *Student Aadhaar*\n📸 *Passport Photo*\n📈 *Previous Marksheet* (if applicable)\n\nIf you have any questions, just reply here. We’d love to guide you through! 🤝`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const waUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
+    window.open(waUrl, "_blank", "noopener,noreferrer");
+  };
+
+  // Quick helper to determine SLA status
+  const isOverdue = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    return diffHours > 48;
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-280px)] w-full border border-slate-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden bg-white dark:bg-zinc-950 shadow-sm">
+      
+      {/* Left Pane: High-Density Lead List */}
+      <div className="w-[320px] shrink-0 flex flex-col border-r border-slate-200/60 dark:border-zinc-800/60 bg-white dark:bg-zinc-950">
+        <div className="py-3 px-4 border-b border-slate-200/60 dark:border-zinc-800/60 flex justify-between items-center bg-slate-50/50 dark:bg-zinc-900/50">
+          <h3 className="font-semibold text-xs tracking-tight text-slate-800 dark:text-zinc-200 flex items-center gap-2">
+            <Icon name="inbox" size={16} className="text-slate-400" />
+            Lead Inbox <span className="bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 px-1.5 py-0.5 rounded-full text-[9px] font-bold ml-1">{inquiries.length}</span>
+          </h3>
+          <button className="p-1 hover:bg-slate-200/50 dark:hover:bg-zinc-800 rounded text-slate-400 transition-colors" title="Filter & Sort">
+            <Icon name="sort" size={14} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {inquiries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-zinc-900 flex items-center justify-center mb-3">
+                <Icon name="inbox" size={20} className="text-slate-300 dark:text-zinc-700" />
+              </div>
+              <p className="text-sm font-semibold text-slate-600 dark:text-zinc-400">Inbox Zero</p>
+              <p className="text-xs mt-1 text-slate-400">No pending inquiries found.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100 dark:divide-zinc-800/40">
+              {inquiries.map((inq) => {
+                const isSelected = selectedInquiry?.id === inq.id;
+                const overdue = isOverdue(inq.createdAt) && inq.status !== "APPLIED";
+                
+                return (
+                  <li 
+                    key={inq.id}
+                    onClick={() => setSelectedInquiry(inq)}
+                    className={`py-3 px-4 cursor-pointer transition-colors group flex items-start gap-3 min-w-0 ${
+                      isSelected ? "bg-sky-50/50 dark:bg-sky-900/10 border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent hover:bg-slate-50 dark:hover:bg-zinc-900/50"
+                    }`}
+                  >
+                    <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold tracking-wider ${getAvatarColor(inq.studentName)}`}>
+                      {getInitials(inq.studentName)}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-0.5">
+                        <span className={`font-semibold text-sm truncate pr-2 ${isSelected ? "text-primary dark:text-sky-400" : "text-slate-800 dark:text-zinc-200"}`}>
+                          {inq.studentName}
+                        </span>
+                        {/* Status Indicator */}
+                        <div className="shrink-0 flex items-center gap-1.5 mt-1">
+                          {overdue && (
+                            <span className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-red-500">
+                              <Icon name="error" size={10} />
+                            </span>
+                          )}
+                          <span className={`h-2 w-2 rounded-full ${
+                            inq.status === "APPLIED" ? "bg-emerald-400" : "bg-amber-400"
+                          }`} title={inq.status} />
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 truncate mb-1">
+                        <span className="truncate">{inq.parentName || "—"}</span>
+                        <span>•</span>
+                        <span className="truncate">{inq.classApplied?.name || "—"}</span>
+                      </div>
+                      
+                      <div className="text-[10px] text-slate-400 dark:text-zinc-500">
+                        {new Date(inq.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* Right Pane: Smart Details Workspace */}
+      <div className="flex-1 flex flex-col bg-slate-50/30 dark:bg-zinc-950/20 relative min-w-0">
+        {selectedInquiry ? (
+          <div className="flex flex-col h-full">
+            {/* Unified Sleek Header */}
+            <div className="px-6 py-4 border-b border-slate-200/60 dark:border-zinc-800/60 bg-white dark:bg-zinc-950 shrink-0">
+              <div className="flex justify-between items-start gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                        selectedInquiry.status === "APPLIED" 
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      }`}>
+                      {selectedInquiry.status}
+                    </span>
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <Icon name="public" size={12} /> {selectedInquiry.source || "—"}
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-zinc-100 truncate">
+                    {selectedInquiry.studentName}
+                  </h2>
+                </div>
+                
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="ghost" size="sm" icon="edit" className="h-8 text-xs text-slate-500" onClick={() => onOpenInquiryWorkspace(selectedInquiry)}>
+                    Note
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    size="sm" 
+                    icon="forum"
+                    onClick={() => handleSendWelcomeWhatsApp(selectedInquiry)}
+                    disabled={!selectedInquiry.parentPhone}
+                    className="h-8 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-900/20 disabled:opacity-50"
+                  >
+                    WhatsApp
+                  </Button>
+                  {selectedInquiry.status !== "APPLIED" && canVerifyDocs && (
+                    <Button 
+                      variant="filled" 
+                      size="sm" 
+                      icon="rocket_launch"
+                      className="h-8 text-xs bg-primary hover:bg-primary/90 text-white shadow-sm"
+                      onClick={() => {
+                        setAppForm({
+                          inquiryId: selectedInquiry.id,
+                          firstName: selectedInquiry.studentName.split(" ")[0] || "",
+                          lastName: selectedInquiry.studentName.split(" ").slice(1).join(" ") || "",
+                          dateOfBirth: selectedInquiry.dateOfBirth ? selectedInquiry.dateOfBirth.split("T")[0] : "",
+                          gender: selectedInquiry.gender || "MALE",
+                          bloodGroup: "",
+                          address: "",
+                          pincode: "",
+                          emergencyContact: "",
+                          fatherName: selectedInquiry.parentName,
+                          fatherPhone: selectedInquiry.parentPhone,
+                          fatherEmail: selectedInquiry.parentEmail,
+                          fatherOccupation: "",
+                          motherName: "",
+                          motherPhone: "",
+                          motherEmail: "",
+                          motherOccupation: "",
+                          classId: selectedInquiry.classApplied?.id || "",
+                        });
+                        setApplicationModalOpen(true);
+                      }}
+                    >
+                      Convert to App
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Property Grid & Notes (Body) */}
+            <div className="p-6 flex-1 overflow-y-auto space-y-8">
+              
+              <div className="grid grid-cols-2 gap-8">
+                {/* Property Grid: Parent Details */}
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-slate-200/60 dark:border-zinc-800/60 pb-2">
+                    <Icon name="family_restroom" size={14} /> Family Information
+                  </h4>
+                  <dl className="space-y-3">
+                    <div className="flex flex-col">
+                      <dt className="text-[10px] text-slate-400 uppercase">Parent Name</dt>
+                      <dd className="text-sm font-medium text-slate-800 dark:text-zinc-200 mt-0.5">{selectedInquiry.parentName || "—"}</dd>
+                    </div>
+                    <div className="flex flex-col">
+                      <dt className="text-[10px] text-slate-400 uppercase">Phone Number</dt>
+                      <dd className="text-sm font-mono text-slate-800 dark:text-zinc-200 mt-0.5">
+                        {selectedInquiry.parentPhone ? (
+                          <a href={`tel:${selectedInquiry.parentPhone}`} className="hover:text-primary transition-colors">
+                            {selectedInquiry.parentPhone}
+                          </a>
+                        ) : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex flex-col">
+                      <dt className="text-[10px] text-slate-400 uppercase">Email Address</dt>
+                      <dd className="text-sm text-slate-800 dark:text-zinc-200 mt-0.5">
+                        {selectedInquiry.parentEmail ? (
+                          <a href={`mailto:${selectedInquiry.parentEmail}`} className="hover:text-primary transition-colors truncate block">
+                            {selectedInquiry.parentEmail}
+                          </a>
+                        ) : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Property Grid: Student Details */}
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-slate-200/60 dark:border-zinc-800/60 pb-2">
+                    <Icon name="face" size={14} /> Student Profile
+                  </h4>
+                  <dl className="space-y-3">
+                    <div className="flex flex-col">
+                      <dt className="text-[10px] text-slate-400 uppercase">Target Class</dt>
+                      <dd className="text-sm font-medium text-slate-800 dark:text-zinc-200 mt-0.5">{selectedInquiry.classApplied?.name || "—"}</dd>
+                    </div>
+                    <div className="flex flex-col">
+                      <dt className="text-[10px] text-slate-400 uppercase">Date of Birth</dt>
+                      <dd className="text-sm text-slate-800 dark:text-zinc-200 mt-0.5">
+                        {selectedInquiry.dateOfBirth ? new Date(selectedInquiry.dateOfBirth).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex flex-col">
+                      <dt className="text-[10px] text-slate-400 uppercase">Gender</dt>
+                      <dd className="text-sm text-slate-800 dark:text-zinc-200 mt-0.5 capitalize">{selectedInquiry.gender?.toLowerCase() || "—"}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+
+              {/* Activity & Notes */}
+              <div>
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5 border-b border-slate-200/60 dark:border-zinc-800/60 pb-2">
+                  <Icon name="forum" size={14} /> Counselor Notes
+                </h4>
+                <div className="text-sm text-slate-700 dark:text-zinc-300 leading-relaxed max-w-3xl whitespace-pre-wrap">
+                  {selectedInquiry.notes ? (
+                    selectedInquiry.notes
+                  ) : (
+                    <span className="text-slate-400 italic">No activity notes recorded yet.</span>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-slate-400">
+            <div className="w-16 h-16 mb-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800/50 shadow-sm flex items-center justify-center">
+              <Icon name="ads_click" size={32} className="text-slate-300 dark:text-zinc-700" />
+            </div>
+            <p className="text-base font-semibold text-slate-600 dark:text-zinc-300">Select a Lead</p>
+            <p className="text-xs mt-1 text-slate-400 max-w-xs text-center">Click on a prospect from the pipeline list to view their profile, send a message, or convert them to an application.</p>
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}

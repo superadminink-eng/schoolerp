@@ -28,175 +28,130 @@ export default function AdmissionsStats({
   stageFilter,
   onStageClick,
 }: StatsProps) {
+  const cards = [];
+
+  if (hasInqAccess) {
+    cards.push({
+      id: "inquiries",
+      title: "Inquiries",
+      count: stats.inquiryCount,
+      icon: "group_add",
+      color: "sky",
+      isActive: activeTab === "inquiries",
+      onClick: () => onStageClick("inquiries"),
+    });
+  }
+
+  if (hasAppAccess) {
+    cards.push({
+      id: "SUBMITTED",
+      title: "Submitted",
+      count: stats.submittedCount,
+      icon: "app_registration",
+      color: "blue",
+      isActive: activeTab === "applications" && stageFilter === "SUBMITTED",
+      onClick: () => onStageClick("SUBMITTED"),
+    });
+
+    cards.push({
+      id: "DOCUMENT_VERIFICATION",
+      title: "Verify Docs",
+      count: stats.pendingVerify,
+      icon: "check_circle",
+      color: "amber",
+      isActive: activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION",
+      onClick: () => onStageClick("DOCUMENT_VERIFICATION"),
+    });
+
+    if (hasEntranceTest) {
+      cards.push({
+        id: "TEST_SCHEDULED",
+        title: "Exam",
+        count: stats.awaitingExam,
+        icon: "event",
+        color: "purple",
+        isActive: activeTab === "applications" && stageFilter === "TEST_SCHEDULED",
+        onClick: () => onStageClick("TEST_SCHEDULED"),
+      });
+    }
+
+    cards.push({
+      id: "SHORTLISTED",
+      title: "Shortlisted",
+      count: stats.readyToEnroll,
+      icon: "star",
+      color: "teal",
+      isActive: activeTab === "applications" && stageFilter === "SHORTLISTED",
+      onClick: () => onStageClick("SHORTLISTED"),
+    });
+  }
+
+  const colorMap: Record<string, { activeBg: string, activeBorder: string, activeText: string, iconActiveBg: string }> = {
+    sky: {
+      activeBg: "bg-sky-50 dark:bg-sky-500/10",
+      activeBorder: "border-sky-200 dark:border-sky-500/30",
+      activeText: "text-sky-700 dark:text-sky-300",
+      iconActiveBg: "bg-sky-500 text-white",
+    },
+    blue: {
+      activeBg: "bg-blue-50 dark:bg-blue-500/10",
+      activeBorder: "border-blue-200 dark:border-blue-500/30",
+      activeText: "text-blue-700 dark:text-blue-300",
+      iconActiveBg: "bg-blue-500 text-white",
+    },
+    amber: {
+      activeBg: "bg-amber-50 dark:bg-amber-500/10",
+      activeBorder: "border-amber-200 dark:border-amber-500/30",
+      activeText: "text-amber-700 dark:text-amber-300",
+      iconActiveBg: "bg-amber-500 text-white",
+    },
+    purple: {
+      activeBg: "bg-purple-50 dark:bg-purple-500/10",
+      activeBorder: "border-purple-200 dark:border-purple-500/30",
+      activeText: "text-purple-700 dark:text-purple-300",
+      iconActiveBg: "bg-purple-500 text-white",
+    },
+    teal: {
+      activeBg: "bg-teal-50 dark:bg-teal-500/10",
+      activeBorder: "border-teal-200 dark:border-teal-500/30",
+      activeText: "text-teal-700 dark:text-teal-300",
+      iconActiveBg: "bg-teal-500 text-white",
+    }
+  };
+
   return (
-    <div
-      className={`grid gap-4 shrink-0 transition-all duration-300 ${
-        hasAppAccess
-          ? hasEntranceTest ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"
-          : "grid-cols-1 md:grid-cols-1 max-w-xs"
-      }`}
-    >
-      {/* Step 1: Counselor Inquiries */}
-      {hasInqAccess && (
-        <button
-          onClick={() => onStageClick("inquiries")}
-          className={`group relative text-left p-5 border rounded-3xl transition-all duration-300 bg-white dark:bg-zinc-900 border-sky-100 dark:border-sky-950/40 hover:border-sky-300 dark:hover:border-sky-900 hover:shadow-lg hover:shadow-sky-500/5 ${
-            activeTab === "inquiries"
-              ? "ring-2 ring-sky-500 border-sky-500 bg-gradient-to-br from-sky-50/40 to-sky-100/10 dark:from-sky-950/20 dark:to-sky-900/5 shadow-md"
-              : ""
-          }`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div
-              className={`p-3 rounded-2xl bg-sky-50 text-sky-600 transition-all duration-300 group-hover:scale-110 ${
-                activeTab === "inquiries" ? "bg-sky-500 text-white shadow-md shadow-sky-500/20" : ""
-              }`}
-            >
-              <Icon name="group_add" size={20} />
+    <div className="flex overflow-x-auto hide-scrollbar gap-2 w-full pb-1">
+      {cards.map((card) => {
+        const theme = colorMap[card.color];
+        return (
+          <button
+            key={card.id}
+            onClick={card.onClick}
+            className={`group flex flex-1 items-center justify-between gap-2 p-2 rounded-xl transition-all duration-200 border min-w-[130px] ${
+              card.isActive
+                ? `${theme.activeBg} ${theme.activeBorder} shadow-sm ring-1 ring-inset ring-current`
+                : "bg-white dark:bg-zinc-900 border-slate-200/60 dark:border-zinc-800/60 hover:bg-slate-50 hover:border-slate-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                card.isActive ? theme.iconActiveBg : "bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400 group-hover:bg-slate-200"
+              }`}>
+                <Icon name={card.icon} size={16} />
+              </div>
+              
+              <div className="flex flex-col text-left overflow-hidden">
+                <span className={`text-[9px] font-bold uppercase tracking-wider truncate ${card.isActive ? theme.activeText : "text-slate-500 dark:text-zinc-400"}`}>
+                  {card.title}
+                </span>
+                <span className={`text-lg font-black leading-none mt-0.5 ${card.isActive ? theme.activeText : "text-slate-800 dark:text-zinc-100"}`}>
+                  {card.count}
+                </span>
+              </div>
             </div>
-            <span className="text-[10px] font-bold tracking-wider text-sky-500/80 uppercase">Step 1</span>
-          </div>
-          <span className="block text-3xl font-extrabold text-slate-800 dark:text-zinc-100 tracking-tight">
-            {stats.inquiryCount}
-          </span>
-          <span className="block text-xs font-bold text-slate-500 dark:text-zinc-400 mt-1">
-            Inquiries
-          </span>
-          <span className="text-[10px] text-slate-400 dark:text-zinc-500 block truncate mt-0.5">
-            Counselor lead desk
-          </span>
-        </button>
-      )}
-
-      {/* Step 2: Submitted Applications */}
-      {hasAppAccess && (
-        <button
-          onClick={() => onStageClick("SUBMITTED")}
-          className={`group relative text-left p-5 border rounded-3xl transition-all duration-300 bg-white dark:bg-zinc-900 border-blue-100 dark:border-blue-950/40 hover:border-blue-300 dark:hover:border-blue-900 hover:shadow-lg hover:shadow-blue-500/5 ${
-            activeTab === "applications" && stageFilter === "SUBMITTED"
-              ? "ring-2 ring-blue-500 border-blue-500 bg-gradient-to-br from-blue-50/40 to-blue-100/10 dark:from-blue-950/20 dark:to-blue-900/5 shadow-md"
-              : ""
-          }`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div
-              className={`p-3 rounded-2xl bg-blue-50 text-blue-600 transition-all duration-300 group-hover:scale-110 ${
-                activeTab === "applications" && stageFilter === "SUBMITTED" ? "bg-blue-500 text-white shadow-md shadow-blue-500/20" : ""
-              }`}
-            >
-              <Icon name="app_registration" size={20} />
-            </div>
-            <span className="text-[10px] font-bold tracking-wider text-blue-500/80 uppercase">Step 2</span>
-          </div>
-          <span className="block text-3xl font-extrabold text-slate-800 dark:text-zinc-100 tracking-tight">
-            {stats.submittedCount}
-          </span>
-          <span className="block text-xs font-bold text-slate-500 dark:text-zinc-400 mt-1">
-            Submitted
-          </span>
-          <span className="text-[10px] text-slate-400 dark:text-zinc-500 block truncate mt-0.5">
-            Initial review intake
-          </span>
-        </button>
-      )}
-
-      {/* Step 3: Document Verification */}
-      {hasAppAccess && (
-        <button
-          onClick={() => onStageClick("DOCUMENT_VERIFICATION")}
-          className={`group relative text-left p-5 border rounded-3xl transition-all duration-300 bg-white dark:bg-zinc-900 border-amber-100 dark:border-amber-950/40 hover:border-amber-300 dark:hover:border-amber-900 hover:shadow-lg hover:shadow-amber-500/5 ${
-            activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION"
-              ? "ring-2 ring-amber-500 border-amber-500 bg-gradient-to-br from-amber-50/40 to-amber-100/10 dark:from-amber-950/20 dark:to-amber-900/5 shadow-md"
-              : ""
-          }`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div
-              className={`p-3 rounded-2xl bg-amber-50 text-amber-600 transition-all duration-300 group-hover:scale-110 ${
-                activeTab === "applications" && stageFilter === "DOCUMENT_VERIFICATION" ? "bg-amber-500 text-white shadow-md shadow-amber-500/20" : ""
-              }`}
-            >
-              <Icon name="check_circle" size={20} />
-            </div>
-            <span className="text-[10px] font-bold tracking-wider text-amber-500/80 uppercase">Step 3</span>
-          </div>
-          <span className="block text-3xl font-extrabold text-slate-800 dark:text-zinc-100 tracking-tight">
-            {stats.pendingVerify}
-          </span>
-          <span className="block text-xs font-bold text-slate-500 dark:text-zinc-400 mt-1">
-            Verify Docs
-          </span>
-          <span className="text-[10px] text-slate-400 dark:text-zinc-500 block truncate mt-0.5">
-            Pending clerk review
-          </span>
-        </button>
-      )}
-
-      {/* Step 4: Entrance Test */}
-      {hasAppAccess && hasEntranceTest && (
-        <button
-          onClick={() => onStageClick("TEST_SCHEDULED")}
-          className={`group relative text-left p-5 border rounded-3xl transition-all duration-300 bg-white dark:bg-zinc-900 border-purple-100 dark:border-purple-950/40 hover:border-purple-300 dark:hover:border-purple-900 hover:shadow-lg hover:shadow-purple-500/5 ${
-            activeTab === "applications" && stageFilter === "TEST_SCHEDULED"
-              ? "ring-2 ring-purple-500 border-purple-500 bg-gradient-to-br from-purple-50/40 to-purple-100/10 dark:from-purple-950/20 dark:to-purple-900/5 shadow-md"
-              : ""
-          }`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div
-              className={`p-3 rounded-2xl bg-purple-50 text-purple-600 transition-all duration-300 group-hover:scale-110 ${
-                activeTab === "applications" && stageFilter === "TEST_SCHEDULED" ? "bg-purple-500 text-white shadow-md shadow-purple-500/20" : ""
-              }`}
-            >
-              <Icon name="event" size={20} />
-            </div>
-            <span className="text-[10px] font-bold tracking-wider text-purple-500/80 uppercase">Step 4</span>
-          </div>
-          <span className="block text-3xl font-extrabold text-slate-800 dark:text-zinc-100 tracking-tight">
-            {stats.awaitingExam}
-          </span>
-          <span className="block text-xs font-bold text-slate-500 dark:text-zinc-400 mt-1">
-            Entrance Exam
-          </span>
-          <span className="text-[10px] text-slate-400 dark:text-zinc-500 block truncate mt-0.5">
-            Exam scores & reviews
-          </span>
-        </button>
-      )}
-
-      {/* Step 5: Shortlist/Enroll */}
-      {hasAppAccess && (
-        <button
-          onClick={() => onStageClick("SHORTLISTED")}
-          className={`group relative text-left p-5 border rounded-3xl transition-all duration-300 bg-white dark:bg-zinc-900 border-teal-100 dark:border-teal-950/40 hover:border-teal-300 dark:hover:border-teal-900 hover:shadow-lg hover:shadow-teal-500/5 ${
-            activeTab === "applications" && stageFilter === "SHORTLISTED"
-              ? "ring-2 ring-teal-500 border-teal-500 bg-gradient-to-br from-teal-50/40 to-teal-100/10 dark:from-teal-950/20 dark:to-teal-900/5 shadow-md"
-              : ""
-          }`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div
-              className={`p-3 rounded-2xl bg-teal-50 text-teal-600 transition-all duration-300 group-hover:scale-110 ${
-                activeTab === "applications" && stageFilter === "SHORTLISTED" ? "bg-teal-500 text-white shadow-md shadow-teal-500/20" : ""
-              }`}
-            >
-              <Icon name="star" size={20} />
-            </div>
-            <span className="text-[10px] font-bold tracking-wider text-teal-500/80 uppercase">
-              Step {hasEntranceTest ? "5" : "4"}
-            </span>
-          </div>
-          <span className="block text-3xl font-extrabold text-slate-800 dark:text-zinc-100 tracking-tight">
-            {stats.readyToEnroll}
-          </span>
-          <span className="block text-xs font-bold text-slate-500 dark:text-zinc-400 mt-1">
-            Shortlisted
-          </span>
-          <span className="text-[10px] text-slate-400 dark:text-zinc-500 block truncate mt-0.5">
-            Ready for enrollment
-          </span>
-        </button>
-      )}
+          </button>
+        );
+      })}
     </div>
   );
 }
