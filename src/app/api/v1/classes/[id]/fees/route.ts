@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-helpers";
-import { checkApiPermission } from "@/lib/rbac";
+import { getTenantContext, hasPermission } from "@/lib/rbac";
 
 type RouteContext = any;
 
@@ -9,8 +9,22 @@ type RouteContext = any;
  * GET /api/v1/classes/:id/fees — list fees for a class (for student form)
  */
 export async function GET(req: NextRequest, context: RouteContext) {
-  const denied = await checkApiPermission(req, "fees", "read");
-  if (denied) return denied;
+  const ctx = getTenantContext(req);
+  const isSuperOrSchoolAdmin = ctx.roleName === "SUPER_ADMIN" || ctx.roleName === "SCHOOL_ADMIN";
+  let allowed = isSuperOrSchoolAdmin;
+  
+  if (!allowed) {
+    const [hasFeeRead, hasAdmissionsVerify, hasRegistrar] = await Promise.all([
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "fees", "read"),
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "document_verification"),
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "registrar_desk"),
+    ]);
+    allowed = hasFeeRead || hasAdmissionsVerify || hasRegistrar;
+  }
+  
+  if (!allowed) {
+    return apiError("FORBIDDEN", "Insufficient permissions", 403);
+  }
 
   const { id } = await context.params;
 
