@@ -19,8 +19,8 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // Public marketing pages — always accessible
-  if (publicPaths.includes(pathname)) {
+  // Public marketing & parent upload pages — always accessible
+  if (publicPaths.includes(pathname) || pathname.startsWith("/public/")) {
     return NextResponse.next();
   }
 
@@ -91,9 +91,10 @@ export default auth((req) => {
     "/api/v1/organizations/register",
   ];
 
-  // If no session exists, return 401 for private API routes (except parent login and bearer-token authenticated endpoints)
+  // If no session exists, return 401 for private API routes (except public APIs and bearer-token authenticated endpoints)
   if (
     pathname.startsWith("/api/v1/") &&
+    !pathname.startsWith("/api/v1/public/") &&
     !publicApiPaths.includes(pathname) &&
     !req.headers.get("authorization")?.trim().startsWith("Bearer ")
   ) {

@@ -78,11 +78,12 @@ export const authConfig: NextAuthConfig = {
       const isLoggedIn = !!auth?.user && (auth as any)?.error !== "SessionInvalid";
       const { pathname } = nextUrl;
 
-      // Bypass auth checks for Next.js internal paths, APIs, assets, and public marketing pages
+      // Bypass auth checks for Next.js internal paths, APIs, assets, public parent portal, and public marketing pages
       if (
         pathname.startsWith("/_") ||
         pathname.startsWith("/api") ||
         pathname.startsWith("/assets") ||
+        pathname.startsWith("/public") ||
         pathname === "/favicon.ico" ||
         pathname === "/" ||
         pathname === "/pricing"
