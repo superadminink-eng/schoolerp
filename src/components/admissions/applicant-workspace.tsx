@@ -656,16 +656,16 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
         body: JSON.stringify(editForm),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to update application");
+      const json = await response.json();
+      if (!response.ok || !json.success) {
+        throw new Error(json.error?.message || "Failed to update application");
       }
 
-      const updated = await response.json();
-      onApplicantUpdated(updated.data);
+      onApplicantUpdated(json.data);
       setIsEditing(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating application:", error);
-      alert("Failed to update application details.");
+      alert(error.message || "Failed to update application details.");
     } finally {
       setEditLoading(false);
     }

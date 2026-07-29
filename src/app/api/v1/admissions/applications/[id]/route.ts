@@ -10,8 +10,8 @@ const editApplicationSchema = z.object({
   dateOfBirth: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
   gender: z.enum(["MALE", "FEMALE", "OTHER"]),
   bloodGroup: z.string().nullable().optional(),
-  address: z.string().min(5, "Address must be at least 5 characters"),
-  pincode: z.string().min(4, "Invalid pincode"),
+  address: z.string().nullable().optional().or(z.literal("")),
+  pincode: z.string().nullable().optional().or(z.literal("")),
   previousSchool: z.string().nullable().optional(),
   emergencyContact: z.string().nullable().optional(),
   fatherName: z.string().nullable().optional(),
@@ -24,6 +24,13 @@ const editApplicationSchema = z.object({
   motherOccupation: z.string().nullable().optional(),
   classId: z.string(),
 });
+
+export async function PUT(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  return PATCH(req, ctx);
+}
 
 export async function PATCH(
   req: NextRequest,
