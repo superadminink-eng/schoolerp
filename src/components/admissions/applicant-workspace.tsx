@@ -1797,17 +1797,21 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                             MANDATORY FEES
                           </span>
                           <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                            ₹{formatIndianNumber(installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0))}
+                            ₹{formatIndianNumber(mandatoryTotal)}
                           </span>
                         </div>
 
                         <div className="space-y-1.5 text-xs text-slate-600 dark:text-zinc-400 pl-1">
-                          {installmentTemplates.map((t) => (
-                            <div key={t.id} className="flex justify-between items-center text-[11px]">
-                              <span>{t.name} <span className="text-[9px] text-slate-400">(annual)</span></span>
-                              <span className="font-semibold text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(Number(t.amount))}</span>
-                            </div>
-                          ))}
+                          {classFees.length > 0 ? (
+                            classFees.filter(f => f.applicability === "MANDATORY").map((fee) => (
+                              <div key={fee.id} className="flex justify-between items-center text-[11px]">
+                                <span>{fee.name} <span className="text-[9px] text-slate-400">({fee.frequency.toLowerCase()})</span></span>
+                                <span className="font-semibold text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(Number(fee.amount))}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-[11px] text-slate-400 italic">No mandatory fees found.</div>
+                          )}
                         </div>
                       </div>
 
@@ -1816,23 +1820,48 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                           OPTIONAL ADD-ONS
                         </span>
-                        <div className="p-3 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-900/30 flex items-center justify-between text-xs">
-                          <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800 dark:text-zinc-200">
-                            <input
-                              type="checkbox"
-                              onChange={(e) => handleOptionalFeeToggle?.({ id: "sports-academy", amount: 2500 }, e.target.checked)}
-                              className="rounded text-primary focus:ring-primary/20 w-4 h-4"
-                            />
-                            <span>Sport Academy</span>
-                          </label>
-                          <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">₹2,500 / annual</span>
+                        <div className="space-y-2">
+                          {classFees.filter(f => f.applicability === "OPTIONAL").length > 0 ? (
+                            classFees.filter(f => f.applicability === "OPTIONAL").map((fee) => {
+                              const selectedFee = selectedOptionalFees.find(opt => opt.id === fee.id);
+                              return (
+                                <div key={fee.id} className="p-3 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-900/30 flex items-center justify-between text-xs">
+                                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800 dark:text-zinc-200">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!selectedFee}
+                                      onChange={(e) => handleOptionalFeeToggle(fee, e.target.checked)}
+                                      className="rounded text-primary focus:ring-primary/20 w-4 h-4"
+                                    />
+                                    <span>{fee.name}</span>
+                                  </label>
+                                  {selectedFee ? (
+                                    <div className="flex items-center gap-1.5 w-24">
+                                      <span className="text-[10px] font-bold text-slate-400">₹</span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={selectedFee.amount || ""}
+                                        onChange={(e) => handleOptionalFeeAmountChange(fee.id, Number(e.target.value))}
+                                        className="w-full h-7 px-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-950 text-xs font-bold text-amber-700 dark:text-amber-400 text-right outline-none focus:border-amber-400"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">₹{formatIndianNumber(fee.amount)} / {fee.frequency.toLowerCase()}</span>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-[11px] text-slate-400 italic">No optional add-ons available.</div>
+                          )}
                         </div>
                       </div>
 
                       {/* SCHOLARSHIP / FLAT DISCOUNT */}
                       <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
                         <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                          SCHOLARSHIP / FLAT DISCOUNT (%)
+                          SCHOLARSHIP / FLAT DISCOUNT (₹)
                         </label>
                         <div className="relative">
                           <span className="absolute left-3.5 top-2.5 text-xs font-bold text-slate-400">₹</span>
@@ -1850,7 +1879,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       <div className="pt-3 border-t-2 border-dashed border-slate-200 dark:border-zinc-800 space-y-2">
                         <div className="flex justify-between items-center text-xs font-bold text-slate-600 dark:text-zinc-400">
                           <span>GROSS FEES</span>
-                          <span>₹{formatIndianNumber(installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0))}</span>
+                          <span>₹{formatIndianNumber(baseTotal)}</span>
                         </div>
 
                         <div className="flex justify-between items-center pt-2">
@@ -1858,7 +1887,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                             NET APPLICABLE FEE
                           </span>
                           <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">
-                            ₹{formatIndianNumber(customInstallments.filter((inst) => inst.checked).reduce((acc, curr) => acc + curr.amount, 0))}
+                            ₹{formatIndianNumber(totalDiscountedFee)}
                           </span>
                         </div>
                       </div>
