@@ -1677,64 +1677,237 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
             {/* WIZARD: SHORTLISTED */}
             {selectedApp.status === "SHORTLISTED" && (
-              <form onSubmit={onPromote} className="space-y-6">
+              <form onSubmit={onPromote} className="space-y-6 animate-in fade-in duration-300">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
                   <Icon name="school" size={16} className="text-emerald-500" />
-                  Shortlist Selection & Fee Allocation
+                  Shortlist Selection, Class Placement & Fee Billing Setup
                 </h3>
 
                 <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
                   <Icon name="info" size={18} className="text-amber-500 shrink-0 mt-0.5" />
                   <div className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
-                    <p className="font-bold text-amber-700 dark:text-amber-400">Class Section & Fee Allocation</p>
-                    <p className="mt-0.5">Assign section, roll number, and confirm fee installments to promote candidate to Enrolled Student Status.</p>
+                    <p className="font-bold text-amber-700 dark:text-amber-400">SIS Enrollment Desk</p>
+                    <p className="mt-0.5">Assign class section, configure fee scholarship/installments, and record initial payment to promote candidate to Enrolled Student Status.</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                      Assign Section <span className="text-red-500">*</span>
-                    </label>
-                    <Select
-                      value={promoteForm.sectionId}
-                      onValueChange={(val: any) => handlePromoteChange("sectionId", val)}
-                    >
-                      <SelectTrigger fullWidth className="h-12 rounded-xl border-slate-200 dark:border-zinc-800 text-sm font-semibold">
-                        <SelectValue placeholder="Select Section" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {classSections.map((sec) => (
-                          <SelectItem key={sec.id} value={sec.id}>Section {sec.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {/* Section 1: Academic Placement */}
+                <div className="p-4 rounded-2xl border border-slate-200/60 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-4 shadow-xs">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
+                    <Icon name="school" size={14} className="text-primary" />
+                    1. Class Placement Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Assign Section <span className="text-red-500">*</span>
+                      </label>
+                      <Select
+                        value={promoteForm.sectionId}
+                        onValueChange={(val: any) => handlePromoteChange("sectionId", val)}
+                      >
+                        <SelectTrigger fullWidth className="h-12 rounded-xl border-slate-200 dark:border-zinc-800 text-sm font-semibold">
+                          <SelectValue placeholder="Select Section" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {classSections.map((sec) => (
+                            <SelectItem key={sec.id} value={sec.id}>Section {sec.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Roll Number (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={promoteForm.rollNo}
+                        onChange={(e) => handlePromoteChange("rollNo", e.target.value)}
+                        placeholder="e.g. 101"
+                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Admission Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={promoteForm.admissionDate}
+                        onChange={(e) => handlePromoteChange("admissionDate", e.target.value)}
+                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Fee Schedule & Billing Setup */}
+                <div className="p-4 rounded-2xl border border-slate-200/60 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-4 shadow-xs">
+                  <div className="flex justify-between items-center border-b pb-2 border-slate-100 dark:border-zinc-800">
+                    <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                      <Icon name="receipt_long" size={14} className="text-amber-500" />
+                      2. Fee Schedule & Billing Setup
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-450 dark:text-zinc-500 select-none">Term:</span>
+                      <select
+                        value={promoteForm.termType}
+                        onChange={(e) => handlePromoteChange("termType", e.target.value)}
+                        className="text-xs font-extrabold bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-1.5 text-slate-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="FULL_TERM">Full Term</option>
+                        <option value="HALF_TERM">Half Term</option>
+                        <option value="SHORT_TERM">Short Term</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                      Roll Number
-                    </label>
-                    <input
-                      type="text"
-                      value={promoteForm.rollNo}
-                      onChange={(e) => handlePromoteChange("rollNo", e.target.value)}
-                      placeholder="e.g. 101"
-                      className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-4">
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Discount Scholarship (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={String(promoteForm.discountAmount)}
+                        onChange={(e) => handlePromoteChange("discountAmount", e.target.value)}
+                        placeholder="e.g. 10"
+                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Class Base Total
+                      </label>
+                      <div className="flex items-center justify-center h-12 rounded-xl bg-slate-100/50 dark:bg-zinc-900/40 border border-slate-200/60 dark:border-zinc-800/80 text-sm font-extrabold text-slate-700 dark:text-zinc-300 select-none">
+                        ₹{formatIndianNumber(installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0))}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Onboarding Total
+                      </label>
+                      <div className="flex items-center justify-center h-12 rounded-xl bg-primary/5 dark:bg-sky-500/[0.03] border border-primary/20 dark:border-sky-500/20 text-sm font-black text-primary dark:text-sky-400 select-none">
+                        ₹{formatIndianNumber(customInstallments.filter((inst) => inst.checked).reduce((acc, curr) => acc + curr.amount, 0))}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
-                      Admission Date <span className="text-red-500">*</span>
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      Installment Templates Checklist (Edit or Deselect)
                     </label>
-                    <input
-                      type="date"
-                      required
-                      value={promoteForm.admissionDate}
-                      onChange={(e) => handlePromoteChange("admissionDate", e.target.value)}
-                      className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
-                    />
+
+                    {installmentTemplates.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 border border-dashed rounded-xl bg-slate-50 dark:bg-zinc-900/40">
+                        No installment templates configured for this class/term.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {installmentTemplates.map((t) => {
+                          const inst = customInstallments.find((ci) => ci.templateId === t.id) || {
+                            checked: false,
+                            amount: 0,
+                          };
+                          return (
+                            <div
+                              key={t.id}
+                              className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all duration-300 ${
+                                inst.checked
+                                  ? "bg-slate-50/50 dark:bg-zinc-900/60 border-primary/30 dark:border-primary/20 shadow-xs"
+                                  : "bg-slate-50/20 dark:bg-zinc-950/10 border-slate-100 dark:border-zinc-900 opacity-60"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={inst.checked}
+                                  onChange={(e) => handleInstallmentCheckChange(t.id, e.target.checked)}
+                                  className="rounded text-primary focus:ring-primary/20 w-4.5 h-4.5 border-slate-350 dark:border-zinc-800"
+                                />
+                                <div>
+                                  <span className="text-xs font-bold text-slate-850 dark:text-zinc-200">
+                                    {t.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 block mt-0.5">
+                                    Due: {new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-400">₹</span>
+                                <BaseCurrencyInput
+                                  disabled={!inst.checked}
+                                  value={String(inst.amount)}
+                                  onChange={(e) => handleInstallmentAmountChange(t.id, Number(e.target.value) || 0)}
+                                  className="w-28 h-9 text-xs font-bold bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 text-right text-slate-800 dark:text-zinc-200 outline-none focus:border-primary disabled:opacity-50 transition-all duration-300"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Section 3: Initial Admission Fee Payment */}
+                <div className="p-4 rounded-2xl border border-slate-200/60 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-4 shadow-xs">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
+                    <Icon name="payments" size={14} className="text-emerald-500" />
+                    3. Initial Admission Payment (Optional)
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Amount Paid Now
+                      </label>
+                      <BaseCurrencyInput
+                        value={String(promoteForm.amountPaid)}
+                        onChange={(e) => handlePromoteChange("amountPaid", e.target.value)}
+                        placeholder="e.g. 5000"
+                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Payment Method
+                      </label>
+                      <Select
+                        value={promoteForm.paymentMethod}
+                        onValueChange={(val: any) => handlePromoteChange("paymentMethod", val)}
+                      >
+                        <SelectTrigger fullWidth className="h-12 rounded-xl border-slate-200 dark:border-zinc-800 text-sm font-semibold">
+                          <SelectValue placeholder="Select Method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CASH">Cash Payment</SelectItem>
+                          <SelectItem value="UPI">UPI Transfer</SelectItem>
+                          <SelectItem value="ONLINE">Online Portal</SelectItem>
+                          <SelectItem value="CHEQUE">Bank Cheque</SelectItem>
+                          <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Transaction / Reference ID
+                      </label>
+                      <input
+                        type="text"
+                        value={promoteForm.transactionId}
+                        onChange={(e) => handlePromoteChange("transactionId", e.target.value)}
+                        placeholder="e.g. TXN9876543"
+                        className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                      />
+                    </div>
                   </div>
                 </div>
 
