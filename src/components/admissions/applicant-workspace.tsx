@@ -1087,125 +1087,62 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
             {(selectedApp.status === "SUBMITTED" || selectedApp.status === "DOCUMENT_VERIFICATION") && (
               <form onSubmit={onVerifyDocs} className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start animate-in fade-in duration-300">
                 {/* LEFT COLUMN: Documents Manager (60% width) */}
-                <div className="lg:col-span-7 space-y-4 bg-white dark:bg-zinc-950 p-4 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 shadow-xs">
-                  <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-zinc-800">
+                <div className="lg:col-span-7 space-y-2 bg-white dark:bg-zinc-950 p-4 sm:p-5 rounded-2xl border border-slate-200/40 dark:border-zinc-800/40 shadow-sm relative">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-zinc-800/80 pb-3 mb-2">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2">
-                        <Icon name="check_circle" size={18} className="text-amber-500" />
-                        Document Verification Checklist
+                      <h3 className="text-[15px] font-extrabold text-slate-900 dark:text-zinc-100 tracking-tight flex items-center gap-2">
+                        <Icon name="check_circle" size={18} className="text-primary" />
+                        Checklist
                       </h3>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 rounded-full border border-slate-200/50">
-                      {verifyForm.documents.length} File(s) Uploaded
-                    </span>
-                  </div>
-
-                  {/* WhatsApp Parent Upload Action Bar */}
-                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-blue-950/40 border border-emerald-200/60 dark:border-emerald-800/60 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
-                        📲
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-1.5">
-                          <span>Parent Mobile Upload Link</span>
-                          {magicUploadData ? (
-                            magicUploadData.isExpired ? (
-                              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300">
-                                🔴 Expired
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
-                                🟢 Active ({magicUploadData.daysLeft}d left)
-                              </span>
-                            )
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-                              WhatsApp Ready
-                            </span>
-                          )}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                          {magicUploadData?.isExpired
-                            ? "This link has expired after 7 days. Click Renew to issue a fresh link to parents."
-                            : "Send a 1-tap secure link to parents so they can upload documents from their phone."}
-                        </p>
-                      </div>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
+                        {verifyForm.documents.length} Uploaded
+                      </span>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {!magicUploadData ? (
+                    {/* Minimal WhatsApp Action */}
+                    <div className="flex items-center gap-2">
+                      {magicUploadData?.isExpired === false ? (
+                        <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 rounded-lg p-1">
+                          <button
+                            type="button"
+                            onClick={handleCopyMagicLink}
+                            className="h-7 px-2.5 rounded-md text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors flex items-center gap-1.5"
+                          >
+                            <Icon name={copiedLink ? "check" : "content_copy"} size={13} />
+                            {copiedLink ? "Copied" : "Copy"}
+                          </button>
+                          <a
+                            href={magicUploadData.whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-7 px-2.5 rounded-md text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1.5 shadow-xs"
+                          >
+                            WhatsApp Link
+                          </a>
+                        </div>
+                      ) : (
                         <button
                           type="button"
                           disabled={generatingLink}
-                          onClick={() => handleGenerateMagicLink(false)}
-                          className="h-8 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-900/20"
+                          onClick={() => handleGenerateMagicLink(magicUploadData ? true : false)}
+                          className="h-8 px-3 rounded-lg text-[11px] font-bold bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors flex items-center gap-1.5 border border-slate-200/50 dark:border-zinc-700/50 shadow-2xs cursor-pointer"
                         >
-                          {generatingLink ? (
-                            <>
-                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              <span>Generating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Icon name="share" size={14} />
-                              <span>Generate Link</span>
-                            </>
-                          )}
+                          <Icon name={generatingLink ? "sync" : (magicUploadData ? "refresh" : "share")} size={14} className={generatingLink ? "animate-spin" : ""} />
+                          <span>{generatingLink ? "Wait..." : (magicUploadData ? "Renew Link" : "Request via WhatsApp")}</span>
                         </button>
-                      ) : (
-                        <>
-                          {!magicUploadData.isExpired && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={handleCopyMagicLink}
-                                className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-zinc-700"
-                              >
-                                <Icon name={copiedLink ? "check" : "content_copy"} size={14} className={copiedLink ? "text-emerald-500" : ""} />
-                                <span>{copiedLink ? "Copied!" : "Copy Link"}</span>
-                              </button>
-
-                              <a
-                                href={magicUploadData.whatsappUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="h-8 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-900/20"
-                              >
-                                <span>📲</span>
-                                <span>Send WhatsApp</span>
-                              </a>
-                            </>
-                          )}
-
-                          <button
-                            type="button"
-                            disabled={generatingLink}
-                            onClick={() => handleGenerateMagicLink(true)}
-                            className={`h-8 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                              magicUploadData.isExpired
-                                ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/20"
-                                : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700"
-                            }`}
-                            title="Renew and generate a fresh 7-day magic link"
-                          >
-                            <Icon name="sync" size={13} className={generatingLink ? "animate-spin" : ""} />
-                            <span>{magicUploadData.isExpired ? "Renew Link" : "Renew"}</span>
-                          </button>
-                        </>
                       )}
                     </div>
                   </div>
 
                   {/* Uploaded Documents List */}
                   {verifyForm.documents.length === 0 ? (
-                    <div className="p-8 text-center border border-dashed rounded-2xl text-slate-400 bg-slate-50/50 dark:bg-zinc-900/30">
-                      <Icon name="cloud_upload" size={28} className="opacity-40 mb-1.5" />
-                      <p className="text-xs font-bold text-slate-700 dark:text-zinc-300">No documents uploaded yet.</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Select a mandatory document below to upload.</p>
+                    <div className="py-10 text-center rounded-xl text-slate-400 bg-slate-50/30 dark:bg-zinc-900/10">
+                      <Icon name="cloud_upload" size={24} className="opacity-30 mb-2" />
+                      <p className="text-xs font-bold text-slate-600 dark:text-zinc-400">No documents uploaded yet</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Use the add document field below.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-1">
                       {verifyForm.documents.map((doc, index) => {
                         const meta = DOCUMENT_META[doc.documentType] || { label: doc.documentType, badgeText: "Document" };
                         const isPdf = doc.filePath?.toLowerCase().endsWith(".pdf");
@@ -1213,159 +1150,118 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         return (
                           <div
                             key={doc.id || doc.documentType}
-                            className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800/90 shadow-xs hover:border-slate-300 dark:hover:border-zinc-700 hover:shadow-md transition-all duration-200 group"
+                            className="group flex flex-col p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-900/30 border border-transparent hover:border-slate-200/50 dark:hover:border-zinc-800/50 transition-colors"
                           >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              {/* Left Meta & Status */}
-                              <div className="flex items-start gap-3 min-w-0">
-                                <span className={`p-2.5 rounded-xl border shrink-0 mt-0.5 ${
+                            <div className="flex items-center justify-between gap-3">
+                              {/* Left Meta */}
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
                                   isPdf 
-                                    ? "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border-rose-100 dark:border-rose-900/40"
-                                    : "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 border-blue-100 dark:border-blue-900/40"
+                                    ? "bg-rose-50 text-rose-500 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100/40 dark:border-rose-900/30"
+                                    : "bg-blue-50 text-blue-500 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100/40 dark:border-blue-900/30"
                                 }`}>
-                                  <Icon name={isPdf ? "picture_as_pdf" : "image"} size={20} />
-                                </span>
-
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <h4 className="text-xs font-bold text-slate-900 dark:text-zinc-100 truncate">
+                                  <Icon name={isPdf ? "picture_as_pdf" : "image"} size={16} />
+                                </div>
+                                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate leading-none">
                                       {meta.label}
-                                    </h4>
-
-                                    {/* Badge Pill */}
-                                    {meta.badge === "MANDATORY" && (
-                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/50">
-                                        Mandatory
-                                      </span>
-                                    )}
-                                    {meta.badge === "CONDITIONAL" && (
-                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/50">
-                                        Class 2nd+
-                                      </span>
-                                    )}
-                                    {meta.badge === "ACCEPTED_VARIANTS" && (
-                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/50">
-                                        Address Proof
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 dark:text-zinc-500 mt-1">
-                                    <span className="flex items-center gap-1">
-                                      <span className={`w-1.5 h-1.5 rounded-full ${
-                                        doc.status === "VERIFIED"
-                                          ? "bg-emerald-500 shadow-xs shadow-emerald-500/50"
-                                          : doc.status === "REJECTED"
-                                          ? "bg-rose-500 shadow-xs shadow-rose-500/50"
-                                          : "bg-amber-500 shadow-xs shadow-amber-500/50 animate-pulse"
-                                      }`} />
-                                      <strong className={`font-bold ${
-                                        doc.status === "VERIFIED"
-                                          ? "text-emerald-600 dark:text-emerald-400"
-                                          : doc.status === "REJECTED"
-                                          ? "text-rose-600 dark:text-rose-400"
-                                          : "text-amber-600 dark:text-amber-400"
-                                      }`}>
-                                        {doc.status}
-                                      </strong>
                                     </span>
-
-                                    {doc.fileName && (
-                                      <>
-                                        <span>•</span>
-                                        <span className="truncate max-w-[140px] text-slate-500 dark:text-zinc-400 font-mono text-[10px]">{doc.fileName}</span>
-                                      </>
+                                    {meta.badge === "MANDATORY" && (
+                                      <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold uppercase tracking-wider bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-100/50 dark:border-rose-900/40">
+                                        Req
+                                      </span>
                                     )}
                                   </div>
+                                  {doc.fileName && (
+                                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate mt-1 leading-none font-medium">
+                                      {doc.fileName}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
-                              {/* Right Action Cluster */}
-                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              {/* Right Actions & Status */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Secondary actions - Always visible for touch devices */}
                                 {doc.filePath && (
                                   <button
                                     type="button"
                                     onClick={() => setPreviewDoc(doc)}
-                                    className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 hover:text-primary transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                    title="Preview uploaded document"
+                                    className="w-7 h-7 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors cursor-pointer"
+                                    title="Preview"
                                   >
-                                    <Icon name="visibility" size={13} />
-                                    <span>Preview</span>
+                                    <Icon name="visibility" size={15} />
                                   </button>
                                 )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedDocType(doc.documentType);
-                                    fileInputRef.current?.click();
-                                  }}
-                                  className="h-8 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                  title="Replace file with a new upload"
-                                >
-                                  <Icon name="sync" size={13} />
-                                  <span>Change</span>
-                                </button>
-
+                                
                                 <button
                                   type="button"
                                   onClick={() => setDeleteConfirmDoc(doc)}
                                   disabled={deletingDocId === doc.id}
-                                  className="h-8 w-8 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center justify-center cursor-pointer shrink-0"
+                                  className="w-7 h-7 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
                                   title="Delete document"
                                 >
-                                  <Icon name="delete" size={15} />
+                                  <Icon name="delete" size={14} />
                                 </button>
 
-                                {/* Approve / Reject Segmented Switch */}
-                                <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-zinc-800/80 rounded-xl border border-slate-200/60 dark:border-zinc-700/60">
+                                <div className="w-px h-4 bg-slate-200 dark:bg-zinc-800 mx-1 hidden sm:block"></div>
+
+                                {/* Silicon Valley Pill Toggles */}
+                                <div className="flex items-center p-0.5 bg-slate-100/80 dark:bg-zinc-800/50 rounded-lg border border-slate-200/50 dark:border-zinc-700/50">
                                   <button
                                     type="button"
-                                    onClick={() => handleDocStatusChange(index, "VERIFIED")}
-                                    title={doc.status === "VERIFIED" ? "Click to reset status to Pending" : "Approve document"}
-                                    className={`h-6 px-2.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                      doc.status === "VERIFIED" 
-                                        ? "bg-emerald-600 text-white shadow-sm" 
-                                        : "text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                    onClick={() => handleDocStatusChange(index, doc.status === "VERIFIED" ? "PENDING" : "VERIFIED")}
+                                    className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                                      doc.status === "VERIFIED"
+                                        ? "bg-emerald-500 text-white shadow-sm"
+                                        : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                                     }`}
+                                    title="Approve"
                                   >
-                                    Approve
+                                    <Icon name="check" size={16} className={doc.status === "VERIFIED" ? "stroke-[3px]" : ""} />
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleDocStatusChange(index, "REJECTED")}
-                                    title={doc.status === "REJECTED" ? "Click to reset status to Pending" : "Reject document"}
-                                    className={`h-6 px-2.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                      doc.status === "REJECTED" 
-                                        ? "bg-rose-600 text-white shadow-sm" 
-                                        : "text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                    onClick={() => handleDocStatusChange(index, doc.status === "REJECTED" ? "PENDING" : "REJECTED")}
+                                    className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                                      doc.status === "REJECTED"
+                                        ? "bg-rose-500 text-white shadow-sm"
+                                        : "text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                                     }`}
+                                    title="Reject"
                                   >
-                                    Reject
+                                    <Icon name="close" size={16} className={doc.status === "REJECTED" ? "stroke-[3px]" : ""} />
                                   </button>
                                 </div>
                               </div>
                             </div>
-
-                            {/* Remarks Input Sub-Bar */}
-                            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60">
-                              <input
-                                type="text"
-                                placeholder="Add verification remarks or mismatch note..."
-                                value={doc.remarks || ""}
-                                onChange={(e) => handleDocRemarksChange(index, e.target.value)}
-                                className="w-full h-8 px-3 text-xs rounded-xl border border-slate-200/80 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/50 focus:bg-white dark:focus:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/20 text-slate-800 dark:text-zinc-200 transition-all placeholder:text-slate-400"
-                              />
-                            </div>
+                            
+                            {/* Auto-expanding Remarks */}
+                            {(doc.status === "REJECTED" || doc.remarks) && (
+                              <div className="mt-2 pl-[44px] pr-2 animate-in slide-in-from-top-2 fade-in duration-200">
+                                <input
+                                  type="text"
+                                  autoFocus={doc.status === "REJECTED" && !doc.remarks}
+                                  placeholder="Specify rejection reason or remarks..."
+                                  value={doc.remarks || ""}
+                                  onChange={(e) => handleDocRemarksChange(index, e.target.value)}
+                                  className={`w-full h-7 px-2 text-[11px] rounded-md bg-transparent border-b ${
+                                    doc.status === "REJECTED" 
+                                      ? "border-rose-300 dark:border-rose-800/50 text-rose-900 dark:text-rose-200 placeholder:text-rose-300 dark:placeholder:text-rose-800" 
+                                      : "border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 placeholder:text-slate-400"
+                                  } focus:outline-none focus:border-primary transition-colors`}
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   )}
 
-                  {/* SMART UPLOAD SECTION: Auto-filter already uploaded & verified documents */}
+                  {/* SMART UPLOAD SECTION */}
                   {(() => {
-                    // Filter out documents that are already uploaded and VERIFIED
                     const availableDocTypes = DOC_TYPES.filter(type => {
                       const existing = verifyForm.documents.find((d: any) => d.documentType === type);
                       return !existing || existing.status === "REJECTED";
@@ -1373,168 +1269,195 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
                     if (availableDocTypes.length === 0) {
                       return (
-                        <div className="p-3.5 rounded-xl border border-emerald-200/60 bg-emerald-50/40 text-emerald-800 text-xs font-bold flex items-center gap-2">
-                          <Icon name="check_circle" size={18} className="text-emerald-600 shrink-0" />
-                          <span>✨ All required checklist documents have been uploaded.</span>
+                        <div className="mt-4 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-950/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-2">
+                          <Icon name="check_circle" size={16} />
+                          <span>All required documents are uploaded.</span>
                         </div>
                       );
                     }
 
-                    const activeMeta = DOCUMENT_META[selectedDocType] || { label: selectedDocType, badgeText: "Document" };
-
                     return (
-                      <div className="pt-2 border-t border-slate-100 dark:border-zinc-800 space-y-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                          Upload Missing Document
-                        </span>
-                        <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-900/20 flex flex-col sm:flex-row items-center gap-3">
-                          <div className="flex-1 w-full">
-                            <Select
-                              value={selectedDocType}
-                              onValueChange={(val) => setSelectedDocType(val)}
-                            >
-                              <SelectTrigger className="w-full h-10 px-3.5 text-xs rounded-xl border-slate-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 font-medium focus:ring-2 focus:ring-primary/20 shadow-2xs">
-                                <SelectValue placeholder="Select Document Type..." />
-                              </SelectTrigger>
-                              <SelectContent className="rounded-2xl border-slate-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900 p-1">
-                                {availableDocTypes.map((type) => {
-                                  const meta = DOCUMENT_META[type] || { label: type, badgeText: "" };
-                                  return (
-                                    <SelectItem key={type} value={type} className="rounded-xl text-xs py-2.5 cursor-pointer focus:bg-slate-100 dark:focus:bg-zinc-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full ${
-                                          meta.badge === "MANDATORY"
-                                            ? "bg-rose-500"
-                                            : meta.badge === "CONDITIONAL"
-                                            ? "bg-amber-500"
-                                            : "bg-emerald-500"
-                                        }`} />
-                                        <span className="font-bold text-slate-800 dark:text-zinc-200">{meta.label}</span>
-                                        {meta.badgeText && (
-                                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 ml-auto">({meta.badgeText})</span>
-                                        )}
-                                      </div>
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleCounselorUpload}
-                            className="hidden"
-                            accept="image/*,.pdf"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploadingDoc}
-                            className="h-9 px-4 rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-2 hover:bg-primary/95 transition-colors disabled:opacity-50 shrink-0 cursor-pointer shadow-md shadow-primary/10"
+                      <div className="pt-3 mt-1 border-t border-slate-100 dark:border-zinc-800/50 flex flex-col sm:flex-row items-center gap-2">
+                        <div className="flex-1 w-full">
+                          <Select
+                            value={selectedDocType}
+                            onValueChange={(val) => setSelectedDocType(val)}
                           >
-                            {uploadingDoc ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="cloud_upload" size={15} />}
-                            {uploadingDoc ? "Uploading..." : "Upload File"}
-                          </button>
+                            <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-dashed border-slate-300 dark:border-zinc-700 bg-transparent text-slate-500 dark:text-zinc-400 font-medium hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors focus:ring-0">
+                              <SelectValue placeholder="+ Add missing document..." />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-slate-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900 p-1">
+                              {availableDocTypes.map((type) => {
+                                const meta = DOCUMENT_META[type] || { label: type, badgeText: "" };
+                                return (
+                                  <SelectItem key={type} value={type} className="rounded-lg text-xs py-2 cursor-pointer focus:bg-slate-100 dark:focus:bg-zinc-800">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        meta.badge === "MANDATORY" ? "bg-rose-500" : meta.badge === "CONDITIONAL" ? "bg-amber-500" : "bg-emerald-500"
+                                      }`} />
+                                      <span className="font-semibold text-slate-700 dark:text-zinc-300">{meta.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
                         </div>
 
-                        {/* Helper info for Address Proof Variants */}
-                        {activeMeta.variants && (
-                          <div className="p-2.5 rounded-lg bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 text-[11px] text-blue-700 dark:text-blue-300 flex items-start gap-2">
-                            <Icon name="info" size={14} className="shrink-0 mt-0.5" />
-                            <span>
-                              <strong>Accepted Address Proofs:</strong> {activeMeta.variants.join(", ")}
-                            </span>
-                          </div>
-                        )}
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleCounselorUpload}
+                          className="hidden"
+                          accept="image/*,.pdf"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingDoc || !selectedDocType}
+                          className="h-9 px-4 rounded-lg bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold flex items-center justify-center transition-all disabled:opacity-30 shrink-0 shadow-sm cursor-pointer hover:bg-slate-800 dark:hover:bg-zinc-200"
+                        >
+                          {uploadingDoc ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="upload" size={14} className="mr-1.5" />}
+                          {uploadingDoc ? "Uploading" : "Upload"}
+                        </button>
                       </div>
                     );
                   })()}
                 </div>
 
                 {/* RIGHT COLUMN: Action & Decision Panel (40% width) */}
-                <div className="lg:col-span-5 space-y-4 bg-white dark:bg-zinc-950 p-4 rounded-2xl border border-slate-200/60 dark:border-zinc-800/80 shadow-xs">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-zinc-800">
+                <div className="lg:col-span-5 space-y-4 bg-white dark:bg-zinc-950 p-4 sm:p-5 rounded-2xl border border-slate-200/40 dark:border-zinc-800/40 shadow-sm flex flex-col">
+                  <h3 className="text-[15px] font-extrabold text-slate-900 dark:text-zinc-100 tracking-tight flex items-center gap-2 border-b pb-3 mb-2 border-slate-100 dark:border-zinc-800/80">
                     <Icon name="gavel" size={18} className="text-primary" />
                     Verification Decision
                   </h3>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3 flex-1">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                       Next Stage Transition
                     </label>
-                    <Select
-                      value={verifyForm.nextStatus}
-                      onValueChange={(val: any) => setVerifyForm((prev: any) => ({ ...prev, nextStatus: val }))}
-                    >
-                      <SelectTrigger fullWidth className="h-10 rounded-xl border-slate-200 dark:border-zinc-800 text-xs font-bold bg-white dark:bg-zinc-900">
-                        <SelectValue placeholder="Select Next Stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="DOCUMENT_VERIFICATION">Keep at Doc Verification (Hold)</SelectItem>
-                        {hasEntranceTest && <SelectItem value="TEST_SCHEDULED">Entrance Exam desk (Approved)</SelectItem>}
-                        <SelectItem value="SHORTLISTED">Direct Shortlist (Ready to Promote)</SelectItem>
-                        <SelectItem value="REJECTED">Reject Applicant</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium pt-1">
-                      {verifyForm.nextStatus === "TEST_SCHEDULED"
-                        ? "✨ Promotes candidate to Entrance Exam scheduling."
-                        : verifyForm.nextStatus === "SHORTLISTED"
-                        ? "✨ Shortlists candidate for Registrar promotion."
-                        : verifyForm.nextStatus === "REJECTED"
-                        ? "⚠️ Moves candidate to archives as Rejected."
-                        : "✨ Holds candidate at Verification Stage."}
-                    </p>
-                  </div>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "DOCUMENT_VERIFICATION" }))}
+                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                          verifyForm.nextStatus === "DOCUMENT_VERIFICATION"
+                            ? "bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-zinc-950 shadow-md ring-2 ring-slate-900/20 dark:ring-white/20"
+                            : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-[13px] flex items-center gap-1.5">
+                            Hold
+                          </div>
+                          <div className={`text-[11px] mt-0.5 ${verifyForm.nextStatus === "DOCUMENT_VERIFICATION" ? "text-slate-300 dark:text-zinc-500" : "text-slate-500 dark:text-zinc-500"}`}>Keep at Doc Verification</div>
+                        </div>
+                        {verifyForm.nextStatus === "DOCUMENT_VERIFICATION" && <Icon name="check_circle" size={18} />}
+                      </button>
 
-                  {verifyForm.nextStatus === "REJECTED" && (
-                    <div className="flex flex-col gap-1.5 pt-1">
+                      {hasEntranceTest && (
+                        <button
+                          type="button"
+                          onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "TEST_SCHEDULED" }))}
+                          className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                            verifyForm.nextStatus === "TEST_SCHEDULED"
+                              ? "bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-500/20 ring-2 ring-purple-500/20"
+                              : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
+                          }`}
+                        >
+                          <div>
+                            <div className="font-bold text-[13px] flex items-center gap-1.5">
+                              Entrance Exam
+                            </div>
+                            <div className={`text-[11px] mt-0.5 ${verifyForm.nextStatus === "TEST_SCHEDULED" ? "text-purple-200" : "text-slate-500 dark:text-zinc-500"}`}>Approve for test</div>
+                          </div>
+                          {verifyForm.nextStatus === "TEST_SCHEDULED" && <Icon name="check_circle" size={18} />}
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "SHORTLISTED" }))}
+                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                          verifyForm.nextStatus === "SHORTLISTED"
+                            ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-500/20 ring-2 ring-emerald-500/20"
+                            : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-[13px] flex items-center gap-1.5">
+                            Direct Shortlist
+                          </div>
+                          <div className={`text-[11px] mt-0.5 ${verifyForm.nextStatus === "SHORTLISTED" ? "text-emerald-200" : "text-slate-500 dark:text-zinc-500"}`}>Ready to Promote</div>
+                        </div>
+                        {verifyForm.nextStatus === "SHORTLISTED" && <Icon name="check_circle" size={18} />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "REJECTED" }))}
+                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                          verifyForm.nextStatus === "REJECTED"
+                            ? "bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-500/20 ring-2 ring-rose-500/20"
+                            : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-[13px] flex items-center gap-1.5">
+                            Reject
+                          </div>
+                          <div className={`text-[11px] mt-0.5 ${verifyForm.nextStatus === "REJECTED" ? "text-rose-200" : "text-slate-500 dark:text-zinc-500"}`}>Move to archives</div>
+                        </div>
+                        {verifyForm.nextStatus === "REJECTED" && <Icon name="check_circle" size={18} />}
+                      </button>
+                    </div>
+
+                    {verifyForm.nextStatus === "REJECTED" && (
+                      <div className="flex flex-col gap-1.5 pt-3 animate-in slide-in-from-top-2 fade-in duration-200">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1">
+                          <Icon name="error" size={12} /> Rejection Reason <span className="text-rose-400">*</span>
+                        </span>
+                        <textarea
+                          rows={2}
+                          required
+                          autoFocus
+                          value={verifyForm.archiveReason || ""}
+                          onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, archiveReason: e.target.value }))}
+                          placeholder="Specify why the applicant is being rejected..."
+                          className="w-full p-3 rounded-xl text-[13px] border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-rose-900 dark:text-rose-100 transition-all resize-none font-medium placeholder:text-rose-300 dark:placeholder:text-rose-800/50"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-1.5 pt-4 mt-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                        Rejection Reason <span className="text-red-500">*</span>
+                        Verification Notes
                       </span>
                       <textarea
                         rows={2}
-                        required
-                        value={verifyForm.archiveReason || ""}
-                        onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, archiveReason: e.target.value }))}
-                        placeholder="Specify why the applicant is being rejected..."
-                        className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none font-semibold"
+                        value={verifyForm.verificationNotes}
+                        onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, verificationNotes: e.target.value }))}
+                        placeholder="Optional remarks, internal notes..."
+                        className="w-full p-3 rounded-xl text-[13px] border border-slate-200/60 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white dark:focus:bg-zinc-900 text-slate-800 dark:text-zinc-200 transition-all resize-none placeholder:text-slate-400"
                       />
                     </div>
-                  )}
-
-                  <div className="flex flex-col gap-1.5 pt-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                      Verification Notes
-                    </span>
-                    <textarea
-                      rows={3}
-                      value={verifyForm.verificationNotes}
-                      onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, verificationNotes: e.target.value }))}
-                      placeholder="Record mismatches or requests for re-upload..."
-                      className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none"
-                    />
                   </div>
 
-                  {formError && (
-                    <div className="p-3 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/40 dark:bg-red-950/10 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
-                      <Icon name="warning" size={16} className="text-red-500 shrink-0" />
-                      <span>{formError}</span>
-                    </div>
-                  )}
-
-                  <div className="pt-2">
-                    <Button
+                  <div className="pt-2 mt-auto">
+                    {formError && (
+                      <div className="mb-3 p-3 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/80 dark:bg-red-950/20 text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
+                        <Icon name="warning" size={16} className="text-red-500 shrink-0" />
+                        <span>{formError}</span>
+                      </div>
+                    )}
+                    <button
                       type="submit"
-                      variant="filled"
-                      icon="check"
-                      loading={actionLoading}
-                      className="w-full bg-primary text-white hover:bg-primary/95 rounded-xl h-11 font-bold shadow-md shadow-primary/15"
+                      disabled={actionLoading}
+                      className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl h-11 font-bold shadow-md shadow-slate-900/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      Save Verification Details
-                    </Button>
+                      {actionLoading ? <Icon name="sync" size={16} className="animate-spin" /> : <Icon name="check_circle" size={16} />}
+                      {actionLoading ? "Saving..." : "Confirm Decision"}
+                    </button>
                   </div>
                 </div>
               </form>
