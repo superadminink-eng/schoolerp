@@ -1475,8 +1475,19 @@ export default function AdmissionsPage() {
         </div>
 
         {/* RIGHT PANE - DETAIL WORKSPACE */}
-        <div className={`flex-1 flex flex-col min-w-0 relative ${!selectedApp && !selectedInquiry ? 'hidden md:flex' : 'flex'}`}>
-          {selectedApp ? (
+        <div className={`flex-1 flex flex-col min-w-0 relative ${!selectedApp && !selectedInquiry && !isCreatingInquiry ? 'hidden md:flex' : 'flex'}`}>
+          {isCreatingInquiry ? (
+            <NewInquiryPane
+              onClose={() => setIsCreatingInquiry(false)}
+              classes={classes}
+              inquiryForm={inquiryForm}
+              setInquiryForm={setInquiryForm}
+              handleFormSubmit={handleCreateInquiry}
+              loading={actionLoading}
+              branchFilter={branchFilter}
+              activeAcademicYearId={activeAcademicYearId}
+            />
+          ) : selectedApp ? (
             <ApplicantWorkspace
               onClose={() => setSelectedApp(null)}
               selectedApp={selectedApp}
