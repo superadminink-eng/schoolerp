@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { usePermissions } from "@/hooks/use-permissions";
 import { NAVIGATION_ITEMS } from "@/config/permissions";
 import { StandardDrawer, ModalDrawer } from "./navigation-drawer";
-import { NavRail } from "./nav-rail";
 import { TopAppBar } from "./top-app-bar";
 import { BranchSwitcher } from "./branch-switcher";
 import { UserMenu } from "./user-menu";
@@ -71,19 +70,12 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-dim font-sans text-on-surface print:h-auto print:block print:overflow-visible print:bg-white">
-      {/* Persistent drawer — desktop only */}
+      {/* Smart Hover Drawer — tablet and desktop */}
       <StandardDrawer
         items={filteredItems}
         orgName={user.organizationName}
         orgLogo={user.organizationLogo}
-        className="hidden xl:block print:hidden"
-      />
-
-      {/* Nav rail — tablet only */}
-      <NavRail
-        items={filteredItems}
-        onMenuClick={() => setDrawerOpen(true)}
-        className="hidden md:flex xl:hidden print:hidden"
+        className="hidden md:block print:hidden"
       />
 
       {/* Modal drawer — opens from hamburger on mobile/tablet */}
@@ -96,7 +88,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       />
 
       {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden min-h-0 w-full print:block print:overflow-visible">
+      <div className="flex flex-1 flex-col overflow-hidden min-h-0 w-full print:block print:overflow-visible relative z-0">
         <TopAppBar
           title={pageTitle}
           onMenuClick={() => setDrawerOpen(true)}

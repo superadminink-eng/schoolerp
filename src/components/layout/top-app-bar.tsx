@@ -27,7 +27,7 @@ export function TopAppBar({
       <button
         type="button"
         onClick={onMenuClick}
-        className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 xl:hidden transition-colors"
+        className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 md:hidden transition-colors"
         aria-label="Open navigation menu"
       >
         <Icon name="menu" size={24} />

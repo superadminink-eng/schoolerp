@@ -129,40 +129,40 @@ export function InquiryDetailPane({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/60 dark:bg-zinc-950/40 relative animate-in fade-in zoom-in-95 duration-200">
+    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 relative animate-in fade-in zoom-in-95 duration-200">
       
       {/* Unified Sleek Header */}
-      <div className="px-8 py-6 border-b border-slate-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md shrink-0 sticky top-0 z-20">
-        <div className="flex flex-col 2xl:flex-row justify-between items-start gap-4">
-          <div className="min-w-0 flex items-start gap-3">
+      <div className="px-6 py-5 border-b border-slate-200/50 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl shrink-0 sticky top-0 z-20">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 max-w-7xl mx-auto w-full">
+          <div className="min-w-0 flex items-center gap-4">
             {onClose && (
-              <button onClick={onClose} className="md:hidden mt-1 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600">
+              <button onClick={onClose} className="lg:hidden w-8 h-8 flex items-center justify-center rounded-full bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 transition-colors">
                 <Icon name="arrow_back" size={20} />
               </button>
             )}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest ${
                     selectedInquiry.status === "APPLIED" 
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
-                      : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800"
+                      ? "bg-emerald-100/50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      : "bg-amber-100/50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                   }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${selectedInquiry.status === "APPLIED" ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${selectedInquiry.status === "APPLIED" ? "bg-emerald-500" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"}`}></span>
                   {selectedInquiry.status}
                 </span>
-                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 bg-slate-100 dark:bg-zinc-900 px-2.5 py-0.5 rounded-full border border-slate-200/50">
-                  <Icon name="sensor_door" size={12} /> {selectedInquiry.source || "—"}
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1 bg-slate-100/50 dark:bg-zinc-900/50 px-2 py-0.5 rounded-md">
+                  <Icon name="sensor_door" size={12} className="text-slate-400" /> {selectedInquiry.source || "—"}
                 </span>
               </div>
-              <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white truncate">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white truncate">
                 {selectedInquiry.studentName}
               </h2>
             </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0 mt-3 2xl:mt-1 w-full 2xl:w-auto">
+          <div className="flex items-center gap-2 shrink-0">
             {hasAppAccess && selectedInquiry.status !== "APPLIED" && (
-              <Button variant="text" size="sm" icon="person_add" className="h-9 text-xs font-semibold text-slate-600 hover:text-teal-700 dark:text-zinc-400 dark:hover:text-teal-400 rounded-xl transition-all" onClick={() => onOpenInquiryWorkspace(selectedInquiry)}>
+              <Button variant="text" size="sm" icon="person_add" className="h-9 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800 rounded-lg transition-colors" onClick={() => onOpenInquiryWorkspace(selectedInquiry)}>
                 Express Admit
               </Button>
             )}
@@ -172,7 +172,7 @@ export function InquiryDetailPane({
               icon="forum"
               onClick={() => handleSendWelcomeWhatsApp(selectedInquiry)}
               disabled={!selectedInquiry.parentPhone}
-              className="h-9 text-xs font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-900/20 disabled:opacity-50 rounded-xl shadow-sm transition-all"
+              className="h-9 px-3 text-xs font-semibold text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100/50 dark:bg-emerald-900/10 dark:text-emerald-400 dark:hover:bg-emerald-900/20 disabled:opacity-50 rounded-lg transition-colors"
             >
               WhatsApp
             </Button>
@@ -181,7 +181,7 @@ export function InquiryDetailPane({
                 variant="filled" 
                 size="sm" 
                 icon="rocket_launch"
-                className="h-9 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-md hover:shadow-lg rounded-xl transition-all"
+                className="h-9 px-4 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm rounded-lg transition-all"
                 onClick={() => {
                   setAppForm({
                     inquiryId: selectedInquiry.id,
@@ -214,226 +214,192 @@ export function InquiryDetailPane({
       </div>
 
       {/* Premium Inner Body */}
-      <div className="p-4 md:p-8 flex-1 flex flex-col min-h-0 space-y-6">
+      <div className="flex-1 min-h-0 overflow-hidden bg-white dark:bg-zinc-950">
+        <div className="flex flex-col lg:flex-row h-full">
         
-        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 shrink-0">
-          
-          {/* Island Card: Family Information */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-800/60 shadow-sm p-6">
-            <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-              <Icon name="family_restroom" size={14} className="text-slate-300" /> Family Details
-            </h4>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-zinc-800 flex items-center justify-center text-slate-400 shrink-0 border border-slate-100 dark:border-zinc-700/50">
-                  <Icon name="person" size={16} />
+          {/* Left Sidebar: Highly Dense Metadata */}
+          <div className="w-full lg:w-[280px] xl:w-[320px] shrink-0 border-r border-slate-100 dark:border-zinc-800/60 overflow-y-auto [&::-webkit-scrollbar]:hidden p-6 lg:p-8 flex flex-col gap-10">
+            
+            {/* Family Details Segment */}
+            <div>
+              <h4 className="text-[11px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-5">Family Details</h4>
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                  <span className="text-[13px] text-slate-500 font-medium">Parent</span>
+                  <span className="text-[13px] font-semibold text-slate-900 dark:text-zinc-100 truncate">{selectedInquiry.parentName || "—"}</span>
                 </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Parent Name</span>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200 truncate">{selectedInquiry.parentName || "—"}</span>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-500 shrink-0 border border-emerald-100 dark:border-emerald-800/30">
-                  <Icon name="call" size={16} />
-                </div>
-                <div className="flex flex-col min-w-0 items-start">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Phone</span>
+                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                  <span className="text-[13px] text-slate-500 font-medium">Phone</span>
                   {selectedInquiry.parentPhone ? (
-                    <a href={`tel:${selectedInquiry.parentPhone}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 mt-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition-colors text-xs font-mono font-bold text-slate-700 dark:text-zinc-300">
-                      {selectedInquiry.parentPhone} <Icon name="open_in_new" size={10} />
+                    <a href={`tel:${selectedInquiry.parentPhone}`} className="text-[13px] font-semibold text-slate-900 dark:text-zinc-100 hover:text-indigo-600 transition-colors truncate">
+                      {selectedInquiry.parentPhone}
                     </a>
                   ) : (
-                    <span className="text-sm text-slate-400">—</span>
+                    <span className="text-[13px] text-slate-400">—</span>
                   )}
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center text-sky-500 shrink-0 border border-sky-100 dark:border-sky-800/30">
-                  <Icon name="mail" size={16} />
-                </div>
-                <div className="flex flex-col min-w-0 items-start">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Email</span>
+                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                  <span className="text-[13px] text-slate-500 font-medium">Email</span>
                   {selectedInquiry.parentEmail ? (
-                    <a href={`mailto:${selectedInquiry.parentEmail}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 mt-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition-colors text-xs font-medium text-slate-700 dark:text-zinc-300 max-w-full truncate">
-                      <span className="truncate">{selectedInquiry.parentEmail}</span> <Icon name="open_in_new" size={10} className="shrink-0" />
+                    <a href={`mailto:${selectedInquiry.parentEmail}`} className="text-[13px] font-semibold text-slate-900 dark:text-zinc-100 hover:text-indigo-600 transition-colors truncate">
+                      {selectedInquiry.parentEmail}
                     </a>
                   ) : (
-                    <span className="text-sm text-slate-400">—</span>
+                    <span className="text-[13px] text-slate-400">—</span>
                   )}
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Island Card: Student Profile */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-800/60 shadow-sm p-6">
-            <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-              <Icon name="face" size={14} className="text-slate-300" /> Student Profile
-            </h4>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-500 shrink-0 border border-indigo-100 dark:border-indigo-800/30">
-                  <Icon name="school" size={16} />
+            {/* Student Profile Segment */}
+            <div>
+              <h4 className="text-[11px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-5">Student Profile</h4>
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                  <span className="text-[13px] text-slate-500 font-medium">Class</span>
+                  <span className="text-[13px] font-semibold text-slate-900 dark:text-zinc-100 truncate">{selectedInquiry.classApplied?.name || "—"}</span>
                 </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Target Class</span>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200 truncate">{selectedInquiry.classApplied?.name || "—"}</span>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center text-rose-500 shrink-0 border border-rose-100 dark:border-rose-800/30">
-                  <Icon name="cake" size={16} />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Date of Birth</span>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200">
-                    {selectedInquiry.dateOfBirth ? new Date(selectedInquiry.dateOfBirth).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "—"}
+                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                  <span className="text-[13px] text-slate-500 font-medium">DOB</span>
+                  <span className="text-[13px] font-semibold text-slate-900 dark:text-zinc-100 truncate">
+                    {selectedInquiry.dateOfBirth ? new Date(selectedInquiry.dateOfBirth).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—"}
                   </span>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-zinc-800 flex items-center justify-center text-slate-400 shrink-0 border border-slate-100 dark:border-zinc-700/50">
-                  <Icon name="wc" size={16} />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Gender</span>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200 capitalize">{selectedInquiry.gender?.toLowerCase() || "—"}</span>
+                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                  <span className="text-[13px] text-slate-500 font-medium">Gender</span>
+                  <span className="text-[13px] font-semibold text-slate-900 dark:text-zinc-100 capitalize truncate">{selectedInquiry.gender?.toLowerCase() || "—"}</span>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Activity Feed & Inline Composer - Takes all remaining vertical space */}
-        <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-800/60 shadow-sm overflow-hidden">
-          
-          <div className="px-6 py-4 border-b border-slate-100 dark:border-zinc-800 shrink-0 bg-slate-50/50 dark:bg-zinc-950/20 rounded-t-2xl">
-            <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <Icon name="forum" size={14} className="text-slate-300" /> Counselor Activity Feed
-            </h4>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar bg-white dark:bg-zinc-900">
-            {selectedInquiry.notes && (!selectedInquiry.followUps || selectedInquiry.followUps.length === 0) && (
-              <div className="relative pl-8 pb-4">
-                <div className="absolute left-[-11px] top-1 flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 dark:bg-zinc-800 border-2 border-white dark:border-zinc-900">
-                  <Icon name="push_pin" size={12} className="text-slate-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-semibold text-slate-800 dark:text-zinc-200">System</span>
-                    <span className="text-[10px] text-slate-400">Initial Inquiry</span>
-                  </div>
-                  <p className="text-[13px] text-slate-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                    {selectedInquiry.notes}
-                  </p>
-                </div>
-              </div>
-            )}
+          {/* Right Area: Minimal Timeline & Floating Pill Composer */}
+          <div className="flex-1 flex flex-col min-h-0 relative bg-slate-50/30 dark:bg-zinc-950/20">
+            
+            {/* Header for Activity */}
+            <div className="px-6 lg:px-10 pt-6 lg:pt-8 pb-4 shrink-0 flex items-center justify-between border-b border-slate-100 dark:border-zinc-800/50">
+              <h3 className="text-[14px] font-bold text-slate-800 dark:text-zinc-100">Activity</h3>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-zinc-900 px-2 py-0.5 rounded-full">{selectedInquiry.followUps?.length || 0} Events</span>
+            </div>
 
-            {selectedInquiry.followUps && selectedInquiry.followUps.length > 0 ? (
-              <div className="relative border-l border-slate-200 dark:border-zinc-800 ml-[11px] space-y-0">
-                {selectedInquiry.followUps.map((log) => (
-                  <div key={log.id} className="relative pl-8 pb-6 group">
-                    <div className="absolute left-[-13px] top-1 flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 dark:bg-zinc-800 border-2 border-white dark:border-zinc-900">
-                      <Icon name="chat_bubble_outline" size={11} className="text-slate-400" />
+            {/* Timeline Stream */}
+            <div className="flex-1 overflow-y-auto px-6 lg:px-10 pt-8 pb-40 [&::-webkit-scrollbar]:hidden">
+              
+              <div className="relative">
+                {/* The continuous vertical line */}
+                <div className="absolute left-[4px] top-2 bottom-0 w-[2px] bg-slate-100 dark:bg-zinc-800 rounded-full" />
+                
+                <div className="flex flex-col gap-10">
+                  {/* Initial Event */}
+                  {selectedInquiry.notes && (
+                    <div className="relative pl-8">
+                      <div className="absolute left-[1px] top-1.5 h-2 w-2 rounded-full bg-slate-300 dark:bg-zinc-600 ring-4 ring-white dark:ring-zinc-950" />
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[13px] font-bold text-slate-900 dark:text-zinc-100">System</span>
+                        <span className="text-xs font-medium text-slate-500">logged the initial inquiry</span>
+                      </div>
+                      <div className="text-[13px] text-slate-600 dark:text-zinc-400 leading-relaxed max-w-2xl bg-white dark:bg-zinc-900/50 p-3 rounded-lg border border-slate-100 dark:border-zinc-800/80 shadow-sm shadow-slate-200/20 whitespace-pre-wrap">
+                        {selectedInquiry.notes}
+                      </div>
                     </div>
-                    
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[12px] font-semibold text-slate-800 dark:text-zinc-200">Counselor</span>
-                        <span className="text-[11px] text-slate-400">
+                  )}
+
+                  {/* Follow Ups */}
+                  {selectedInquiry.followUps?.map((log) => (
+                    <div key={log.id} className="relative pl-8">
+                      <div className="absolute left-[1px] top-1.5 h-2 w-2 rounded-full bg-indigo-500 dark:bg-indigo-400 ring-4 ring-white dark:ring-zinc-950" />
+                      <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <span className="text-[13px] font-bold text-slate-900 dark:text-zinc-100">Counselor</span>
+                        <span className="text-xs font-medium text-slate-500">
                           {new Date(log.followUpDate).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </span>
-                        <div className="h-1 w-1 rounded-full bg-slate-300 dark:bg-zinc-700" />
-                        <span className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
+                        <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full ml-1">
                           {log.statusReached}
                         </span>
                       </div>
                       
-                      <p className="text-[13px] text-slate-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                      <div className="text-[13px] text-slate-700 dark:text-zinc-300 leading-relaxed max-w-2xl">
                         {log.conversationNotes}
-                      </p>
+                      </div>
                       
                       {log.nextFollowUpDate && (
-                        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-                          <Icon name="event" size={12} className="text-slate-400" />
+                        <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                          <Icon name="event" size={14} className="text-slate-400" />
                           Next action: {new Date(log.nextFollowUpDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              !selectedInquiry.notes && (
-                <div className="flex flex-col items-center justify-center p-6 text-center h-32">
-                  <Icon name="chat" size={24} className="text-slate-200 dark:text-zinc-700 mb-2" />
-                  <span className="text-sm font-medium text-slate-400">No activity logged yet.</span>
+                  ))}
+                  
+                  {(!selectedInquiry.notes && (!selectedInquiry.followUps || selectedInquiry.followUps.length === 0)) && (
+                     <div className="flex flex-col items-center justify-center p-6 text-center h-32 pl-8">
+                       <span className="text-[13px] font-medium text-slate-400">No activity logged yet.</span>
+                     </div>
+                  )}
                 </div>
-              )
+              </div>
+            </div>
+
+            {/* Apple-Style Floating Pill Composer */}
+            {selectedInquiry.status !== "APPLIED" && (
+              <div className="absolute bottom-6 left-6 right-6 lg:left-10 lg:right-10 flex justify-center pointer-events-none z-10">
+                <form onSubmit={onSubmitFollowUp} className="w-full max-w-3xl pointer-events-auto bg-white/80 dark:bg-zinc-900/80 backdrop-blur-2xl border border-slate-200/80 dark:border-zinc-700/80 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-black/50 p-1.5 flex flex-col transition-all focus-within:bg-white dark:focus-within:bg-zinc-900 focus-within:shadow-2xl focus-within:shadow-slate-200/60 focus-within:border-slate-300 dark:focus-within:border-zinc-600">
+                  
+                  <textarea
+                    rows={1}
+                    required
+                    value={followUpForm.conversationNotes}
+                    onChange={(e) => handleFieldChange("conversationNotes", e.target.value)}
+                    placeholder="Leave a note or log an activity..."
+                    className="w-full px-4 pt-3 pb-2 bg-transparent text-[13px] font-medium text-slate-900 dark:text-zinc-100 focus:outline-none resize-none min-h-[56px] placeholder:text-slate-400 placeholder:font-normal"
+                  />
+                  
+                  <div className="flex items-center justify-between px-1.5 pb-1">
+                    <div className="flex items-center gap-1">
+                      {/* Status Dropdown */}
+                      <Select value={followUpForm.statusReached} onValueChange={(val) => handleFieldChange("statusReached", val)}>
+                        <SelectTrigger className="h-8 px-3 rounded-xl border-transparent hover:bg-slate-100 dark:hover:bg-zinc-800 text-xs font-semibold text-slate-600 dark:text-zinc-300 focus:ring-0 w-auto transition-colors shadow-none gap-2 cursor-pointer bg-transparent">
+                          <Icon name="flag" size={14} className="text-slate-400" />
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="INQUIRY">New Inquiry</SelectItem>
+                          <SelectItem value="CONTACTED">Contacted</SelectItem>
+                          <SelectItem value="VISITED">Visited Campus</SelectItem>
+                          <SelectItem value="CLOSED">Closed Lead</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      {/* Date Picker */}
+                      <div className="flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl px-3 h-8 transition-colors text-slate-600 dark:text-zinc-300 cursor-text bg-transparent">
+                        <Icon name="event" size={14} className="text-slate-400" />
+                        <input
+                          type="date"
+                          value={followUpForm.nextFollowUpDate}
+                          onChange={(e) => handleFieldChange("nextFollowUpDate", e.target.value)}
+                          className="bg-transparent text-xs font-semibold text-slate-600 dark:text-zinc-300 focus:outline-none w-[105px] cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <Button type="submit" loading={loading} className="h-8 px-4 shrink-0 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-zinc-900 text-white text-[12px] font-bold shadow-sm transition-all">
+                      Comment
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+            
+            {selectedInquiry.status === "APPLIED" && (
+              <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+                <div className="bg-slate-900/90 dark:bg-zinc-100/90 backdrop-blur-md px-4 py-2 rounded-full border border-slate-700 dark:border-zinc-300 text-[11px] font-bold text-white dark:text-zinc-900 tracking-widest uppercase shadow-xl">
+                  Inquiry Converted
+                </div>
+              </div>
             )}
           </div>
-
-          {selectedInquiry.status !== "APPLIED" ? (
-            <div className="p-0 border-t border-slate-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-b-2xl shrink-0">
-              <form onSubmit={onSubmitFollowUp} className="flex flex-col relative m-4 border border-slate-200 dark:border-zinc-700 focus-within:border-slate-400 dark:focus-within:border-zinc-500 rounded-xl bg-white dark:bg-zinc-950 transition-colors">
-                
-                <textarea
-                  rows={1}
-                  required
-                  value={followUpForm.conversationNotes}
-                  onChange={(e) => handleFieldChange("conversationNotes", e.target.value)}
-                  placeholder="Leave a note..."
-                  className="w-full px-4 pt-3 pb-2 bg-transparent text-[13px] text-slate-800 dark:text-zinc-100 focus:outline-none resize-none min-h-[64px]"
-                />
-                
-                <div className="flex items-center justify-between px-2 pb-2">
-                  <div className="flex items-center gap-1">
-                    {/* Status Dropdown */}
-                    <Select value={followUpForm.statusReached} onValueChange={(val) => handleFieldChange("statusReached", val)}>
-                      <SelectTrigger className="h-7 px-2 rounded-lg border-0 hover:bg-slate-100 dark:hover:bg-zinc-800 text-[11px] font-medium text-slate-600 dark:text-zinc-400 focus:ring-0 w-auto min-w-[100px] transition-colors shadow-none gap-1.5 cursor-pointer">
-                        <Icon name="flag" size={12} className="text-slate-400" />
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="INQUIRY">New Inquiry</SelectItem>
-                        <SelectItem value="CONTACTED">Contacted</SelectItem>
-                        <SelectItem value="VISITED">Visited Campus</SelectItem>
-                        <SelectItem value="CLOSED">Closed Lead</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    {/* Date Picker */}
-                    <div className="flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg px-2 h-7 transition-colors border-0 text-slate-600 dark:text-zinc-400 cursor-text">
-                      <Icon name="event" size={12} className="text-slate-400" />
-                      <input
-                        type="date"
-                        value={followUpForm.nextFollowUpDate}
-                        onChange={(e) => handleFieldChange("nextFollowUpDate", e.target.value)}
-                        className="bg-transparent text-[11px] font-medium text-slate-600 dark:text-zinc-400 focus:outline-none w-[95px] cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  <Button type="submit" loading={loading} className="h-7 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 text-white text-[11px] font-semibold shadow-none transition-all">
-                    Comment
-                  </Button>
-                </div>
-              </form>
-            </div>
-          ) : (
-            <div className="p-4 border-t border-slate-100 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950/50 rounded-b-2xl shrink-0 text-center text-xs font-semibold text-slate-400">
-              Inquiry converted to application. Follow-up is disabled.
-            </div>
-          )}
         </div>
-
       </div>
     </div>
   );

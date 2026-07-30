@@ -62,18 +62,18 @@ export function UnifiedInboxList({
   hasEntranceTest,
 }: UnifiedListProps) {
   
-  // Build WhatsApp style tabs
+  // Build Segmented Tabs
   const tabs = [];
   if (hasInqAccess) {
-    tabs.push({ id: "inquiries", label: "Inquiries", count: stats.inquiryCount });
+    tabs.push({ id: "inquiries", label: "INQ", count: stats.inquiryCount });
   }
   if (hasAppAccess) {
-    tabs.push({ id: "SUBMITTED", label: "Intake", count: stats.submittedCount });
-    tabs.push({ id: "DOCUMENT_VERIFICATION", label: "Docs", count: stats.pendingVerify });
+    tabs.push({ id: "SUBMITTED", label: "NEW", count: stats.submittedCount });
+    tabs.push({ id: "DOCUMENT_VERIFICATION", label: "DOCS", count: stats.pendingVerify });
     if (hasEntranceTest) {
-      tabs.push({ id: "TEST_SCHEDULED", label: "Exams", count: stats.awaitingExam });
+      tabs.push({ id: "TEST_SCHEDULED", label: "EXAM", count: stats.awaitingExam });
     }
-    tabs.push({ id: "SHORTLISTED", label: "Shortlisted", count: stats.readyToEnroll });
+    tabs.push({ id: "SHORTLISTED", label: "READY", count: stats.readyToEnroll });
   }
 
   // Helper to generate deterministic avatar colors
@@ -108,32 +108,32 @@ export function UnifiedInboxList({
   return (
     <div className="flex flex-col h-full bg-white dark:bg-zinc-950/80">
       
-      {/* WhatsApp Style Tabs Row */}
-      <div className="flex items-center overflow-x-auto hide-scrollbar gap-1.5 px-3 py-2.5 border-b border-slate-200/50 dark:border-zinc-800/50 shrink-0 bg-slate-50/50 dark:bg-zinc-900/50">
-        {tabs.map(tab => {
-          const isActive = (activeTab === "inquiries" && tab.id === "inquiries") || 
-                           (activeTab === "applications" && stageFilter === tab.id);
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onStageClick(tab.id)}
-              className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all shrink-0 ${
-                isActive 
-                  ? "bg-slate-800 text-white dark:bg-white dark:text-slate-900 shadow-sm" 
-                  : "bg-white dark:bg-zinc-900 text-slate-500 hover:bg-slate-200 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800"
-              }`}
-            >
-              {tab.label}
-              <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                isActive 
-                  ? "bg-white/20 text-white dark:bg-black/10 dark:text-slate-900" 
-                  : "bg-slate-100 dark:bg-zinc-800 text-slate-400"
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
+      {/* Ultra-compact Premium Segmented Control */}
+      <div className="px-3 py-3 border-b border-slate-200/60 dark:border-zinc-800/60 bg-slate-50/50 dark:bg-zinc-900/50 shrink-0">
+        <div className="flex items-stretch bg-slate-100 dark:bg-zinc-900/80 rounded-[14px] p-1 shadow-inner border border-slate-200/50 dark:border-zinc-800/50">
+          {tabs.map(tab => {
+            const isActive = (activeTab === "inquiries" && tab.id === "inquiries") || 
+                             (activeTab === "applications" && stageFilter === tab.id);
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onStageClick(tab.id)}
+                className={`flex-1 flex flex-col items-center justify-center py-1.5 rounded-[10px] transition-all duration-300 ease-out min-w-0 relative ${
+                  isActive 
+                    ? "bg-white dark:bg-zinc-800 shadow-sm ring-1 ring-black/5 dark:ring-white/10 scale-100" 
+                    : "hover:bg-slate-200/40 dark:hover:bg-zinc-800/40 scale-95 hover:scale-100"
+                }`}
+              >
+                <span className={`text-[13px] font-black leading-none mb-1 transition-colors ${
+                  isActive ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-zinc-400"
+                }`}>{tab.count}</span>
+                <span className={`text-[8.5px] font-bold uppercase tracking-widest truncate w-full px-0.5 text-center leading-none transition-colors ${
+                  isActive ? "text-slate-500 dark:text-zinc-400" : "text-slate-400 dark:text-zinc-500"
+                }`}>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* List Container */}

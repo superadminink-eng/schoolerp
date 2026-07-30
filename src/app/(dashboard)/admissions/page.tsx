@@ -12,7 +12,7 @@ import { Icon } from "@/components/ui/icon";
 import AdmissionsStats from "@/components/admissions/admissions-stats";
 import { AdmissionsSearch, AdmissionsGlobalActions, AdmissionsDataToggles } from "@/components/admissions/admissions-filters";
 import AdmissionsList from "@/components/admissions/admissions-list";
-import InquiryModal from "@/components/admissions/inquiry-modal";
+import NewInquiryPane from "@/components/admissions/new-inquiry-pane";
 import ApplicationModal from "@/components/admissions/application-modal";
 import InquiryWorkspace from "@/components/admissions/inquiry-workspace";
 import ApplicantWorkspace from "@/components/admissions/applicant-workspace";
@@ -167,7 +167,7 @@ export default function AdmissionsPage() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Dialog & Workspace controllers
-  const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
+  const [isCreatingInquiry, setIsCreatingInquiry] = useState(false);
   const [applicationModalOpen, setApplicationModalOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -935,7 +935,7 @@ export default function AdmissionsPage() {
       const data = await res.json();
       if (data.success) {
         snackbar.show("Inquiry registered successfully.", "success");
-        setInquiryModalOpen(false);
+        setIsCreatingInquiry(false);
         setInquiryForm({
           studentName: "",
           dateOfBirth: "",
@@ -1193,9 +1193,13 @@ export default function AdmissionsPage() {
       return;
     }
 
-    // 1. Validate Division/Section
-    if (!promoteForm.sectionId) {
-      const errMsg = "Class Division (Section) is required.";
+    // 1. Guard Default Section (User requested hiding Section)
+    let finalSectionId = promoteForm.sectionId;
+    if (!finalSectionId && classSections && classSections.length > 0) {
+      finalSectionId = classSections[0].id;
+    }
+    if (!finalSectionId) {
+      const errMsg = "A Class Division (Section) is required but none exists. Please create one in settings first.";
       setFormError(errMsg);
       snackbar.show(errMsg, "error");
       return;
@@ -1267,6 +1271,7 @@ export default function AdmissionsPage() {
     try {
       const payload = {
         ...promoteForm,
+        sectionId: finalSectionId,
         amountPaid: Number(promoteForm.amountPaid),
         discountAmount: Number(promoteForm.discountAmount),
         installments: customInstallments.filter((i) => i.checked),
@@ -1427,7 +1432,7 @@ export default function AdmissionsPage() {
                 return;
               }
               setInquiryForm((prev) => ({ ...prev, classAppliedId: classes[0].id }));
-              setInquiryModalOpen(true);
+              setIsCreatingInquiry(true);
             }}
             onNewApplicationClick={() => {
               if (classes.length === 0) {
@@ -1445,7 +1450,7 @@ export default function AdmissionsPage() {
       <div className="flex-1 flex overflow-hidden min-h-0 border border-slate-200/60 dark:border-zinc-800/60 rounded-2xl shadow-sm bg-white dark:bg-zinc-950">
         
         {/* LEFT PANE - MASTER LIST */}
-        <div className={`w-full md:w-[380px] lg:w-[400px] shrink-0 border-r border-slate-200/60 dark:border-zinc-800/60 flex flex-col ${selectedApp || selectedInquiry ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`w-full md:w-[280px] lg:w-[320px] shrink-0 border-r border-slate-200/60 dark:border-zinc-800/60 flex flex-col ${selectedApp || selectedInquiry ? 'hidden md:flex' : 'flex'}`}>
           <UnifiedInboxList 
             applications={filteredApplications}
             inquiries={filteredInquiries}
@@ -1541,22 +1546,7 @@ export default function AdmissionsPage() {
       </div>
       {/* 6. MODALS & WORKSPACES */}
 
-      {/* Inquiry Creation Modal */}
-      <InquiryModal
-        open={inquiryModalOpen}
-        onOpenChange={setInquiryModalOpen}
-        classes={classes}
-        inquiryForm={inquiryForm}
-        setInquiryForm={setInquiryForm}
-        onSubmit={handleCreateInquiry}
-        loading={actionLoading}
-        branchId={branchFilter || ""}
-        academicYearId={activeAcademicYearId || ""}
-        onSuccess={() => {
-          fetchDashboardData();
-          setInquiryModalOpen(false);
-        }}
-      />
+      
 
       {/* Application Creation/Conversion Modal */}
       <ApplicationModal

@@ -137,7 +137,7 @@ export default function InquiryWorkspace({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[85vh] overflow-hidden flex flex-col p-0 rounded-3xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 shadow-2xl">
         {/* Header */}
-        <div className="p-6 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/20 flex items-center justify-between shrink-0">
+        <div className="p-4 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/20 flex items-center justify-between shrink-0">
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-sky-50 dark:bg-sky-950/20 text-sky-700 dark:text-sky-400 border border-sky-100/40">
@@ -159,7 +159,7 @@ export default function InquiryWorkspace({
         {/* Split Pane Body */}
         <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Left Panel: Profile Details */}
-          <div className="w-[35%] overflow-y-auto p-6 bg-slate-50/50 dark:bg-zinc-950/10 border-r border-slate-100 dark:border-zinc-800/80 space-y-6">
+          <div className="w-[35%] overflow-y-auto p-4 bg-slate-50/50 dark:bg-zinc-950/10 border-r border-slate-100 dark:border-zinc-800/80 space-y-6">
             {/* Student Info */}
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-primary dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
@@ -231,7 +231,7 @@ export default function InquiryWorkspace({
 
           {/* Right Panel: Express Admit Form */}
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
               {selectedInquiry.status !== "APPLIED" ? (
                   <form onSubmit={handleExpressAdmitSubmit} className="p-4 rounded-2xl border border-teal-100 dark:border-teal-950/40 bg-teal-50/10 dark:bg-teal-950/[0.02] space-y-4">
                     <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
@@ -253,7 +253,7 @@ export default function InquiryWorkspace({
                             value={expressForm.sectionId}
                             onValueChange={(val) => handleExpressFieldChange("sectionId", val)}
                           >
-                            <SelectTrigger fullWidth className="h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
+                            <SelectTrigger fullWidth className="h-10 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-xs font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
                               <SelectValue placeholder="Select Section" />
                             </SelectTrigger>
                             <SelectContent>
@@ -277,7 +277,7 @@ export default function InquiryWorkspace({
                           value={expressForm.rollNo}
                           onChange={(e) => handleExpressFieldChange("rollNo", e.target.value)}
                           placeholder="e.g. 15"
-                          className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                          className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-xs font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
                         />
                       </div>
 
@@ -293,7 +293,7 @@ export default function InquiryWorkspace({
                           value={expressForm.discountAmount || ""}
                           onChange={(e) => handleExpressFieldChange("discountAmount", Number(e.target.value))}
                           placeholder="e.g. 10%"
-                          className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                          className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-xs font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
                         />
                       </div>
 
@@ -306,7 +306,7 @@ export default function InquiryWorkspace({
                           value={expressForm.amountPaid || ""}
                           onChange={(e) => handleExpressFieldChange("amountPaid", Number(e.target.value))}
                           placeholder="e.g. 5000"
-                          className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                          className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-xs font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
                         />
                       </div>
 
@@ -319,7 +319,7 @@ export default function InquiryWorkspace({
                           value={expressForm.paymentMethod}
                           onValueChange={(val) => handleExpressFieldChange("paymentMethod", val)}
                         >
-                          <SelectTrigger fullWidth className="h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
+                          <SelectTrigger fullWidth className="h-10 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-xs font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
                             <SelectValue placeholder="Select Mode" />
                           </SelectTrigger>
                           <SelectContent>
@@ -342,7 +342,7 @@ export default function InquiryWorkspace({
                           value={expressForm.transactionId}
                           onChange={(e) => handleExpressFieldChange("transactionId", e.target.value)}
                           placeholder="e.g. TXN987654"
-                          className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                          className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-xs font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
                         />
                       </div>
                     </div>
