@@ -82,6 +82,9 @@ interface Application {
   previousSchool?: string | null;
   archiveReason?: string | null;
   statusBeforeArchive?: string | null;
+  isProvisional?: boolean;
+  provisionalDeadline?: string | null;
+  overrideReason?: string | null;
 }
 
 interface FollowUp {
@@ -213,15 +216,21 @@ export default function AdmissionsPage() {
   });
 
   const [verifyForm, setVerifyForm] = useState<{
-    documents: { id: string; status: "PENDING" | "VERIFIED" | "REJECTED"; remarks: string; documentType: string }[];
+    documents: { id: string; status: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED"; remarks: string; documentType: string }[];
     verificationNotes: string;
     nextStatus: "DOCUMENT_VERIFICATION" | "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED";
     archiveReason: string;
+    isProvisional: boolean;
+    provisionalDeadline: string;
+    overrideReason: string;
   }>({
     documents: [],
     verificationNotes: "",
     nextStatus: "TEST_SCHEDULED",
     archiveReason: "",
+    isProvisional: false,
+    provisionalDeadline: "",
+    overrideReason: "",
   });
 
   const [examForm, setExamForm] = useState({
@@ -887,6 +896,9 @@ export default function AdmissionsPage() {
       verificationNotes: app.verificationNotes || "",
       nextStatus: initialNextStatus,
       archiveReason: app.archiveReason || "",
+      isProvisional: app.isProvisional || false,
+      provisionalDeadline: app.provisionalDeadline ? new Date(app.provisionalDeadline).toISOString().split("T")[0] : "",
+      overrideReason: app.overrideReason || "",
     });
 
     setExamForm({
@@ -1043,6 +1055,9 @@ export default function AdmissionsPage() {
           verificationNotes: verifyForm.verificationNotes,
           applicationStatus: verifyForm.nextStatus,
           archiveReason: verifyForm.nextStatus === "REJECTED" ? verifyForm.archiveReason : undefined,
+          isProvisional: verifyForm.isProvisional,
+          overrideReason: verifyForm.overrideReason,
+          provisionalDeadline: verifyForm.provisionalDeadline ? new Date(verifyForm.provisionalDeadline).toISOString() : null,
         }),
       });
       const data = await res.json();

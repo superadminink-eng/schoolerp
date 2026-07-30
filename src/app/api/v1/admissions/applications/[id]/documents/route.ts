@@ -19,11 +19,12 @@ export async function POST(
 
     const formData = await request.formData();
     const documentType = formData.get("documentType") as string;
-    const file = formData.get("file") as File;
+    const file = formData.get("file") as File | null;
+    const isHardcopy = formData.get("isHardcopy") === "true";
 
-    if (!documentType || !file) {
+    if (!documentType || (!file && !isHardcopy)) {
       return NextResponse.json(
-        { success: false, error: { code: "VALIDATION_ERROR", message: "Document type and file are required" } },
+        { success: false, error: { code: "VALIDATION_ERROR", message: "Document type and either a file or isHardcopy flag are required" } },
         { status: 400 }
       );
     }
@@ -58,12 +59,15 @@ export async function POST(
     // Secure, multi-tenant path avoiding ID collisions
     const uploadPath = `uploads/${orgId}/${branchId}/applications/${appId}`;
 
-    // 3. Save Document (Supports PDF & Images, validates magic bytes)
-    const uploadResult = await saveUploadedDocument(
-      file,
-      uploadPath,
-      documentType
-    );
+    let uploadResult: any = null;
+    if (!isHardcopy && file) {
+      // 3. Save Document (Supports PDF & Images, validates magic bytes)
+      uploadResult = await saveUploadedDocument(
+        file,
+        uploadPath,
+        documentType
+      );
+    }
 
     // 4. Check if document exists & clean up orphan file
     const existingDoc = await prisma.applicationDocument.findFirst({
@@ -76,17 +80,17 @@ export async function POST(
     let savedDoc;
     if (existingDoc) {
       // Clean up previous physical file to prevent storage leaks
-      if (existingDoc.filePath && existingDoc.filePath !== uploadResult.filePath) {
+      if (existingDoc.filePath && (!uploadResult || existingDoc.filePath !== uploadResult.filePath)) {
         await deleteUploadedFile(existingDoc.filePath);
       }
 
       savedDoc = await prisma.applicationDocument.update({
         where: { id: existingDoc.id },
         data: {
-          fileName: uploadResult.fileName,
-          filePath: uploadResult.filePath,
-          fileSize: uploadResult.fileSize,
-          status: "PENDING",
+          fileName: uploadResult ? uploadResult.fileName : null,
+          filePath: uploadResult ? uploadResult.filePath : null,
+          fileSize: uploadResult ? uploadResult.fileSize : null,
+          status: isHardcopy ? "HARDCOPY_SUBMITTED" : "PENDING",
           remarks: null,
         }
       });
@@ -95,10 +99,10 @@ export async function POST(
         data: {
           applicationId: appId,
           documentType: documentType,
-          fileName: uploadResult.fileName,
-          filePath: uploadResult.filePath,
-          fileSize: uploadResult.fileSize,
-          status: "PENDING"
+          fileName: uploadResult ? uploadResult.fileName : null,
+          filePath: uploadResult ? uploadResult.filePath : null,
+          fileSize: uploadResult ? uploadResult.fileSize : null,
+          status: isHardcopy ? "HARDCOPY_SUBMITTED" : "PENDING"
         }
       });
     }

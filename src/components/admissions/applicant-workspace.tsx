@@ -13,7 +13,7 @@ import { formatIndianNumber } from "@/lib/utils-format";
 interface DocumentItem {
   id: string;
   documentType: string;
-  status: "PENDING" | "VERIFIED" | "REJECTED";
+  status: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED";
   remarks: string | null;
   fileName?: string;
   filePath?: string;
@@ -64,7 +64,7 @@ interface Application {
   class?: { id: string; name: string } | null;
   branch?: { id: string; name: string } | null;
   academicYear?: { id: string; name: string } | null;
-  documents?: { id: string; documentType: string; status: "PENDING" | "VERIFIED" | "REJECTED"; remarks: string | null }[] | null;
+  documents?: { id: string; documentType: string; status: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED"; remarks: string | null }[] | null;
   tokens?: { id: string; token: string; expiresAt: string | Date; isConsumed: boolean }[] | null;
   examResult?: { id: string; examDate: string; marksObtained: number | null; maxMarks: number; verdict: string; notes: string | null } | null;
   fatherName: string | null;
@@ -83,6 +83,9 @@ interface Application {
   previousSchool?: string | null;
   bloodGroup?: string | null;
   emergencyContact?: string | null;
+  isProvisional?: boolean;
+  provisionalDeadline?: string | null;
+  overrideReason?: string | null;
 }
 
 interface WorkspaceProps {
@@ -122,6 +125,9 @@ interface WorkspaceProps {
     verificationNotes: string;
     nextStatus: "DOCUMENT_VERIFICATION" | "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED";
     archiveReason: string;
+    isProvisional: boolean;
+    provisionalDeadline: string;
+    overrideReason: string;
   };
   setVerifyForm: (val: any) => void;
   examForm: {
@@ -216,7 +222,14 @@ export default function ApplicantWorkspace({
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [reactivateLoading, setReactivateLoading] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [markingHardcopy, setMarkingHardcopy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Dedicated state for the "Upload Scan" feature
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const [uploadScanDocType, setUploadScanDocType] = useState<string | null>(null);
+  const [scanningDocType, setScanningDocType] = useState<string | null>(null);
+
   const [selectedDocType, setSelectedDocType] = useState("BIRTH_CERTIFICATE");
   const [previewDoc, setPreviewDoc] = useState<any>(null);
   
@@ -329,13 +342,18 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
   };
 
   // Doc verification change handlers
-  const handleDocStatusChange = (index: number, status: "PENDING" | "VERIFIED" | "REJECTED") => {
+  const handleDocStatusChange = (index: number, requestedStatus: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED") => {
     clearError();
     const nextDocs = [...verifyForm.documents];
-    const currentStatus = nextDocs[index].status;
-    const finalStatus = currentStatus === status ? "PENDING" : status;
+    const doc = nextDocs[index];
+    
+    let finalStatus = requestedStatus;
+    // If the UI requests PENDING (un-checking), but there is no digital file, it must be a physical hardcopy
+    if (finalStatus === "PENDING" && !doc.filePath && !doc.fileName) {
+      finalStatus = "HARDCOPY_SUBMITTED";
+    }
 
-    nextDocs[index] = { ...nextDocs[index], status: finalStatus };
+    nextDocs[index] = { ...doc, status: finalStatus };
     const allVerified = nextDocs.every((d) => d.status === "VERIFIED");
     const anyRejected = nextDocs.some((d) => d.status === "REJECTED");
     let recommendedNextStatus: typeof verifyForm.nextStatus = "DOCUMENT_VERIFICATION";
@@ -370,6 +388,12 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
     isExpired: boolean;
     daysLeft: number;
   } | null>(null);
+
+  // Validation helper for Provisional Admission Bypass
+  const mandatoryDocTypes = Object.keys(DOCUMENT_META).filter(k => DOCUMENT_META[k as keyof typeof DOCUMENT_META].badge === "MANDATORY");
+  const hasAllMandatoryDocs = mandatoryDocTypes.every(type => {
+    return verifyForm.documents.some((d: any) => d.documentType === type && d.status !== "REJECTED");
+  });
 
   // Auto-load existing token from selectedApp across page refreshes!
   useEffect(() => {
@@ -487,7 +511,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
   const handleCounselorUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !selectedDocType) return;
 
     setUploadingDoc(true);
     clearError();
@@ -529,6 +553,100 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
       setFormError?.("Network error during document upload.");
     } finally {
       setUploadingDoc(false);
+    }
+  };
+
+  const handleScanUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadScanDocType) return;
+
+    setScanningDocType(uploadScanDocType);
+    clearError();
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("documentType", uploadScanDocType);
+
+    try {
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (scanInputRef.current) scanInputRef.current.value = "";
+        
+        const updatedDocs = (data.application?.documents || data.documents || []).map((d: any) => ({
+          id: d.id,
+          status: d.status,
+          remarks: d.remarks || "",
+          documentType: d.documentType,
+          fileName: d.fileName,
+          filePath: d.filePath,
+          fileSize: d.fileSize,
+          mimeType: d.mimeType,
+        }));
+
+        setVerifyForm((prev: any) => ({
+          ...prev,
+          documents: updatedDocs,
+        }));
+
+        if (onApplicantUpdated) onApplicantUpdated(data.application || selectedApp);
+      } else {
+         setFormError?.(data.error?.message || "Failed to upload scanned document");
+         alert("API Error: " + (data.error?.message || "Failed to upload scanned document"));
+      }
+    } catch (err: any) {
+      setFormError?.("Network error during scan upload.");
+      alert("Network Error: " + err.message);
+    } finally {
+      setScanningDocType(null);
+      setUploadScanDocType(null);
+    }
+  };
+
+  const handleMarkHardcopy = async () => {
+    if (!selectedDocType) return;
+    setMarkingHardcopy(true);
+    clearError();
+    try {
+      const formData = new FormData();
+      formData.append("documentType", selectedDocType);
+      formData.append("isHardcopy", "true");
+
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedDocType("");
+        const updatedDocs = (data.application?.documents || data.documents || []).map((d: any) => ({
+          id: d.id,
+          status: d.status,
+          remarks: d.remarks || "",
+          documentType: d.documentType,
+          fileName: d.fileName,
+          filePath: d.filePath,
+          fileSize: d.fileSize,
+          mimeType: d.mimeType,
+        }));
+
+        setVerifyForm((prev: any) => ({
+          ...prev,
+          documents: updatedDocs,
+        }));
+        if (onApplicantUpdated) onApplicantUpdated(data.application || selectedApp);
+      } else {
+        setFormError?.(data.error?.message || "Failed to mark hardcopy");
+        alert("API Error: " + (data.error?.message || "Failed to mark hardcopy"));
+      }
+    } catch (err: any) {
+      setFormError?.("Network error");
+      alert("Network Error: " + err.message);
+    } finally {
+      setMarkingHardcopy(false);
     }
   };
 
@@ -692,6 +810,11 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/50 shrink-0">
               {statusLabels[selectedApp.status] || selectedApp.status}
             </span>
+            {selectedApp.isProvisional && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/50 shrink-0" title={`Reason: ${selectedApp.overrideReason}`}>
+                Provisional
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
@@ -1156,33 +1279,49 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                               {/* Left Meta */}
                               <div className="flex items-center gap-3 min-w-0 flex-1">
                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
-                                  isPdf 
+                                  doc.status === "HARDCOPY_SUBMITTED"
+                                    ? "bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-500 border-amber-200/50 dark:border-amber-900/40"
+                                    : isPdf 
                                     ? "bg-rose-50 text-rose-500 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100/40 dark:border-rose-900/30"
                                     : "bg-blue-50 text-blue-500 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100/40 dark:border-blue-900/30"
                                 }`}>
-                                  <Icon name={isPdf ? "picture_as_pdf" : "image"} size={16} />
+                                  <Icon name={doc.status === "HARDCOPY_SUBMITTED" ? "folder_special" : isPdf ? "picture_as_pdf" : "image"} size={16} />
                                 </div>
                                 <div className="min-w-0 flex-1 flex flex-col justify-center">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1">
                                     <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate leading-none">
                                       {meta.label}
                                     </span>
-                                    {meta.badge === "MANDATORY" && (
-                                      <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold uppercase tracking-wider bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-100/50 dark:border-rose-900/40">
-                                        Req
-                                      </span>
-                                    )}
                                   </div>
-                                  {doc.fileName && (
+                                  {doc.status === "HARDCOPY_SUBMITTED" ? (
+                                    <span className="text-[10px] text-amber-600 dark:text-amber-500 truncate mt-1 leading-none font-semibold flex items-center gap-1">
+                                      Physical Hardcopy
+                                    </span>
+                                  ) : doc.fileName ? (
                                     <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate mt-1 leading-none font-medium">
                                       {doc.fileName}
                                     </span>
-                                  )}
+                                  ) : null}
                                 </div>
                               </div>
 
                               {/* Right Actions & Status */}
                               <div className="flex items-center gap-2 shrink-0">
+                                {doc.status === "HARDCOPY_SUBMITTED" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setUploadScanDocType(doc.documentType);
+                                      setTimeout(() => scanInputRef.current?.click(), 50);
+                                    }}
+                                    disabled={scanningDocType === doc.documentType}
+                                    className="h-7 px-2 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 flex items-center justify-center transition-colors cursor-pointer text-[10px] font-bold gap-1 shadow-sm disabled:opacity-50"
+                                    title="Upload scanned file"
+                                  >
+                                    {scanningDocType === doc.documentType ? <Icon name="sync" size={12} className="animate-spin" /> : <Icon name="upload" size={12} />}
+                                    <span>{scanningDocType === doc.documentType ? "Uploading..." : "Upload Scan"}</span>
+                                  </button>
+                                )}
                                 {/* Secondary actions - Always visible for touch devices */}
                                 {doc.filePath && (
                                   <button
@@ -1311,15 +1450,34 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                           className="hidden"
                           accept="image/*,.pdf"
                         />
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={uploadingDoc || !selectedDocType}
-                          className="h-9 px-4 rounded-lg bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold flex items-center justify-center transition-all disabled:opacity-30 shrink-0 shadow-sm cursor-pointer hover:bg-slate-800 dark:hover:bg-zinc-200"
-                        >
-                          {uploadingDoc ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="upload" size={14} className="mr-1.5" />}
-                          {uploadingDoc ? "Uploading" : "Upload"}
-                        </button>
+                        <input
+                          type="file"
+                          ref={scanInputRef}
+                          onChange={handleScanUpload}
+                          className="hidden"
+                          accept="image/*,.pdf"
+                        />
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleMarkHardcopy}
+                            disabled={uploadingDoc || markingHardcopy || !selectedDocType}
+                            className="h-9 px-3 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 text-[11px] font-bold flex items-center justify-center transition-all disabled:opacity-30 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800"
+                            title="Mark as physically received (No file needed)"
+                          >
+                            {markingHardcopy ? <Icon name="sync" size={14} className="mr-1.5 animate-spin text-amber-500" /> : <Icon name="folder_special" size={14} className="mr-1.5 text-amber-500" />}
+                            {markingHardcopy ? "Saving..." : "Hardcopy"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingDoc || markingHardcopy || !selectedDocType}
+                            className="h-9 px-4 rounded-lg bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold flex items-center justify-center transition-all disabled:opacity-30 shadow-sm cursor-pointer hover:bg-slate-800 dark:hover:bg-zinc-200"
+                          >
+                            {uploadingDoc ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="upload" size={14} className="mr-1.5" />}
+                            {uploadingDoc ? "Uploading" : "Upload"}
+                          </button>
+                        </div>
                       </div>
                     );
                   })()}
@@ -1429,6 +1587,79 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       </div>
                     )}
 
+                    {(verifyForm.nextStatus === "SHORTLISTED" || verifyForm.nextStatus === "TEST_SCHEDULED") && !hasAllMandatoryDocs && (
+                      <div className="flex flex-col gap-3 pt-3 animate-in slide-in-from-top-2 fade-in duration-200">
+                        <div className="p-3 rounded-xl border border-amber-200/50 dark:border-amber-900/30 bg-amber-50/50 dark:bg-amber-950/20">
+                          <div className="flex items-start gap-2">
+                            <Icon name="warning" size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-bold text-amber-800 dark:text-amber-500">Missing Mandatory Documents</span>
+                              <span className="text-[11px] font-medium text-amber-700/80 dark:text-amber-600/80 leading-relaxed">
+                                You cannot shortlist this applicant because mandatory documents are pending.
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3 pt-3 border-t border-amber-200/50 dark:border-amber-900/30">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                              <div className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out ${verifyForm.isProvisional ? 'bg-amber-500' : 'bg-slate-200 dark:bg-zinc-700'}`}>
+                                <div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 ease-in-out ${verifyForm.isProvisional ? 'translate-x-5' : 'translate-x-0'}`} />
+                              </div>
+                              <input 
+                                type="checkbox" 
+                                className="hidden" 
+                                checked={verifyForm.isProvisional || false}
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  setVerifyForm((prev: any) => ({
+                                    ...prev,
+                                    isProvisional: isChecked,
+                                    overrideReason: isChecked ? prev.overrideReason : "",
+                                    provisionalDeadline: isChecked ? prev.provisionalDeadline : ""
+                                  }));
+                                }}
+                              />
+                              <span className="text-xs font-bold text-slate-700 dark:text-zinc-300 group-hover:text-slate-900 dark:group-hover:text-zinc-100 transition-colors">
+                                Allow Provisional Admission (Bypass)
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {verifyForm.isProvisional && (
+                          <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 flex items-center gap-1">
+                                <Icon name="edit_note" size={12} /> Override Reason <span className="text-amber-500">*</span>
+                              </span>
+                              <textarea
+                                rows={2}
+                                required={verifyForm.isProvisional}
+                                autoFocus
+                                value={verifyForm.overrideReason || ""}
+                                onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, overrideReason: e.target.value }))}
+                                placeholder="Why is this being bypassed? (e.g. Principal approved...)"
+                                className="w-full p-3 rounded-xl text-[13px] border border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-amber-900 dark:text-amber-100 transition-all resize-none font-medium placeholder:text-amber-700/40 dark:placeholder:text-amber-600/40"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 flex items-center gap-1">
+                                <Icon name="event" size={12} /> Submission Deadline <span className="text-amber-500">*</span>
+                              </span>
+                              <input
+                                type="date"
+                                required={verifyForm.isProvisional}
+                                min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                                value={verifyForm.provisionalDeadline || ""}
+                                onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, provisionalDeadline: e.target.value }))}
+                                className="w-full p-3 rounded-xl text-[13px] border border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-amber-900 dark:text-amber-100 transition-all font-medium"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex flex-col gap-1.5 pt-4 mt-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                         Verification Notes
@@ -1452,8 +1683,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                     )}
                     <button
                       type="submit"
-                      disabled={actionLoading}
-                      className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl h-11 font-bold shadow-md shadow-slate-900/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      disabled={actionLoading || ((verifyForm.nextStatus === "SHORTLISTED" || verifyForm.nextStatus === "TEST_SCHEDULED") && !hasAllMandatoryDocs && !verifyForm.isProvisional)}
+                      className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl h-11 font-bold shadow-md shadow-slate-900/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {actionLoading ? <Icon name="sync" size={16} className="animate-spin" /> : <Icon name="check_circle" size={16} />}
                       {actionLoading ? "Saving..." : "Confirm Decision"}

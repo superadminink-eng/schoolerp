@@ -26,11 +26,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return apiError("BAD_REQUEST", "Invalid JSON body", 400);
   }
 
-  const { documents, applicationStatus, verificationNotes, archiveReason } = body as {
-    documents?: { id: string; status: "PENDING" | "VERIFIED" | "REJECTED"; remarks?: string }[];
+  const { documents, applicationStatus, verificationNotes, archiveReason, isProvisional, overrideReason, provisionalDeadline } = body as {
+    documents?: { id: string; status: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED"; remarks?: string }[];
     applicationStatus?: "DOCUMENT_VERIFICATION" | "SHORTLISTED" | "REJECTED" | "TEST_SCHEDULED";
     verificationNotes?: string;
     archiveReason?: string;
+    isProvisional?: boolean;
+    overrideReason?: string;
+    provisionalDeadline?: string | null;
   };
 
   try {
@@ -68,16 +71,28 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         where: { applicationId: id },
       });
 
-      const hasPending = allDocs.some((d) => d.status === "PENDING");
       const hasRejected = allDocs.some((d) => d.status === "REJECTED");
+      const hasPending = allDocs.some((d) => d.status === "PENDING");
+
+      // Mandatory check (aligns with DOCUMENT_META in frontend)
+      const mandatoryTypes = ["BIRTH_CERTIFICATE", "STUDENT_PHOTO", "AADHAAR_CARD"]; // Standard mandatory set
+      const hasAllMandatory = mandatoryTypes.every(type => 
+        allDocs.some(d => d.documentType === type && d.status !== "REJECTED")
+      );
 
       let finalStatus = applicationStatus || application.status;
-      if (hasRejected) {
-        finalStatus = "REJECTED";
-      } else if (hasPending || allDocs.length === 0) {
-        // Guardrail: Cannot promote to SHORTLISTED or TEST_SCHEDULED if documents are pending or missing
-        if (finalStatus === "SHORTLISTED" || finalStatus === "TEST_SCHEDULED") {
-          finalStatus = "DOCUMENT_VERIFICATION";
+      
+      // Provisional Admission Bypass Validation
+      const isBypassValid = isProvisional && overrideReason && overrideReason.trim() !== "" && provisionalDeadline;
+
+      if (hasRejected && !isBypassValid) {
+        // Only force reject if there's no bypass (though usually rejection isn't bypassed, but we allow provisional if required)
+        if (!isProvisional) finalStatus = "REJECTED";
+      } else if (hasPending || !hasAllMandatory) {
+        // Guardrail: Cannot promote to SHORTLISTED or TEST_SCHEDULED if documents are pending/missing
+        if ((finalStatus === "SHORTLISTED" || finalStatus === "TEST_SCHEDULED") && !isBypassValid) {
+          // Instead of silent fallback, we reject the request completely for strict validation
+          throw new Error("Validation Failed: Mandatory documents are missing or pending, and provisional bypass is not provided.");
         }
       }
 
@@ -90,6 +105,20 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       }
       if (verificationNotes !== undefined) {
         dataToUpdate.verificationNotes = verificationNotes;
+      }
+      
+      // Apply Provisional fields if valid
+      if (isBypassValid && (finalStatus === "SHORTLISTED" || finalStatus === "TEST_SCHEDULED")) {
+        dataToUpdate.isProvisional = true;
+        dataToUpdate.overrideReason = overrideReason;
+        dataToUpdate.provisionalDeadline = new Date(provisionalDeadline);
+        dataToUpdate.overriddenById = ctx.userId || "system";
+      } else if (hasAllMandatory && !hasPending) {
+        // Clear provisional if requirements are fully met
+        dataToUpdate.isProvisional = false;
+        dataToUpdate.overrideReason = null;
+        dataToUpdate.provisionalDeadline = null;
+        dataToUpdate.overriddenById = null;
       }
 
       if (Object.keys(dataToUpdate).length > 0) {
@@ -129,10 +158,18 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       organizationId: ctx.organizationId,
       branchId: updated.branchId,
       userId: ctx.userId,
-      action: "UPDATE",
+      action: updated.isProvisional && !application.isProvisional ? "PROVISIONAL_ADMISSION_GRANTED" : "UPDATE",
       module: "ADMISSIONS",
       entityId: updated.id,
-      details: { applicationNo: updated.applicationNo, status: updated.status, context: "DOCUMENT_VERIFICATION" }
+      details: { 
+        applicationNo: updated.applicationNo, 
+        status: updated.status, 
+        context: "DOCUMENT_VERIFICATION",
+        ...(updated.isProvisional && !application.isProvisional ? {
+          reason: updated.overrideReason,
+          deadline: updated.provisionalDeadline
+        } : {})
+      }
     });
 
     return apiSuccess(updated);
