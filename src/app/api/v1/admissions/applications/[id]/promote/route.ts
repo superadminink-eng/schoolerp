@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import {
@@ -90,16 +90,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     }
 
     if (application.status === "ADMITTED") {
-      let existingStudent = null;
-      if (application.enrolledStudentId) {
-        existingStudent = await prisma.student.findUnique({
-          where: { id: application.enrolledStudentId }
-        });
-      }
       return NextResponse.json({ 
         success: false, 
         error: { code: "CONFLICT", message: "Candidate has already been admitted" },
-        data: existingStudent
+        data: null
       }, { status: 409 });
     }
 
