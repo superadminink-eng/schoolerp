@@ -41,11 +41,11 @@ export default function PublicParentUploadPage({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const fetchPortalData = async () => {
+  const fetchPortalData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
-      const res = await fetch(`/api/v1/public/upload-docs/${token}`);
+      const res = await fetch(`/api/v1/public/upload-docs/${token}?t=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
       if (json.success) {
         setData(json.data);
@@ -55,12 +55,19 @@ export default function PublicParentUploadPage({
     } catch {
       setError("Network error. Please check your internet connection.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPortalData();
+    
+    // Real-time Magic Polling: Sync UI with admin decisions instantly without refreshing
+    const intervalId = setInterval(() => {
+      fetchPortalData(true);
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(intervalId);
   }, [token]);
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
@@ -266,43 +273,76 @@ export default function PublicParentUploadPage({
                   )}
                 </div>
 
-                {/* Rejection Remarks Alert */}
-                {item.remarks && item.status === "REJECTED" && (
-                  <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-[11px] flex items-start gap-2">
-                    <span className="shrink-0">💬</span>
-                    <div>
-                      <span className="font-bold">School Feedback:</span> {item.remarks}
+                {/* Rejection Urgent UI */}
+                {item.status === "REJECTED" && (
+                  <div className="mt-2 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-500/50 rounded-xl flex flex-col gap-3 animate-in fade-in zoom-in duration-300 shadow-md shadow-rose-900/20">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)]"></div>
+                      <span className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Action Required</span>
+                    </div>
+                    
+                    {item.remarks && (
+                      <div className="text-[11px] text-rose-800 dark:text-rose-300 font-medium">
+                        <span className="font-bold opacity-80">Reason:</span> {item.remarks}
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={isUploading}
+                        onClick={() => handleSelectFileClick(item)}
+                        className="h-9 px-4 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-rose-900/40"
+                      >
+                        {isUploading ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>⬆️</span>
+                            <span>Re-Upload File</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}
 
-                {/* Upload Button */}
-                <div className="pt-1 flex justify-end">
-                  <button
-                    type="button"
-                    disabled={isUploading}
-                    onClick={() => handleSelectFileClick(item)}
-                    className={`h-9 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md ${
-                      item.status === "VERIFIED"
-                        ? "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                        : item.status === "REJECTED"
-                        ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/30"
-                        : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/30"
-                    }`}
-                  >
-                    {isUploading ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Uploading...</span>
-                      </>
+                {/* Upload Action / Locked State */}
+                {item.status !== "REJECTED" && (
+                  <div className="pt-1 flex justify-end">
+                    {item.status === "VERIFIED" ? (
+                      <div className="flex flex-col items-end gap-1 animate-in fade-in zoom-in duration-300">
+                        <div className="h-9 px-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 cursor-default shadow-sm shadow-emerald-900/20">
+                          <span>🔒</span>
+                          <span>Verified & Locked</span>
+                        </div>
+                        <span className="text-[9px] text-slate-500/80 font-medium">Secured & verified by school administration.</span>
+                      </div>
                     ) : (
-                      <>
-                        <span>📷</span>
-                        <span>{item.filePath ? "Replace File" : "Upload File"}</span>
-                      </>
+                      <button
+                        type="button"
+                        disabled={isUploading}
+                        onClick={() => handleSelectFileClick(item)}
+                        className="h-9 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-blue-900/30"
+                      >
+                        {isUploading ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📷</span>
+                            <span>{item.filePath ? "Replace File" : "Upload File"}</span>
+                          </>
+                        )}
+                      </button>
                     )}
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}

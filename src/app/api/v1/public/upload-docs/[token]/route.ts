@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedDocument } from "@/lib/upload";
 
+export const dynamic = "force-dynamic";
+
 type RouteContext = {
   params: Promise<{ token: string }>;
 };
@@ -150,17 +152,24 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       );
     }
 
-    // Save physical file using saveUploadedDocument(file, subDir, prefix)
-    const subDir = `uploads/${app.organizationId}/${app.branchId}/applications/${app.id}`;
-    const uploadResult = await saveUploadedDocument(file, subDir, documentType);
-
-    // Check if document record already exists for this documentType
+    // Check if document record already exists and is VERIFIED (Zero Trust Security)
     const existingDoc = await prisma.applicationDocument.findFirst({
       where: {
         applicationId: app.id,
         documentType,
       },
     });
+
+    if (existingDoc && existingDoc.status === "VERIFIED") {
+      return NextResponse.json(
+        { success: false, error: { code: "FORBIDDEN", message: "This document has already been verified and locked. Please contact the administration for changes." } },
+        { status: 403 }
+      );
+    }
+
+    // Save physical file using saveUploadedDocument(file, subDir, prefix)
+    const subDir = `uploads/${app.organizationId}/${app.branchId}/applications/${app.id}`;
+    const uploadResult = await saveUploadedDocument(file, subDir, documentType);
 
     let docRecord;
     if (existingDoc) {
@@ -171,7 +180,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           filePath: uploadResult.filePath,
           fileSize: uploadResult.fileSize,
           status: "PENDING", // Reset to pending for counselor review!
-          remarks: null, // Clear previous rejection remarks
+          remarks: "SYSTEM_REUPLOADED", // Special flag for admin UI, added comment to force recompile
         },
       });
     } else {

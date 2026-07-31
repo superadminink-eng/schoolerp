@@ -113,3 +113,100 @@ export async function DELETE(
     );
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; docId: string }> }
+) {
+  try {
+    const { id, docId } = await params;
+    
+    // 1. Auth check
+    const denied = await checkApiPermission(request, "admissions", "registrar_desk");
+    if (denied) return denied;
+
+    const ctx = getTenantContext(request);
+    const body = await request.json();
+    const { status, remarks } = body;
+
+    if (!status || !["VERIFIED", "REJECTED", "PENDING", "HARDCOPY_SUBMITTED"].includes(status)) {
+      return NextResponse.json(
+        { success: false, error: { code: "BAD_REQUEST", message: "Invalid status provided" } },
+        { status: 400 }
+      );
+    }
+
+    // 2. Strict Tenant Scope Check
+    const whereCondition: any = {
+      id,
+      organizationId: ctx.organizationId,
+    };
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+      whereCondition.branchId = ctx.branchId;
+    }
+
+    const application = await prisma.admissionApplication.findFirst({
+      where: whereCondition,
+    });
+
+    if (!application) {
+      return NextResponse.json(
+        { success: false, error: { code: "NOT_FOUND", message: "Application not found or unauthorized" } },
+        { status: 404 }
+      );
+    }
+
+    // 3. Update document status
+    const targetDoc = await prisma.applicationDocument.update({
+      where: {
+        id: docId,
+        applicationId: id,
+      },
+      data: {
+        status,
+        remarks: remarks !== undefined ? remarks : null,
+      }
+    });
+
+    // 4. Fetch full updated application for live UI state sync
+    const updatedApplication = await prisma.admissionApplication.findUnique({
+      where: { id },
+      include: {
+        academicYear: true,
+        class: true,
+        branch: true,
+        documents: true,
+        examResult: true,
+      }
+    });
+
+    // 5. Log Audit Action for Compliance
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: ctx.branchId,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "ADMISSIONS",
+      entityId: id,
+      details: {
+        documentId: docId,
+        documentType: targetDoc.documentType,
+        newStatus: status,
+        remarks: remarks || "",
+        context: "DOCUMENT_INSTANT_VERIFICATION"
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      application: updatedApplication,
+      message: `Document ${status.toLowerCase()} successfully`,
+    });
+  } catch (error: any) {
+    console.error("Failed to update document status:", error);
+    return NextResponse.json(
+      { success: false, error: { code: "INTERNAL_ERROR", message: error.message || "Failed to update document" } },
+      { status: 500 }
+    );
+  }
+}

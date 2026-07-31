@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
 import { z } from "zod";
+
+export const dynamic = "force-dynamic";
 
 const editApplicationSchema = z.object({
   firstName: z.string().min(1, "First name is required").max(50),
@@ -30,6 +32,59 @@ export async function PUT(
   ctx: { params: Promise<{ id: string }> }
 ) {
   return PATCH(req, ctx);
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const resolvedParams = await params;
+  
+  const ctx = getTenantContext(req);
+  const isSuperOrSchoolAdmin = ctx.roleName === "SUPER_ADMIN" || ctx.roleName === "SCHOOL_ADMIN";
+  let allowed = isSuperOrSchoolAdmin;
+  if (!allowed) {
+    const [hasVerify, hasExam, hasRegistrar] = await Promise.all([
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "document_verification"),
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "entrance_exam"),
+      hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "registrar_desk"),
+    ]);
+    allowed = hasVerify || hasExam || hasRegistrar;
+  }
+
+  if (!allowed) {
+    return apiError("FORBIDDEN", "Insufficient permissions", 403);
+  }
+
+  try {
+    const existingWhere: Record<string, unknown> = {
+      id: resolvedParams.id,
+      organizationId: ctx.organizationId,
+    };
+
+    if (!isSuperOrSchoolAdmin && ctx.branchId) {
+      existingWhere.branchId = ctx.branchId;
+    }
+
+    const application = await prisma.admissionApplication.findFirst({
+      where: existingWhere,
+      include: {
+        documents: true,
+        examResult: true,
+        class: { select: { id: true, name: true } },
+        branch: { select: { id: true, name: true, code: true, hasEntranceTest: true } },
+      }
+    });
+
+    if (!application) {
+      return apiError("NOT_FOUND", "Application not found", 404);
+    }
+
+    return apiSuccess(application);
+  } catch (error) {
+    console.error("Fetch application error:", error);
+    return apiError("INTERNAL_ERROR", "Failed to fetch application", 500);
+  }
 }
 
 export async function PATCH(

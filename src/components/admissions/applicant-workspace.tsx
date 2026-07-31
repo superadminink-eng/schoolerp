@@ -86,6 +86,7 @@ interface Application {
   isProvisional?: boolean;
   provisionalDeadline?: string | null;
   overrideReason?: string | null;
+  enrolledStudent?: any;
 }
 
 interface WorkspaceProps {
@@ -197,10 +198,13 @@ export default function ApplicantWorkspace({
   const [isEditing, setIsEditing] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState<any>(selectedApp);
+  const [cachedCustomInstallments, setCachedCustomInstallments] = useState<any[]>([]);
+  const [isEnrollingLocally, setIsEnrollingLocally] = useState(false);
 
   useEffect(() => {
     setEditForm(selectedApp);
     setIsEditing(false);
+    setCachedCustomInstallments([]);
     if (selectedApp && selectedApp.documents && setVerifyForm) {
       setVerifyForm((prev: any) => ({
         ...prev,
@@ -232,6 +236,73 @@ export default function ApplicantWorkspace({
 
   const [selectedDocType, setSelectedDocType] = useState("BIRTH_CERTIFICATE");
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+
+  // Micro-Feedback Popover State & Instant Verification
+  const [updatingDocId, setUpdatingDocId] = useState<string | null>(null);
+  const [updatingDocAction, setUpdatingDocAction] = useState<string | null>(null);
+  const [updatingDocRemarks, setUpdatingDocRemarks] = useState<string | null>(null);
+  const [rejectPopoverIndex, setRejectPopoverIndex] = useState<number | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>("");
+  const [isOtherReason, setIsOtherReason] = useState(false);
+
+  const REJECTION_REASONS = [
+    { label: "Blurry / Unreadable", icon: "blur_on" },
+    { label: "Wrong Document Uploaded", icon: "find_replace" },
+    { label: "Missing Signature / Stamp", icon: "draw" },
+    { label: "Expired Document", icon: "event_busy" },
+    { label: "Incomplete Pages", icon: "auto_stories" },
+    { label: "Name Mismatch", icon: "badge" },
+    { label: "File Corrupted", icon: "broken_image" },
+    { label: "Other / Custom", icon: "edit_note" }
+  ];
+
+  // Targeted Micro-Polling for Live Document Updates
+  useEffect(() => {
+    if (!selectedApp?.id || !setVerifyForm) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/v1/admissions/applications/${selectedApp.id}?t=${Date.now()}`, { cache: "no-store" });
+        const data = await response.json();
+        
+        if (data.success && data.data?.documents) {
+          // Merge incoming documents with the current state to preserve local, unsubmitted remarks if any
+          setVerifyForm((prev: any) => {
+            const currentDocs = prev.documents || [];
+            const newDocs = data.data.documents || [];
+            
+            const mergedDocs = newDocs.map((freshDoc: any) => {
+              const currentDoc = currentDocs.find((d: any) => d.id === freshDoc.id || d.documentType === freshDoc.documentType);
+              
+              if (!currentDoc) {
+                return freshDoc;
+              }
+              
+              return {
+                ...currentDoc,
+                id: freshDoc.id, // Update ID in case it was a new record
+                status: freshDoc.status,
+                fileName: freshDoc.fileName,
+                filePath: freshDoc.filePath,
+                fileSize: freshDoc.fileSize,
+                mimeType: freshDoc.mimeType,
+                remarks: currentDoc.remarks !== freshDoc.remarks && currentDoc.remarks !== "" ? currentDoc.remarks : freshDoc.remarks || "",
+              };
+            });
+
+            return {
+              ...prev,
+              documents: mergedDocs,
+            };
+          });
+        }
+      } catch (error) {
+        console.error("Micro-polling failed:", error);
+      }
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [selectedApp?.id, setVerifyForm]);
   
 const DOCUMENT_META: Record<string, { label: string; badge: "MANDATORY" | "CONDITIONAL" | "ACCEPTED_VARIANTS"; badgeText: string; hint?: string; variants?: string[] }> = {
   BIRTH_CERTIFICATE: { label: "Birth Certificate", badge: "MANDATORY", badgeText: "🔴 Mandatory" },
@@ -341,11 +412,11 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
     }
   };
 
-  // Doc verification change handlers
-  const handleDocStatusChange = (index: number, requestedStatus: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED") => {
+  // Doc verification change handlers (Instant Save)
+  const handleDocStatusChange = async (index: number, requestedStatus: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED", overrideRemarks?: string) => {
     clearError();
-    const nextDocs = [...verifyForm.documents];
-    const doc = nextDocs[index];
+    const doc = verifyForm.documents[index];
+    if (!doc || !doc.id) return; // Cannot verify a document that hasn't been saved yet
     
     let finalStatus = requestedStatus;
     // If the UI requests PENDING (un-checking), but there is no digital file, it must be a physical hardcopy
@@ -353,22 +424,55 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
       finalStatus = "HARDCOPY_SUBMITTED";
     }
 
-    nextDocs[index] = { ...doc, status: finalStatus };
-    const allVerified = nextDocs.every((d) => d.status === "VERIFIED");
-    const anyRejected = nextDocs.some((d) => d.status === "REJECTED");
-    let recommendedNextStatus: typeof verifyForm.nextStatus = "DOCUMENT_VERIFICATION";
-
-    if (anyRejected) {
-      recommendedNextStatus = "REJECTED";
-    } else if (allVerified) {
-      recommendedNextStatus = hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED";
+    setUpdatingDocId(doc.id);
+    setUpdatingDocAction(finalStatus);
+    setUpdatingDocRemarks(overrideRemarks || null);
+    
+    let finalRemarks = overrideRemarks !== undefined ? overrideRemarks : doc.remarks;
+    if (finalRemarks === "SYSTEM_REUPLOADED") {
+      finalRemarks = null;
     }
 
-    setVerifyForm((prev: any) => ({
-      ...prev,
-      documents: nextDocs,
-      nextStatus: recommendedNextStatus,
-    }));
+    try {
+      const response = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/documents/${doc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: finalStatus, remarks: finalRemarks }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || "Failed to update document status");
+      }
+
+      // Optimistic UI Update
+      const nextDocs = [...verifyForm.documents];
+      nextDocs[index] = { ...doc, status: finalStatus, remarks: finalRemarks };
+      const allVerified = nextDocs.every((d) => d.status === "VERIFIED");
+      const anyRejected = nextDocs.some((d) => d.status === "REJECTED");
+      let recommendedNextStatus: typeof verifyForm.nextStatus = "DOCUMENT_VERIFICATION";
+
+      if (allVerified) {
+        recommendedNextStatus = hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED";
+      }
+
+      setVerifyForm((prev: any) => ({
+        ...prev,
+        documents: nextDocs,
+        nextStatus: recommendedNextStatus,
+      }));
+
+    } catch (err: any) {
+      setFormError?.(err.message || "Failed to update document status");
+    } finally {
+      setUpdatingDocId(null);
+      setUpdatingDocAction(null);
+      setUpdatingDocRemarks(null);
+      if (requestedStatus === "REJECTED") {
+        setRejectPopoverIndex(null);
+      }
+    }
   };
 
   const handleDocRemarksChange = (index: number, remarks: string) => {
@@ -703,6 +807,15 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
     setSelectedOptionalFees?.((prev: any) => prev.map((f: any) => f.id === feeId ? { ...f, amount: newAmount } : f));
   };
 
+  const handleInstallmentDateChange = (id: string, newDateStr: string) => {
+    if (!setCustomInstallments || !newDateStr) return;
+    setCustomInstallments((prev: any[]) => prev.map(inst => 
+      inst.id === id 
+        ? { ...inst, dueDate: newDateStr + "T00:00:00.000Z" } 
+        : inst
+    ));
+  };
+
   // God-Level Custom Installments Generator
   const generateCustomInstallments = () => {
     if (customConfigRows <= 0) return;
@@ -937,6 +1050,53 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
       </div>
 
       {/* Main View Area */}
+      {selectedApp.status === "ADMITTED" ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 animate-in zoom-in-95 duration-500 fade-in bg-slate-50/50 dark:bg-zinc-950/50 relative overflow-hidden">
+          <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 dark:border-zinc-800 p-8 text-center flex flex-col items-center relative overflow-hidden">
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-sky-400/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 w-full flex flex-col items-center">
+              <div className="size-20 mx-auto bg-emerald-50 text-emerald-500 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full flex items-center justify-center shadow-inner mb-6 border border-emerald-100 dark:border-emerald-900">
+                <Icon name="verified" size={42} />
+              </div>
+              <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 mb-2">Enrollment Successful!</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-8 leading-relaxed">
+                <span className="font-bold text-slate-700 dark:text-slate-300">{selectedApp.firstName} {selectedApp.lastName}</span> is now officially a student. 
+                <br />
+                <span className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 bg-slate-100 dark:bg-zinc-800 rounded-lg border border-slate-200 dark:border-zinc-700 shadow-sm">
+                  Admission No: <span className="font-bold text-slate-800 dark:text-zinc-200 tracking-wide">{selectedApp.enrolledStudent?.admissionNo || "Pending Generation"}</span>
+                </span>
+              </p>
+              
+              <div className="flex flex-col gap-3 w-full">
+                <button 
+                  onClick={() => alert('Fee receipt printing initiated...')}
+                  className="w-full h-11 rounded-xl bg-primary text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md shadow-primary/20 hover:bg-primary/90 transition-all active:scale-[0.98]"
+                >
+                  <Icon name="receipt_long" size={18} />
+                  Print Fee Receipt
+                </button>
+                
+                <button 
+                  onClick={() => window.open(`/students/${selectedApp.enrolledStudent?.id || ''}`, '_blank')}
+                  className="w-full h-11 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-200 text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-200 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 transition-all active:scale-[0.98]"
+                >
+                  <Icon name="person" size={18} />
+                  View Student Profile
+                </button>
+
+                <button 
+                  onClick={onClose} 
+                  className="w-full h-10 mt-2 rounded-xl text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-bold transition-colors text-sm"
+                >
+                  Close & Enroll Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar bg-slate-50/30 dark:bg-zinc-950 p-3 md:p-4 lg:p-4">
         <div className="max-w-5xl mx-auto w-full">
         {workspaceMode === "student_profile" ? (
@@ -1271,128 +1431,229 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         const isPdf = doc.filePath?.toLowerCase().endsWith(".pdf");
 
                         return (
-                          <div
-                            key={doc.id || doc.documentType}
-                            className="group flex flex-col p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-900/30 border border-transparent hover:border-slate-200/50 dark:hover:border-zinc-800/50 transition-colors"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              {/* Left Meta */}
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
-                                  doc.status === "HARDCOPY_SUBMITTED"
-                                    ? "bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-500 border-amber-200/50 dark:border-amber-900/40"
-                                    : isPdf 
-                                    ? "bg-rose-50 text-rose-500 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100/40 dark:border-rose-900/30"
-                                    : "bg-blue-50 text-blue-500 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100/40 dark:border-blue-900/30"
-                                }`}>
-                                  <Icon name={doc.status === "HARDCOPY_SUBMITTED" ? "folder_special" : isPdf ? "picture_as_pdf" : "image"} size={16} />
-                                </div>
-                                <div className="min-w-0 flex-1 flex flex-col justify-center">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate leading-none">
-                                      {meta.label}
-                                    </span>
+                          <div key={doc.id || index} className="grid grid-cols-12 gap-4 items-center">
+                            {/* Display Mode */}
+                            <div className="col-span-12">
+                              <div className="flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-sm hover:shadow-md transition-shadow relative">
+                                <div className="flex items-center gap-4">
+                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
+                                    doc.status === "HARDCOPY_SUBMITTED"
+                                      ? "bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-500 border-amber-200/50 dark:border-amber-900/40"
+                                      : isPdf 
+                                      ? "bg-rose-50 text-rose-500 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100/40 dark:border-rose-900/30"
+                                      : "bg-blue-50 text-blue-500 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100/40 dark:border-blue-900/30"
+                                  }`}>
+                                    <Icon name={doc.status === "HARDCOPY_SUBMITTED" ? "folder_special" : isPdf ? "picture_as_pdf" : "image"} size={16} />
                                   </div>
-                                  {doc.status === "HARDCOPY_SUBMITTED" ? (
-                                    <span className="text-[10px] text-amber-600 dark:text-amber-500 truncate mt-1 leading-none font-semibold flex items-center gap-1">
-                                      Physical Hardcopy
-                                    </span>
-                                  ) : doc.fileName ? (
-                                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate mt-1 leading-none font-medium">
-                                      {doc.fileName}
-                                    </span>
-                                  ) : null}
+                                  <div className="min-w-0 flex-1 flex flex-col justify-center">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate leading-none">
+                                        {meta.label}
+                                      </span>
+                                      {doc.remarks === "SYSTEM_REUPLOADED" && doc.status === "PENDING" && (
+                                        <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                          <Icon name="change_circle" size={10} />
+                                          Re-Uploaded
+                                        </span>
+                                      )}
+                                    </div>
+                                    {doc.status === "HARDCOPY_SUBMITTED" ? (
+                                      <span className="text-[10px] text-amber-600 dark:text-amber-500 truncate mt-1 leading-none font-semibold flex items-center gap-1">
+                                        Physical Hardcopy
+                                      </span>
+                                    ) : doc.fileName ? (
+                                      <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate mt-1 leading-none font-medium">
+                                        {doc.fileName}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+
+                                {/* Right Actions & Status */}
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {doc.status === "HARDCOPY_SUBMITTED" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setUploadScanDocType(doc.documentType);
+                                        setTimeout(() => scanInputRef.current?.click(), 50);
+                                      }}
+                                      disabled={scanningDocType === doc.documentType}
+                                      className="h-7 px-2 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 flex items-center justify-center transition-colors cursor-pointer text-[10px] font-bold gap-1 shadow-sm disabled:opacity-50"
+                                      title="Upload scanned file"
+                                    >
+                                      {scanningDocType === doc.documentType ? <Icon name="sync" size={12} className="animate-spin" /> : <Icon name="upload" size={12} />}
+                                      <span>{scanningDocType === doc.documentType ? "Uploading..." : "Upload Scan"}</span>
+                                    </button>
+                                  )}
+                                  {doc.filePath && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewDoc(doc)}
+                                      className="w-7 h-7 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors cursor-pointer"
+                                      title="Preview"
+                                    >
+                                      <Icon name="visibility" size={15} />
+                                    </button>
+                                  )}
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteConfirmDoc(doc)}
+                                    disabled={deletingDocId === doc.id}
+                                    className="w-7 h-7 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
+                                    title="Delete document"
+                                  >
+                                    <Icon name="delete" size={14} />
+                                  </button>
+
+                                  <div className="w-px h-4 bg-slate-200 dark:bg-zinc-800 mx-1 hidden sm:block"></div>
+
+                                  {/* Silicon Valley Pill Toggles */}
+                                  <div className="flex items-center p-0.5 bg-slate-100/80 dark:bg-zinc-800/50 rounded-lg border border-slate-200/50 dark:border-zinc-700/50">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDocStatusChange(index, doc.status === "VERIFIED" ? "PENDING" : "VERIFIED")}
+                                      disabled={updatingDocId === doc.id}
+                                      className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 ${
+                                        doc.status === "VERIFIED"
+                                          ? "bg-emerald-500 text-white shadow-sm"
+                                          : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                      }`}
+                                      title="Approve"
+                                    >
+                                      {updatingDocId === doc.id && (updatingDocAction === "VERIFIED" || (doc.status === "VERIFIED" && updatingDocAction === "PENDING")) ? (
+                                        <Icon name="sync" size={16} className="animate-spin" />
+                                      ) : (
+                                        <Icon name="check" size={16} className={doc.status === "VERIFIED" ? "stroke-[3px]" : ""} />
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (doc.status === "REJECTED") {
+                                          handleDocStatusChange(index, "PENDING");
+                                        } else {
+                                          setRejectPopoverIndex(rejectPopoverIndex === index ? null : index);
+                                          setRejectionReason("");
+                                          setIsOtherReason(false);
+                                        }
+                                      }}
+                                      disabled={updatingDocId === doc.id}
+                                      className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 ${
+                                        doc.status === "REJECTED" || rejectPopoverIndex === index
+                                          ? "bg-rose-500 text-white shadow-sm"
+                                          : "text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                                      }`}
+                                      title="Reject"
+                                    >
+                                      {updatingDocId === doc.id && (updatingDocAction === "REJECTED" || (doc.status === "REJECTED" && updatingDocAction === "PENDING")) ? (
+                                        <Icon name="sync" size={16} className="animate-spin" />
+                                      ) : (
+                                        <Icon name="close" size={16} className={doc.status === "REJECTED" ? "stroke-[3px]" : ""} />
+                                      )}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
-                              {/* Right Actions & Status */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                {doc.status === "HARDCOPY_SUBMITTED" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setUploadScanDocType(doc.documentType);
-                                      setTimeout(() => scanInputRef.current?.click(), 50);
-                                    }}
-                                    disabled={scanningDocType === doc.documentType}
-                                    className="h-7 px-2 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 flex items-center justify-center transition-colors cursor-pointer text-[10px] font-bold gap-1 shadow-sm disabled:opacity-50"
-                                    title="Upload scanned file"
-                                  >
-                                    {scanningDocType === doc.documentType ? <Icon name="sync" size={12} className="animate-spin" /> : <Icon name="upload" size={12} />}
-                                    <span>{scanningDocType === doc.documentType ? "Uploading..." : "Upload Scan"}</span>
-                                  </button>
-                                )}
-                                {/* Secondary actions - Always visible for touch devices */}
-                                {doc.filePath && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setPreviewDoc(doc)}
-                                    className="w-7 h-7 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors cursor-pointer"
-                                    title="Preview"
-                                  >
-                                    <Icon name="visibility" size={15} />
-                                  </button>
-                                )}
-                                
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteConfirmDoc(doc)}
-                                  disabled={deletingDocId === doc.id}
-                                  className="w-7 h-7 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
-                                  title="Delete document"
-                                >
-                                  <Icon name="delete" size={14} />
-                                </button>
+                              {/* Premium Silicon Valley Style Rejection Drawer */}
+                              <div className={`grid transition-all duration-300 ease-in-out ${rejectPopoverIndex === index ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                                <div className="overflow-hidden">
+                                  <div className="p-4 bg-slate-50/80 dark:bg-zinc-900/50 border-t border-slate-100 dark:border-zinc-800 backdrop-blur-sm">
+                                    <div className="flex flex-col gap-4">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
+                                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Select Rejection Reason</span>
+                                        </div>
+                                        <button 
+                                          onClick={() => setRejectPopoverIndex(null)} 
+                                          className="w-6 h-6 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"
+                                        >
+                                          <Icon name="close" size={14} />
+                                        </button>
+                                      </div>
 
-                                <div className="w-px h-4 bg-slate-200 dark:bg-zinc-800 mx-1 hidden sm:block"></div>
+                                      <div className="grid grid-cols-4 gap-2">
+                                        {REJECTION_REASONS.map((reason, rIndex) => {
+                                          const isOther = reason.label === "Other / Custom";
+                                          if (isOther) return null; // Handle separately below
+                                          return (
+                                            <button
+                                              key={rIndex}
+                                              type="button"
+                                              onClick={() => { handleDocStatusChange(index, "REJECTED", reason.label); }}
+                                              disabled={updatingDocId === doc.id}
+                                              className={`group flex flex-col items-center justify-start p-3 rounded-xl border transition-all ${
+                                                doc.remarks === reason.label
+                                                  ? "bg-rose-50 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/30 ring-2 ring-rose-500/20"
+                                                  : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/50 dark:bg-zinc-800/80 dark:border-zinc-700 dark:hover:border-rose-500/50 dark:hover:bg-rose-900/20"
+                                              }`}
+                                            >
+                                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 transition-colors ${
+                                                doc.remarks === reason.label
+                                                  ? "bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400"
+                                                  : "bg-slate-100 text-slate-500 group-hover:bg-rose-100 group-hover:text-rose-600 dark:bg-zinc-700/50 dark:text-zinc-400 dark:group-hover:bg-rose-500/20 dark:group-hover:text-rose-400"
+                                              }`}>
+                                                {updatingDocId === doc.id && updatingDocAction === "REJECTED" && updatingDocRemarks === reason.label ? (
+                                                  <Icon name="sync" size={16} className="animate-spin" />
+                                                ) : (
+                                                  <Icon name={reason.icon} size={16} />
+                                                )}
+                                              </div>
+                                              <span className={`text-[10px] font-bold text-center leading-tight ${
+                                                doc.remarks === reason.label ? "text-rose-700 dark:text-rose-400" : "text-slate-600 dark:text-slate-300"
+                                              }`}>{reason.label}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
 
-                                {/* Silicon Valley Pill Toggles */}
-                                <div className="flex items-center p-0.5 bg-slate-100/80 dark:bg-zinc-800/50 rounded-lg border border-slate-200/50 dark:border-zinc-700/50">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDocStatusChange(index, doc.status === "VERIFIED" ? "PENDING" : "VERIFIED")}
-                                    className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
-                                      doc.status === "VERIFIED"
-                                        ? "bg-emerald-500 text-white shadow-sm"
-                                        : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                                    }`}
-                                    title="Approve"
-                                  >
-                                    <Icon name="check" size={16} className={doc.status === "VERIFIED" ? "stroke-[3px]" : ""} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDocStatusChange(index, doc.status === "REJECTED" ? "PENDING" : "REJECTED")}
-                                    className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
-                                      doc.status === "REJECTED"
-                                        ? "bg-rose-500 text-white shadow-sm"
-                                        : "text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                                    }`}
-                                    title="Reject"
-                                  >
-                                    <Icon name="close" size={16} className={doc.status === "REJECTED" ? "stroke-[3px]" : ""} />
-                                  </button>
+                                      <div className="flex gap-2 items-stretch mt-1">
+                                        <button 
+                                          onClick={() => { setRejectionReason(""); setIsOtherReason(true); }} 
+                                          className={`flex-shrink-0 px-4 py-2 rounded-xl border text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                                            isOtherReason 
+                                              ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-500/10 dark:border-rose-500/30 dark:text-rose-400 shadow-sm" 
+                                              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-slate-300"
+                                          }`}
+                                        >
+                                          <Icon name="edit_note" size={16} />
+                                          Other
+                                        </button>
+                                        
+                                        {isOtherReason && (
+                                          <div className="flex-1 flex gap-2">
+                                            <input 
+                                              type="text" 
+                                              value={rejectionReason} 
+                                              onChange={(e) => setRejectionReason(e.target.value)}
+                                              onKeyDown={(e) => { if(e.key === 'Enter' && rejectionReason.trim() && updatingDocId !== doc.id) { handleDocStatusChange(index, "REJECTED", rejectionReason.trim()); } }}
+                                              placeholder="Type specific reason..." 
+                                              className="flex-1 h-full min-h-[36px] px-3 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 shadow-inner" 
+                                              autoFocus 
+                                            />
+                                            <button
+                                              disabled={!rejectionReason.trim() || (updatingDocId === doc.id && updatingDocAction === "REJECTED")}
+                                              onClick={() => { handleDocStatusChange(index, "REJECTED", rejectionReason.trim()); }}
+                                              className="flex-shrink-0 flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white text-xs font-bold shadow-md shadow-rose-500/20 transition-all duration-200 disabled:opacity-50"
+                                            >
+                                              {updatingDocId === doc.id && updatingDocAction === "REJECTED" && updatingDocRemarks === rejectionReason.trim() ? (
+                                                <Icon name="sync" size={14} className="animate-spin" />
+                                              ) : (
+                                                <span>Confirm</span>
+                                              )}
+                                              <Icon name="arrow_forward" size={14} />
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                            
-                            {/* Auto-expanding Remarks */}
-                            {(doc.status === "REJECTED" || doc.remarks) && (
-                              <div className="mt-2 pl-[44px] pr-2 animate-in slide-in-from-top-2 fade-in duration-200">
-                                <input
-                                  type="text"
-                                  autoFocus={doc.status === "REJECTED" && !doc.remarks}
-                                  placeholder="Specify rejection reason or remarks..."
-                                  value={doc.remarks || ""}
-                                  onChange={(e) => handleDocRemarksChange(index, e.target.value)}
-                                  className={`w-full h-7 px-2 text-[11px] rounded-md bg-transparent border-b ${
-                                    doc.status === "REJECTED" 
-                                      ? "border-rose-300 dark:border-rose-800/50 text-rose-900 dark:text-rose-200 placeholder:text-rose-300 dark:placeholder:text-rose-800" 
-                                      : "border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 placeholder:text-slate-400"
-                                  } focus:outline-none focus:border-primary transition-colors`}
-                                />
-                              </div>
-                            )}
                           </div>
                         );
                       })}
@@ -1879,7 +2140,25 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       <div className="flex p-0.5 bg-slate-100 dark:bg-zinc-900 rounded-lg border border-slate-200/60 dark:border-zinc-800">
                         <button
                           type="button"
-                          onClick={() => setBillingMode?.("STANDARD")}
+                          onClick={() => {
+                            if (billingMode !== "STANDARD") {
+                              setCachedCustomInstallments([...(customInstallments || [])]);
+                              setBillingMode?.("STANDARD");
+                              if (setCustomInstallments && installmentTemplates) {
+                                setCustomInstallments(
+                                  installmentTemplates.map((t: any) => ({
+                                    id: `template-${t.id}`,
+                                    templateId: t.id,
+                                    name: t.name,
+                                    dueDate: t.dueDate,
+                                    amount: Number(t.amount) || 0,
+                                    checked: true,
+                                    isCustom: false,
+                                  }))
+                                );
+                              }
+                            }
+                          }}
                           className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-md transition-all ${
                             billingMode === "STANDARD" ? "bg-white dark:bg-zinc-950 text-slate-800 shadow-xs" : "text-slate-500"
                           }`}
@@ -1888,7 +2167,14 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         </button>
                         <button
                           type="button"
-                          onClick={() => setBillingMode?.("CUSTOM")}
+                          onClick={() => {
+                            if (billingMode !== "CUSTOM") {
+                              setBillingMode?.("CUSTOM");
+                              if (setCustomInstallments && cachedCustomInstallments.length > 0) {
+                                setCustomInstallments(cachedCustomInstallments);
+                              }
+                            }
+                          }}
                           className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-md transition-all ${
                             billingMode === "CUSTOM" ? "bg-white dark:bg-zinc-950 text-slate-800 shadow-xs" : "text-slate-500"
                           }`}
@@ -2001,17 +2287,36 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       </div>
 
                       {/* Discount & Totals */}
-                      <div className="pt-2 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between">
-                         <label className="text-[10px] font-extrabold uppercase text-slate-400">Flat Discount</label>
-                         <div className="relative w-24">
-                           <span className="absolute left-2 top-1.5 text-[10px] font-bold text-slate-400">₹</span>
-                           <input type="number" value={String(promoteForm.discountAmount)} onChange={(e) => handlePromoteChange("discountAmount", e.target.value)} className="w-full h-7 pl-5 pr-2 rounded-md border border-slate-200 text-xs font-bold text-right outline-none focus:border-primary" />
-                         </div>
+                      <div className="pt-3 border-t border-slate-100 dark:border-zinc-800 space-y-2.5">
+                        {/* Gross Total */}
+                        <div className="flex items-center justify-between px-3">
+                          <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-zinc-400 tracking-wider">Gross Total</span>
+                          <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(mandatoryTotal + optionalTotal)}</span>
+                        </div>
+
+                        {/* Flat Discount */}
+                        <div className="flex items-center justify-between px-3">
+                          <label className="text-[10px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">
+                            Discount
+                          </label>
+                          <div className="relative w-24">
+                            <span className="absolute left-2 top-1.5 text-[10px] font-bold text-slate-400">- ₹</span>
+                            <input 
+                              type="number" 
+                              value={String(promoteForm.discountAmount)} 
+                              onChange={(e) => handlePromoteChange("discountAmount", e.target.value)} 
+                              className="w-full h-7 pl-7 pr-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold text-right text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 transition-all shadow-sm" 
+                            />
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="pt-2 mt-1 border-t-2 border-dashed border-slate-200 dark:border-zinc-800 flex justify-between items-center bg-slate-50 dark:bg-zinc-900/50 p-2 rounded-lg">
-                        <span className="text-xs font-black tracking-wider text-slate-900 uppercase">NET FEE</span>
-                        <span className="text-lg font-black text-emerald-600">₹{formatIndianNumber(totalDiscountedFee)}</span>
+                      <div className="pt-2 mt-2 border-t-2 border-dashed border-emerald-200 dark:border-emerald-900/50 flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2.5 rounded-lg shadow-inner mx-1">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black tracking-wider text-emerald-800 dark:text-emerald-400 uppercase">NET FEE</span>
+                          <span className="text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/70 uppercase">Applicable Amount</span>
+                        </div>
+                        <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">₹{formatIndianNumber(totalDiscountedFee)}</span>
                       </div>
                     </div>
                   </div>
@@ -2039,7 +2344,21 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                               <input type="checkbox" checked={inst.checked} onChange={(e) => handleInstallmentCheckChange(inst.templateId || inst.id || String(index), e.target.checked)} className="rounded text-primary w-4 h-4 cursor-pointer" />
                               <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
                                 <span className="text-xs font-bold text-slate-700 min-w-[120px] truncate">{template?.name || inst.name || `Inst. ${index + 1}`}</span>
-                                <span className="text-[10px] text-slate-400 font-medium">Due: {template ? new Date(template.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "TBD"}</span>
+                                {inst.isCustom ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-400 font-medium">Due: </span>
+                                    <input
+                                      type="date"
+                                      min={new Date().toISOString().split("T")[0]}
+                                      value={inst.dueDate ? inst.dueDate.split("T")[0] : ""}
+                                      onChange={(e) => handleInstallmentDateChange(inst.id, e.target.value)}
+                                      className="h-6 px-1.5 rounded-md border border-slate-200/80 dark:border-zinc-700/80 bg-white dark:bg-zinc-800 text-[10px] font-bold text-primary outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 cursor-pointer transition-all"
+                                      title="Edit Due Date"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-medium">Due: {inst.dueDate ? new Date(inst.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "TBD"}</span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <span className="text-xs text-slate-400 font-bold">₹</span>
@@ -2118,22 +2437,6 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
               </form>
             )}
 
-            {/* WIZARD: ADMITTED */}
-            {selectedApp.status === "ADMITTED" && (
-              <div className="py-10 text-center space-y-6 animate-in fade-in duration-300">
-                <span className="inline-flex items-center justify-center p-4 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-200/50 shadow-sm">
-                  <Icon name="check_circle" size={48} />
-                </span>
-                <div className="space-y-2 max-w-md mx-auto">
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-zinc-100">
-                    Candidate Successfully Enrolled!
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-zinc-400 leading-relaxed">
-                    This candidate is now a fully registered student in Student Information System (SIS).
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* STATUS: REJECTED */}
             {selectedApp.status === "REJECTED" && (
@@ -2226,6 +2529,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
         )}
         </div>
       </div>
+      )}
 
       {/* Withdraw Confirmation Dialog */}
       <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>

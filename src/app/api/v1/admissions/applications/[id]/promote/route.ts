@@ -90,7 +90,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     }
 
     if (application.status === "ADMITTED") {
-      return apiError("CONFLICT", "Candidate has already been admitted", 409);
+      let existingStudent = null;
+      if (application.enrolledStudentId) {
+        existingStudent = await prisma.student.findUnique({
+          where: { id: application.enrolledStudentId }
+        });
+      }
+      return NextResponse.json({ 
+        success: false, 
+        error: { code: "CONFLICT", message: "Candidate has already been admitted" },
+        data: existingStudent
+      }, { status: 409 });
     }
 
     // Verify age validation: student must be at least 3 years old on admission date
@@ -496,6 +506,6 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     ) {
       return apiError("BAD_REQUEST", error.message.split(": ")[1], 400);
     }
-    return apiError("INTERNAL_ERROR", "Failed to promote candidate to student", 500);
+    return apiError("INTERNAL_ERROR", `Failed to promote candidate to student: ${error?.message || "Unknown error"}`, 500);
   }
 }

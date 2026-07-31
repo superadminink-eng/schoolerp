@@ -68,6 +68,7 @@ interface Application {
   documents?: Document[] | null;
   tokens?: any[] | null;
   examResult?: ExamResult | null;
+  enrolledStudent?: any;
   fatherName: string | null;
   fatherPhone: string | null;
   fatherEmail: string | null;
@@ -1301,12 +1302,20 @@ export default function AdmissionsPage() {
       if (data.success) {
         snackbar.show("Candidate successfully promoted to student!", "success");
         setFormError(null);
-        setWorkspaceOpen(false);
+        setSelectedApp({ ...selectedApp, status: "ADMITTED", enrolledStudent: data.data });
         fetchDashboardData();
       } else {
         const errMsg = data.error?.message || "Failed to promote student.";
-        setFormError(errMsg);
-        snackbar.show(errMsg, "error");
+        if (data.error?.code === "CONFLICT" && errMsg === "Candidate has already been admitted") {
+          // Recover from double-click or timeout-retry
+          snackbar.show("Candidate is already enrolled!", "success");
+          setFormError(null);
+          setSelectedApp({ ...selectedApp, status: "ADMITTED", enrolledStudent: data.data || selectedApp.enrolledStudent });
+          fetchDashboardData();
+        } else {
+          setFormError(errMsg);
+          snackbar.show(errMsg, "error");
+        }
       }
     } catch {
       setFormError("Network error.");
