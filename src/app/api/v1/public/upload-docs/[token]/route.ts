@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedDocument } from "@/lib/upload";
+import { unlink } from "fs/promises";
+import path from "path";
 
 export const dynamic = "force-dynamic";
 
@@ -152,7 +154,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       );
     }
 
-    // Check if document record already exists and is VERIFIED (Zero Trust Security)
+    // Check if document record already exists and is VERIFIED or HARDCOPY_SUBMITTED
     const existingDoc = await prisma.applicationDocument.findFirst({
       where: {
         applicationId: app.id,
@@ -160,9 +162,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       },
     });
 
-    if (existingDoc && existingDoc.status === "VERIFIED") {
+    if (existingDoc && (existingDoc.status === "VERIFIED" || existingDoc.status === "HARDCOPY_SUBMITTED")) {
       return NextResponse.json(
-        { success: false, error: { code: "FORBIDDEN", message: "This document has already been verified and locked. Please contact the administration for changes." } },
+        { success: false, error: { code: "FORBIDDEN", message: "This document is locked and cannot be modified. Contact the admission desk for changes." } },
         { status: 403 }
       );
     }
@@ -173,6 +175,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     let docRecord;
     if (existingDoc) {
+      // Storage Optimization: Delete old file to prevent storage bloat
+      if (existingDoc.filePath) {
+        try {
+          const oldFilePath = path.join(process.cwd(), "public", existingDoc.filePath);
+          await unlink(oldFilePath);
+        } catch (err) {
+          console.error("Failed to delete old document file:", err);
+          // Don't fail the upload if delete fails
+        }
+      }
+
       docRecord = await prisma.applicationDocument.update({
         where: { id: existingDoc.id },
         data: {

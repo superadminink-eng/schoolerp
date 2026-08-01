@@ -179,3 +179,41 @@ export async function PATCH(
     return apiError("INTERNAL_ERROR", "Failed to update application", 500);
   }
 }
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const resolvedParams = await params;
+  const ctx = getTenantContext(req);
+
+  try {
+    const existingWhere: Record<string, unknown> = {
+      id: resolvedParams.id,
+      organizationId: ctx.organizationId,
+    };
+
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+      existingWhere.branchId = ctx.branchId;
+    }
+
+    const application = await prisma.admissionApplication.findFirst({
+      where: existingWhere,
+      include: {
+        academicYear: true,
+        class: true,
+        branch: true,
+        documents: true,
+        examResult: true,
+        tokens: true
+      }
+    });
+
+    if (!application) return apiError("NOT_FOUND", "Application not found", 404);
+
+    return apiSuccess(application);
+  } catch (error) {
+    console.error("Fetch application error:", error);
+    return apiError("INTERNAL_ERROR", "Failed to fetch application", 500);
+  }
+}

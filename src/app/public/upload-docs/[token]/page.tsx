@@ -1,6 +1,21 @@
 "use client";
 
 import { useEffect, useState, useRef, use } from "react";
+import { 
+  UploadCloud, 
+  ShieldCheck, 
+  FileCheck2, 
+  AlertCircle, 
+  FileText, 
+  CheckCircle2,
+  Clock,
+  RefreshCcw,
+  Camera,
+  FileArchive,
+  Lock,
+  User,
+  Hash
+} from "lucide-react";
 
 interface ChecklistItem {
   type: string;
@@ -10,7 +25,7 @@ interface ChecklistItem {
   fileName: string | null;
   filePath: string | null;
   fileSize: number | null;
-  status: "VERIFIED" | "PENDING" | "REJECTED" | "NOT_UPLOADED";
+  status: "VERIFIED" | "PENDING" | "REJECTED" | "NOT_UPLOADED" | "HARDCOPY_SUBMITTED";
   remarks: string | null;
 }
 
@@ -89,7 +104,7 @@ export default function PublicParentUploadPage({
 
     // Validate size (10MB)
     if (file.size > 10 * 1024 * 1024) {
-      showToast("File size cannot exceed 10MB", "error");
+      showToast("File size cannot exceed 10MB to save your mobile data.", "error");
       return;
     }
 
@@ -121,22 +136,22 @@ export default function PublicParentUploadPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 font-sans">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-sm font-semibold text-slate-300 animate-pulse">Loading Admission Portal...</p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
+        <RefreshCcw className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+        <h2 className="text-base font-bold text-slate-800">Loading Portal...</h2>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center font-sans">
-        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center mb-4 text-2xl">
-          ⚠️
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+          <AlertCircle className="w-8 h-8" />
         </div>
-        <h1 className="text-xl font-bold text-slate-100 mb-2">Link Unavailable</h1>
-        <p className="text-sm text-slate-400 max-w-sm mb-6">{error || "Portal not found"}</p>
-        <p className="text-xs text-slate-500">Please contact the school admission desk for assistance.</p>
+        <h1 className="text-xl font-bold text-slate-900 mb-2">Link Unavailable</h1>
+        <p className="text-sm text-slate-600 max-w-sm mb-6">{error || "This secure portal link has expired or is invalid."}</p>
+        <p className="text-xs text-slate-500 font-medium">Please contact the admission desk for a new link.</p>
       </div>
     );
   }
@@ -148,8 +163,14 @@ export default function PublicParentUploadPage({
     .substring(0, 2)
     .toUpperCase();
 
+  // Progress Calculation
+  const mandatoryItems = data.checklist.filter(item => item.mandatory);
+  const completedMandatory = mandatoryItems.filter(item => item.status === "VERIFIED" || item.status === "HARDCOPY_SUBMITTED" || item.status === "PENDING").length;
+  const progressPercent = mandatoryItems.length > 0 ? Math.round((completedMandatory / mandatoryItems.length) * 100) : 100;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-12 antialiased">
+    <div className="h-screen overflow-y-auto bg-slate-50 text-slate-900 font-sans pb-16 antialiased selection:bg-blue-100">
+      
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
@@ -162,84 +183,102 @@ export default function PublicParentUploadPage({
       {/* Toast Alert */}
       {toastMessage && (
         <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl backdrop-blur-md flex items-center gap-2 border animate-in slide-in-from-top-4 duration-300 ${
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg flex items-center gap-2.5 border animate-in slide-in-from-top-4 fade-in duration-300 min-w-[280px] max-w-[90vw] ${
             toastMessage.type === "success"
-              ? "bg-emerald-950/90 border-emerald-500/40 text-emerald-200"
-              : "bg-rose-950/90 border-rose-500/40 text-rose-200"
+              ? "bg-green-50 border-green-200 text-green-800"
+              : "bg-red-50 border-red-200 text-red-800"
           }`}
         >
-          <span>{toastMessage.type === "success" ? "✅" : "⚠️"}</span>
+          {toastMessage.type === "success" ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <AlertCircle className="w-5 h-5 text-red-600" />}
           <span>{toastMessage.text}</span>
         </div>
       )}
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-black text-white text-xs shadow-md">
+      {/* Premium Header - Ultra Compact */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="w-7 h-7 rounded bg-blue-600 flex items-center justify-center font-bold text-white text-xs shrink-0">
             {data.branchName.substring(0, 1)}
           </div>
-          <div>
-            <h1 className="text-xs font-black tracking-tight text-white uppercase">{data.branchName}</h1>
-            <p className="text-[10px] text-slate-400 font-medium">Admission Document Portal</p>
+          <div className="min-w-0">
+            <h1 className="text-sm font-bold text-slate-900 truncate">{data.branchName}</h1>
           </div>
         </div>
-        <div className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-          🔒 Secure Upload
+        <div className="px-2 py-1 rounded bg-green-50 border border-green-200 text-green-700 flex items-center gap-1 shrink-0">
+          <ShieldCheck className="w-3 h-3" />
+          <span className="text-[9px] font-bold uppercase tracking-wider">Secure</span>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-lg mx-auto px-4 pt-5 space-y-4">
-        {/* Student Banner */}
-        <div className="p-4 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden">
-          <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-black text-sm flex items-center justify-center shadow-lg shrink-0">
+      {/* Main Content Container - Centered and Compact */}
+      <main className="max-w-3xl mx-auto px-4 pt-4 space-y-4">
+        
+        {/* Combined Student & Progress Card */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-700 font-bold text-sm flex items-center justify-center shrink-0 border border-blue-100">
               {studentInitials}
             </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base font-bold text-white tracking-tight truncate">{data.studentName}</h2>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <span className="text-[11px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700/50">
-                  App: {data.applicationNo}
-                </span>
-                <span className="text-[11px] font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-lg border border-blue-500/20">
-                  Class: {data.className || "N/A"}
-                </span>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">{data.studentName}</h2>
+              <div className="flex items-center gap-2 mt-0.5 text-xs font-medium text-slate-500">
+                <span>{data.applicationNo}</span>
+                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                <span>{data.className || "N/A"}</span>
               </div>
+            </div>
+          </div>
+          
+          <div className="w-full md:w-64">
+            <div className="flex justify-between items-end mb-1.5">
+              <span className="text-xs font-bold text-slate-700">Documents</span>
+              <span className="text-xs font-bold text-blue-600">{progressPercent}%</span>
+            </div>
+            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              ></div>
             </div>
           </div>
         </div>
 
-        {/* Instructions */}
-        <div className="px-1">
-          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Required Documents</h3>
-          <p className="text-[11px] text-slate-400">
-            Please tap <span className="text-white font-semibold">"Upload File"</span> next to each item to attach your documents. Clear camera photos or PDF files are accepted.
-          </p>
-        </div>
-
-        {/* Document Checklist */}
-        <div className="space-y-3">
-          {data.checklist.map((item) => {
+        {/* Compact Document List */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          {data.checklist.map((item, index) => {
             const isUploading = uploadingType === item.type;
+            const isLocked = item.status === "VERIFIED" || item.status === "HARDCOPY_SUBMITTED";
+            const isLast = index === data.checklist.length - 1;
+            
             return (
               <div
                 key={item.type}
-                className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 transition-all space-y-3"
+                className={`flex flex-col md:flex-row md:items-center justify-between p-3.5 gap-3 transition-colors ${
+                  !isLast ? "border-b border-slate-100" : ""
+                } ${isUploading ? "opacity-60 pointer-events-none" : ""} ${
+                  isLocked ? "bg-slate-50/50" : "hover:bg-slate-50"
+                }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
+                {/* Left: Info */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    item.status === "VERIFIED" ? "bg-green-100 text-green-600" :
+                    item.status === "REJECTED" ? "bg-red-100 text-red-600" :
+                    item.status === "HARDCOPY_SUBMITTED" ? "bg-amber-100 text-amber-600" :
+                    item.fileName ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
+                  }`}>
+                    {item.status === "VERIFIED" ? <ShieldCheck className="w-4 h-4" /> :
+                     item.status === "REJECTED" ? <AlertCircle className="w-4 h-4" /> :
+                     item.status === "HARDCOPY_SUBMITTED" ? <FileArchive className="w-4 h-4" /> :
+                     <FileText className="w-4 h-4" />}
+                  </div>
+                  
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-white">{item.label}</span>
-                      {item.mandatory ? (
-                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400">
-                          Mandatory
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
-                          Optional
+                      <h4 className="text-sm font-bold text-slate-900 truncate">{item.label}</h4>
+                      {item.mandatory && (
+                        <span className="text-[9px] font-bold uppercase px-1 rounded bg-red-50 text-red-600 border border-red-100 shrink-0">
+                          Req
                         </span>
                       )}
                     </div>
@@ -254,6 +293,11 @@ export default function PublicParentUploadPage({
                   {item.status === "VERIFIED" && (
                     <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1 shrink-0">
                       <span>🟢</span> Approved
+                    </span>
+                  )}
+                  {item.status === "HARDCOPY_SUBMITTED" && (
+                    <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-600 flex items-center gap-1 shrink-0">
+                      <span>📁</span> Hardcopy Submitted
                     </span>
                   )}
                   {item.status === "PENDING" && (
@@ -308,18 +352,18 @@ export default function PublicParentUploadPage({
                       </button>
                     </div>
                   </div>
-                )}
+                </div>
 
                 {/* Upload Action / Locked State */}
                 {item.status !== "REJECTED" && (
                   <div className="pt-1 flex justify-end">
-                    {item.status === "VERIFIED" ? (
+                    {isLocked ? (
                       <div className="flex flex-col items-end gap-1 animate-in fade-in zoom-in duration-300">
                         <div className="h-9 px-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 cursor-default shadow-sm shadow-emerald-900/20">
                           <span>🔒</span>
-                          <span>Verified & Locked</span>
+                          <span>Locked</span>
                         </div>
-                        <span className="text-[9px] text-slate-500/80 font-medium">Secured & verified by school administration.</span>
+                        <span className="text-[9px] text-slate-500/80 font-medium">Secured by school administration.</span>
                       </div>
                     ) : (
                       <button
@@ -349,8 +393,11 @@ export default function PublicParentUploadPage({
         </div>
 
         {/* Footer info */}
-        <div className="pt-6 text-center text-[11px] text-slate-500">
-          Powered by Google Antigravity School ERP • Protected by End-to-End Encryption
+        <div className="pt-2 pb-2 text-center">
+          <div className="inline-flex items-center justify-center gap-1 px-2 text-[11px] text-slate-400 font-medium">
+            <Lock className="w-3 h-3" />
+            <span>End-to-End Encrypted</span>
+          </div>
         </div>
       </main>
     </div>
