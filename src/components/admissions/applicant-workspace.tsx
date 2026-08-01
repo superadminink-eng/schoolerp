@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -234,6 +234,11 @@ export default function ApplicantWorkspace({
   const [uploadScanDocType, setUploadScanDocType] = useState<string | null>(null);
   const [scanningDocType, setScanningDocType] = useState<string | null>(null);
 
+  // Dedicated state for "Replace Document" feature
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const [replaceDocType, setReplaceDocType] = useState<string | null>(null);
+  const [isReplacingDocType, setIsReplacingDocType] = useState<string | null>(null);
+
   const [selectedDocType, setSelectedDocType] = useState("BIRTH_CERTIFICATE");
   const [previewDoc, setPreviewDoc] = useState<any>(null);
 
@@ -319,6 +324,26 @@ const DOCUMENT_META: Record<string, { label: string; badge: "MANDATORY" | "CONDI
 };
 
 const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIOUS_MARKSHEET", "OTHER"];
+
+  // Smart Auto-Selection Logic
+  const availableDocTypes = useMemo(() => {
+    return DOC_TYPES.filter(type => {
+      const existing = verifyForm?.documents?.find((d: any) => d.documentType === type);
+      return !existing || existing.status === "REJECTED";
+    }).sort((a, b) => {
+      const metaA = DOCUMENT_META[a];
+      const metaB = DOCUMENT_META[b];
+      if (metaA?.badge === "MANDATORY" && metaB?.badge !== "MANDATORY") return -1;
+      if (metaB?.badge === "MANDATORY" && metaA?.badge !== "MANDATORY") return 1;
+      return 0;
+    });
+  }, [verifyForm?.documents]);
+
+  useEffect(() => {
+    if (availableDocTypes.length > 0 && !availableDocTypes.includes(selectedDocType)) {
+      setSelectedDocType(availableDocTypes[0]);
+    }
+  }, [availableDocTypes, selectedDocType]);
 
   const mandatoryTotal = classFees.length > 0
     ? classFees.filter(f => f.applicability === "MANDATORY").reduce((acc, curr) => {
@@ -496,7 +521,9 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
   // Validation helper for Provisional Admission Bypass
   const mandatoryDocTypes = Object.keys(DOCUMENT_META).filter(k => DOCUMENT_META[k as keyof typeof DOCUMENT_META].badge === "MANDATORY");
   const hasAllMandatoryDocs = mandatoryDocTypes.every(type => {
-    return verifyForm.documents.some((d: any) => d.documentType === type && d.status !== "REJECTED");
+    return verifyForm.documents.some((d: any) => 
+      d.documentType === type && (d.status === "VERIFIED" || d.status === "HARDCOPY_SUBMITTED")
+    );
   });
 
   // Auto-load existing token from selectedApp across page refreshes!
@@ -659,6 +686,78 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
       setUploadingDoc(false);
     }
   };
+
+  const handleReplaceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !replaceDocType) return;
+    await executeReplace(file, replaceDocType);
+  };
+
+  const executeReplace = async (file: File, docType: string) => {
+    // Basic validations
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      setFormError?.("Only JPG, PNG, WEBP, and PDF files are allowed.");
+      return;
+    }
+    const MAX_SIZE_MB = 5;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setFormError?.(`File size exceeds ${MAX_SIZE_MB}MB limit.`);
+      return;
+    }
+
+    setIsReplacingDocType(docType);
+    clearError();
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("documentType", docType);
+
+    try {
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (replaceInputRef.current) replaceInputRef.current.value = "";
+        
+        const updatedDocs = (data.application?.documents || data.documents || []).map((d: any) => ({
+          id: d.id,
+          status: d.status,
+          remarks: d.remarks || "",
+          documentType: d.documentType,
+          fileName: d.fileName,
+          filePath: d.filePath,
+          fileSize: d.fileSize,
+          mimeType: d.mimeType,
+        }));
+
+        setVerifyForm((prev: any) => ({
+          ...prev,
+          documents: updatedDocs,
+        }));
+
+        // If preview is open, update it
+        if (previewDoc && previewDoc.documentType === replaceDocType) {
+           const newDoc = updatedDocs.find((d: any) => d.documentType === replaceDocType);
+           if (newDoc) setPreviewDoc(newDoc);
+        }
+
+        if (onApplicantUpdated) onApplicantUpdated(data.application || selectedApp);
+      } else {
+         setFormError?.(data.error?.message || "Failed to replace document");
+      }
+    } catch (err: any) {
+      setFormError?.("Network error during document replacement.");
+    } finally {
+      setIsReplacingDocType(null);
+      setReplaceDocType(null);
+      if (replaceInputRef.current) replaceInputRef.current.value = "";
+    }
+  };
+
+  const [dragOverDocId, setDragOverDocId] = useState<string | null>(null);
 
   const handleScanUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1071,7 +1170,16 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
               
               <div className="flex flex-col gap-3 w-full">
                 <button 
-                  onClick={() => alert('Fee receipt printing initiated...')}
+                  onClick={() => {
+                    const paymentId = (selectedApp.enrolledStudent as any)?.paymentId;
+                    if (paymentId) {
+                      window.open(`/fees/receipt/${paymentId}/print`, '_blank');
+                    } else if (selectedApp.enrolledStudent?.id) {
+                      window.open(`/fees/${selectedApp.enrolledStudent.id}`, '_blank');
+                    } else {
+                      alert('No fee payment was made during enrollment.');
+                    }
+                  }}
                   className="w-full h-11 rounded-xl bg-primary text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md shadow-primary/20 hover:bg-primary/90 transition-all active:scale-[0.98]"
                 >
                   <Icon name="receipt_long" size={18} />
@@ -1431,10 +1539,31 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         const isPdf = doc.filePath?.toLowerCase().endsWith(".pdf");
 
                         return (
-                          <div key={doc.id || index} className="grid grid-cols-12 gap-4 items-center">
+                          <div 
+                            key={doc.id || index} 
+                            className="grid grid-cols-12 gap-4 items-center relative"
+                            onDragOver={(e) => { e.preventDefault(); setDragOverDocId(doc.id); }}
+                            onDragLeave={(e) => { e.preventDefault(); setDragOverDocId(null); }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setDragOverDocId(null);
+                              const file = e.dataTransfer.files?.[0];
+                              if (file) executeReplace(file, doc.documentType);
+                            }}
+                          >
+                            {/* Drag Drop Overlay */}
+                            {dragOverDocId === doc.id && (
+                              <div className="absolute inset-0 z-50 bg-blue-500/10 dark:bg-blue-500/20 backdrop-blur-[2px] border-2 border-dashed border-blue-500 rounded-xl flex items-center justify-center pointer-events-none">
+                                <div className="bg-white dark:bg-zinc-900 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                                  <Icon name="cloud_upload" size={20} />
+                                  Drop to Replace
+                                </div>
+                              </div>
+                            )}
+
                             {/* Display Mode */}
                             <div className="col-span-12">
-                              <div className="flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-sm hover:shadow-md transition-shadow relative">
+                              <div className={`flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border ${dragOverDocId === doc.id ? 'border-transparent' : 'border-slate-200 dark:border-zinc-800'} rounded-xl shadow-sm hover:shadow-md transition-shadow relative`}>
                                 <div className="flex items-center gap-4">
                                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
                                     doc.status === "HARDCOPY_SUBMITTED"
@@ -1496,6 +1625,20 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                       <Icon name="visibility" size={15} />
                                     </button>
                                   )}
+
+                                  {/* Silicon Valley Replace Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReplaceDocType(doc.documentType);
+                                      setTimeout(() => replaceInputRef.current?.click(), 50);
+                                    }}
+                                    disabled={isReplacingDocType === doc.documentType}
+                                    className="w-7 h-7 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
+                                    title="Replace document"
+                                  >
+                                    {isReplacingDocType === doc.documentType ? <Icon name="sync" size={14} className="animate-spin" /> : <Icon name="upload" size={14} />}
+                                  </button>
                                   
                                   <button
                                     type="button"
@@ -1662,11 +1805,6 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
                   {/* SMART UPLOAD SECTION */}
                   {(() => {
-                    const availableDocTypes = DOC_TYPES.filter(type => {
-                      const existing = verifyForm.documents.find((d: any) => d.documentType === type);
-                      return !existing || existing.status === "REJECTED";
-                    });
-
                     if (availableDocTypes.length === 0) {
                       return (
                         <div className="mt-4 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-950/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-2">
@@ -1715,6 +1853,13 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                           type="file"
                           ref={scanInputRef}
                           onChange={handleScanUpload}
+                          className="hidden"
+                          accept="image/*,.pdf"
+                        />
+                        <input
+                          type="file"
+                          ref={replaceInputRef}
+                          onChange={handleReplaceUpload}
                           className="hidden"
                           accept="image/*,.pdf"
                         />
@@ -2617,7 +2762,18 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
         </DialogContent>
       </Dialog>
 
-      <DocumentPreviewDialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)} document={previewDoc} />
+      <DocumentPreviewDialog 
+        open={!!previewDoc} 
+        onOpenChange={(open) => !open && setPreviewDoc(null)} 
+        document={previewDoc} 
+        onReplaceClick={() => {
+          if (previewDoc) {
+            setReplaceDocType(previewDoc.documentType);
+            setTimeout(() => replaceInputRef.current?.click(), 50);
+          }
+        }}
+        isReplacing={isReplacingDocType === previewDoc?.documentType}
+      />
     </div>
   );
 }

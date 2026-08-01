@@ -405,6 +405,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       // Apply dynamic payment rollover
       let remainingPayment = new Prisma.Decimal(amountPaid ?? 0);
+      let firstPaymentId = null;
       
       if (remainingPayment.gt(0) && paymentMethod) {
         // Sort created invoices by dueDate ascending
@@ -422,7 +423,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
           const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
 
-          await tx.feePayment.create({
+          const payment = await tx.feePayment.create({
             data: {
               invoiceId: inv.id,
               studentId: studentRecord.id,
@@ -434,6 +435,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
               paidAt: new Date(),
             },
           });
+
+          if (!firstPaymentId) firstPaymentId = payment.id;
 
           await tx.invoice.update({
             where: { id: inv.id },
@@ -466,7 +469,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         })),
       });
 
-      return studentRecord;
+      return { ...studentRecord, paymentId: firstPaymentId };
     }, { timeout: 30000 });
 
     await logAction({

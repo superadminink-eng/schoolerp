@@ -17,9 +17,11 @@ interface DocumentPreviewDialogProps {
     status?: string;
     remarks?: string | null;
   } | null;
+  onReplaceClick?: () => void;
+  isReplacing?: boolean;
 }
 
-export function DocumentPreviewDialog({ open, onOpenChange, document }: DocumentPreviewDialogProps) {
+export function DocumentPreviewDialog({ open, onOpenChange, document, onReplaceClick, isReplacing }: DocumentPreviewDialogProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
@@ -98,6 +100,23 @@ export function DocumentPreviewDialog({ open, onOpenChange, document }: Document
                   Reset
                 </button>
               </div>
+            )}
+
+            {onReplaceClick && (
+              <button
+                type="button"
+                onClick={onReplaceClick}
+                disabled={isReplacing}
+                className="p-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200/80 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors flex items-center gap-1.5 text-xs font-bold shadow-2xs disabled:opacity-50"
+                title="Replace Document"
+              >
+                {isReplacing ? (
+                  <Icon name="sync" size={16} className="animate-spin" />
+                ) : (
+                  <Icon name="upload" size={16} />
+                )}
+                <span className="hidden sm:inline">{isReplacing ? "Replacing..." : "Replace"}</span>
+              </button>
             )}
 
             <a
