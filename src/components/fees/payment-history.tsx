@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { DataTable } from "@/components/ui/lazy-table";
 import type { Column } from "@/components/ui/data-table";
 import { PAYMENT_METHOD_LABELS } from "@/lib/validations/fee-payment";
@@ -20,31 +21,118 @@ interface PaymentHistoryProps {
 }
 
 export function PaymentHistory({ payments }: PaymentHistoryProps) {
-  const columns: Column<Payment>[] = [
+  // Aggregate multiple installments into a single Transaction/Receipt
+  const aggregatedPayments = useMemo(() => {
+    const map = new Map<string, Payment & { allReceiptNos: string[] }>();
+    
+    payments.forEach((p) => {
+      // Group strictly by transactionId first to handle legacy multi-receipt transactions.
+      const key = p.transactionId || p.receiptNo || p.id;
+      if (!map.has(key)) {
+        map.set(key, { 
+          ...p, 
+          amount: Number(p.amount),
+          allReceiptNos: p.receiptNo ? [p.receiptNo] : []
+        });
+      } else {
+        const existing = map.get(key)!;
+        existing.amount += Number(p.amount);
+        if (p.receiptNo && !existing.allReceiptNos.includes(p.receiptNo)) {
+          existing.allReceiptNos.push(p.receiptNo);
+        }
+      }
+    });
+
+    // Sort by paidAt descending
+    return Array.from(map.values()).sort((a, b) => {
+      return new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime();
+    });
+  }, [payments]);
+
+  const columns: Column<Payment & { allReceiptNos: string[] }>[] = [
     {
       key: "receiptNo",
       header: "Receipt No",
-      minWidth: 155,
+      minWidth: 160,
       render: (row) => {
-        if (!row.receiptNo) return "—";
+        if (row.allReceiptNos.length === 0) return <span className="text-slate-400">—</span>;
+        
+        if (row.allReceiptNos.length === 1) {
+          return (
+            <span className="font-semibold text-[13px] text-slate-800 dark:text-slate-200">
+              {row.allReceiptNos[0]}
+            </span>
+          );
+        }
+
         return (
-          <span className="font-mono bg-slate-50 dark:bg-slate-900 px-2 py-0.5 border border-slate-200/50 dark:border-slate-800 rounded text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-            {row.receiptNo}
+          <div className="flex flex-col">
+            <span className="font-semibold text-[13px] text-slate-800 dark:text-slate-200 leading-tight">
+              {row.allReceiptNos[0]}
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">
+              +{row.allReceiptNos.length - 1} more
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "amount",
+      header: "Total Amount",
+      minWidth: 120,
+      render: (row) => (
+        <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">
+          ₹{row.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      key: "method",
+      header: "Method",
+      minWidth: 100,
+      render: (row) => {
+        const label = PAYMENT_METHOD_LABELS[row.method as any] ?? row.method;
+        return (
+          <span className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">
+            {label}
           </span>
+        );
+      },
+    },
+    {
+      key: "transactionId",
+      header: "Transaction ID",
+      minWidth: 200,
+      render: (row) => {
+        if (!row.transactionId) return <span className="text-slate-400">—</span>;
+        
+        return (
+          <div className="group flex items-center gap-2">
+            <span className="font-mono text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-200/50 dark:border-slate-700/50 shadow-sm">
+              {row.transactionId}
+            </span>
+            <button
+              type="button"
+              title="Copy Transaction ID"
+              onClick={() => navigator.clipboard.writeText(row.transactionId || "")}
+              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-opacity flex items-center"
+            >
+              <Icon name="copy" size={13} />
+            </button>
+          </div>
         );
       },
     },
     {
       key: "paidAt",
       header: "Date",
-      minWidth: 115,
-      sortValue: (row) => row.paidAt,
+      minWidth: 120,
       render: (row) => {
         const d = new Date(row.paidAt);
         if (isNaN(d.getTime())) return "—";
         return (
-          <span className="text-slate-650 dark:text-slate-350 text-sm font-semibold flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[13px] text-slate-400">calendar_today</span>
+          <span className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">
             {d.toLocaleDateString("en-IN", {
               year: "numeric",
               month: "short",
@@ -55,91 +143,17 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
       },
     },
     {
-      key: "amount",
-      header: "Amount",
-      minWidth: 110,
-      sortValue: (row) => row.amount,
-      render: (row) => (
-        <span className="font-extrabold text-slate-900 dark:text-slate-50">
-          ₹{row.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-        </span>
-      ),
-    },
-    {
-      key: "method",
-      header: "Method",
-      minWidth: 105,
-      render: (row) => {
-        const label = PAYMENT_METHOD_LABELS[row.method] ?? row.method;
-        let style = "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-350 dark:border-slate-700";
-        let dotColor = "bg-slate-400";
-        if (row.method === "UPI") {
-          style = "bg-indigo-500/[0.04] text-indigo-700 border-indigo-500/20 dark:bg-indigo-500/[0.02] dark:text-indigo-400 dark:border-indigo-500/10";
-          dotColor = "bg-indigo-500";
-        } else if (row.method === "CASH") {
-          style = "bg-purple-500/[0.04] text-purple-700 border-purple-500/20 dark:bg-purple-500/[0.02] dark:text-purple-400 dark:border-purple-500/10";
-          dotColor = "bg-purple-500";
-        } else if (row.method === "ONLINE") {
-          style = "bg-teal-500/[0.04] text-teal-700 border-teal-500/20 dark:bg-teal-500/[0.02] dark:text-teal-400 dark:border-teal-500/10";
-          dotColor = "bg-teal-500";
-        } else if (row.method === "BANK_TRANSFER") {
-          style = "bg-amber-500/[0.04] text-amber-700 border-amber-500/20 dark:bg-amber-500/[0.02] dark:text-amber-400 dark:border-amber-500/10";
-          dotColor = "bg-amber-500";
-        } else if (row.method === "CHEQUE") {
-          style = "bg-cyan-500/[0.04] text-cyan-700 border-cyan-500/20 dark:bg-cyan-500/[0.02] dark:text-cyan-400 dark:border-cyan-500/10";
-          dotColor = "bg-cyan-500";
-        }
-        return (
-          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border tracking-wider ${style}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-            {label}
-          </span>
-        );
-      },
-    },
-    {
-      key: "transactionId",
-      header: "Transaction ID",
-      minWidth: 160,
-      render: (row) => {
-        if (!row.transactionId) return "—";
-        return (
-          <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-650 dark:text-slate-400">
-            <span className="truncate max-w-[120px]" title={row.transactionId}>{row.transactionId}</span>
-            <button
-              type="button"
-              title="Copy Transaction ID"
-              onClick={() => {
-                navigator.clipboard.writeText(row.transactionId || "");
-              }}
-              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-450 hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer flex items-center justify-center border border-transparent hover:border-slate-200/50"
-            >
-              <Icon name="copy" size={12} />
-            </button>
-          </div>
-        );
-      },
-    },
-    {
-      key: "remarks",
-      header: "Remarks",
-      minWidth: 150,
-      render: (row) => row.remarks || "—",
-    },
-    {
       key: "actions",
-      header: "Actions",
-      className: "w-20 text-center",
-      minWidth: 80,
+      header: "",
+      className: "w-12 text-center",
+      minWidth: 60,
       render: (row) => (
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-end pr-2">
           <button
             type="button"
             title="Print Receipt"
-            onClick={() => {
-              window.open(`/fees/receipt/${row.id}/print`, "_blank");
-            }}
-            className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200/50 dark:hover:border-slate-700 rounded-lg text-slate-500 hover:text-teal-600 transition-all cursor-pointer flex items-center justify-center"
+            onClick={() => window.open(`/fees/receipt/${row.transactionId || row.allReceiptNos[0] || row.id}/print`, "_blank")}
+            className="text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex items-center justify-center p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <Icon name="print" size={15} />
           </button>
@@ -149,14 +163,14 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
   ];
 
   return (
-    <div className="rounded-md border border-outline-variant bg-surface overflow-hidden">
+    <div className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-950/50 overflow-hidden shadow-sm">
       <DataTable
         columns={columns}
-        data={payments}
-        keyExtractor={(row) => row.id}
+        data={aggregatedPayments}
+        keyExtractor={(row) => row.transactionId || row.allReceiptNos[0] || row.id}
         emptyIcon="receipt_long"
         emptyMessage="No payments recorded yet"
-        paginationPageSize={5}
+        paginationPageSize={10}
       />
     </div>
   );

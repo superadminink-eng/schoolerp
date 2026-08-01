@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
@@ -59,6 +60,8 @@ interface FeeData {
   payments: Payment[];
 }
 
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
 const formatCurrency = (amount: number) =>
   `₹${amount.toLocaleString("en-IN")}`;
 
@@ -75,36 +78,34 @@ export default function FeeCollectionPage() {
   const snackbar = useSnackbar();
   const { can, isLoading: permissionsLoading } = usePermissions();
 
-  const [data, setData] = useState<FeeData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
 
   // Success dialog state
   const [successModalOpen, setSuccessModalOpen] = useState(false);
-  const [successPayment, setSuccessPayment] = useState<{ id: string; amount: number; receiptNo: string | null } | null>(null);
+  const [successPayment, setSuccessPayment] = useState<{ id: string; amount: number; receiptNo: string | null; count?: number } | null>(null);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/v1/fees/${params.studentId}`);
-      const json = await res.json();
-      if (json.success) {
-        setData(json.data);
-      } else {
-        snackbar.show(json.error?.message ?? "Student not found", "error");
-        router.push("/fees");
-      }
-    } catch {
-      snackbar.show("Failed to load fee details", "error");
-      router.push("/fees");
-    } finally {
-      setLoading(false);
-    }
-  }, [params.studentId, router, snackbar]);
+  const { data: responseData, error, isLoading, mutate } = useSWR<{ success: boolean; data: FeeData; error?: any }>(
+    `/api/v1/fees/${params.studentId}`,
+    fetcher
+  );
+
+  const data = responseData?.success ? responseData.data : null;
+  const loading = isLoading;
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (responseData && !responseData.success) {
+      snackbar.show(responseData.error?.message ?? "Student not found", "error");
+      router.push("/fees");
+    }
+  }, [responseData, router, snackbar]);
+
+  useEffect(() => {
+    if (error) {
+      snackbar.show("Failed to load fee details", "error");
+      router.push("/fees");
+    }
+  }, [error, router, snackbar]);
 
   // Auto-select oldest unpaid invoice on initial load
   useEffect(() => {
@@ -126,6 +127,11 @@ export default function FeeCollectionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
+      
+      if (!res.ok) {
+        throw new Error("HTTP Error");
+      }
+      
       const json = await res.json();
 
       if (json.success) {
@@ -133,17 +139,17 @@ export default function FeeCollectionPage() {
           `Payment of ${formatCurrency(formData.amount)} recorded successfully`,
           "success"
         );
-        // Re-fetch to update all data
-        setLoading(true);
-        await fetchData();
+        
+        await mutate();
 
         // Trigger success print modal
         const pay = json.data?.payment;
         if (pay) {
           setSuccessPayment({
             id: pay.id,
-            amount: Number(pay.amount),
+            amount: json.data?.totalProcessedAmount || formData.amount,
             receiptNo: pay.receiptNo,
+            count: json.data?.paymentsCount || 1,
           });
           setSuccessModalOpen(true);
         }
@@ -439,12 +445,15 @@ export default function FeeCollectionPage() {
                           ? selectedInvoice.items 
                           : [{ id: "fallback", description: getInstallmentLabel(selectedInvoice, invoices.findIndex(i => i.id === selectedInvoice.id)), amount: selectedInvoice.totalAmount }];
 
-                        return itemsToShow.map((item) => (
-                          <div key={item.id} className="flex justify-between items-center text-xs font-semibold">
-                            <span className="text-slate-500 dark:text-slate-400">{item.description || "Fee Item"}</span>
-                            <span className="text-slate-850 dark:text-slate-200">{formatCurrency(item.amount)}</span>
-                          </div>
-                        ));
+                        return itemsToShow.map((item) => {
+                          const isLateFee = item.id.startsWith("late-fee-");
+                          return (
+                            <div key={item.id} className="flex justify-between items-center text-xs font-semibold">
+                              <span className={isLateFee ? "text-rose-600 font-bold" : "text-slate-500 dark:text-slate-400"}>{item.description || "Fee Item"}</span>
+                              <span className={isLateFee ? "text-rose-600 font-bold" : "text-slate-850 dark:text-slate-200"}>{formatCurrency(item.amount)}</span>
+                            </div>
+                          );
+                        });
                       })()}
                       
                       <div className="border-t border-dashed border-slate-200 dark:border-slate-800/80 pt-2 flex justify-between items-center text-xs font-extrabold text-slate-800 dark:text-slate-250">
@@ -461,7 +470,8 @@ export default function FeeCollectionPage() {
                     <PermissionGate module="fees" action="create">
                       <div className="pt-3.5 border-t border-slate-150 dark:border-slate-800/80">
                         <PaymentForm
-                          pendingAmount={selectedInvoice.pendingAmount}
+                          maxAllowedAmount={totalPendingAll}
+                          suggestedAmount={selectedInvoice.pendingAmount}
                           invoiceId={selectedInvoice.id}
                           onSubmit={handlePayment}
                           submitting={submitting}
@@ -513,14 +523,27 @@ export default function FeeCollectionPage() {
               <div className="w-full bg-slate-50 dark:bg-slate-950/40 rounded-xl p-4 border border-slate-100 dark:border-slate-900 text-left space-y-2 text-xs font-semibold">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Receipt No:</span>
-                  <span className="text-slate-800 dark:text-slate-200 font-mono font-bold">{successPayment.receiptNo ?? "—"}</span>
+                  <span className="text-slate-800 dark:text-slate-200 font-mono font-bold">
+                    {successPayment.receiptNo ?? "—"}
+                    {(successPayment.count && successPayment.count > 1) ? (
+                      <span className="text-slate-400 font-normal ml-1">
+                        (+ {successPayment.count - 1} more)
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Amount Paid:</span>
+                  <span className="text-slate-400">Total Processed:</span>
                   <span className="text-emerald-600 font-bold">₹{successPayment.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             )}
+
+            {(successPayment?.count && successPayment.count > 1) ? (
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-lg p-3 text-[10px] text-amber-800 dark:text-amber-200 text-left leading-relaxed">
+                <strong>Note:</strong> This payment was distributed across {successPayment.count} installments. The Print button below will only print the primary receipt. You can print the remaining receipts from the Payment Ledger.
+              </div>
+            ) : null}
 
             <div className="flex gap-3 w-full pt-2">
               <Button

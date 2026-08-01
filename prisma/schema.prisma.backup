@@ -806,7 +806,7 @@ model FeePayment {
   amount        Decimal       @db.Decimal(10, 2)
   method        PaymentMethod
   transactionId String?
-  receiptNo     String?
+  receiptNo     String?       @unique
   paidAt        DateTime      @default(now())
   remarks       String?
   invoice       Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
@@ -819,7 +819,6 @@ model FeePayment {
   @@index([invoiceId])
   @@index([organizationId])
   @@index([deletedAt])
-  @@index([receiptNo])
   @@map("fee_payments")
 }
 

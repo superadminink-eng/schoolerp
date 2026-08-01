@@ -17,7 +17,8 @@ import {
 import { BaseCurrencyInput } from "@/components/ui/base-currency-input";
 
 interface PaymentFormProps {
-  pendingAmount: number;
+  maxAllowedAmount: number;
+  suggestedAmount: number;
   invoiceId?: string;
   onSubmit: (data: CreateFeePaymentInput) => Promise<void>;
   submitting: boolean;
@@ -29,21 +30,22 @@ const formatCurrency = (amount: number) =>
 const METHODS_WITH_TXN_ID = new Set(["UPI", "ONLINE", "BANK_TRANSFER"]);
 
 export function PaymentForm({
-  pendingAmount,
+  maxAllowedAmount,
+  suggestedAmount,
   invoiceId,
   onSubmit,
   submitting,
 }: PaymentFormProps) {
   const [amount, setAmount] = useState("");
   
-  // Pre-fill amount when pendingAmount or invoiceId changes
+  // Pre-fill amount when suggestedAmount or invoiceId changes
   useEffect(() => {
-    if (pendingAmount > 0) {
-      setAmount(pendingAmount.toString());
+    if (suggestedAmount > 0) {
+      setAmount(suggestedAmount.toString());
     } else {
       setAmount("");
     }
-  }, [pendingAmount, invoiceId]);
+  }, [suggestedAmount, invoiceId]);
 
   const [paidAt, setPaidAt] = useState(
     new Date().toISOString().split("T")[0]
@@ -54,7 +56,7 @@ export function PaymentForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const numericAmount = parseFloat(amount) || 0;
-  const remainingAfter = pendingAmount - numericAmount;
+  const remainingAfter = Math.round((maxAllowedAmount - numericAmount) * 100) / 100;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,8 +81,8 @@ export function PaymentForm({
       return;
     }
 
-    if (numericAmount > pendingAmount) {
-      setErrors({ amount: `Amount cannot exceed pending balance of ${formatCurrency(pendingAmount)}` });
+    if (numericAmount > maxAllowedAmount) {
+      setErrors({ amount: `Amount cannot exceed total outstanding balance of ${formatCurrency(maxAllowedAmount)}` });
       return;
     }
 
@@ -96,12 +98,21 @@ export function PaymentForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Amount */}
       <div className="space-y-1.5">
-        <label
-          htmlFor="amount"
-          className="block text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider px-1"
-        >
-          Amount
-        </label>
+        <div className="flex justify-between items-center px-1">
+          <label
+            htmlFor="amount"
+            className="block text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider"
+          >
+            Amount
+          </label>
+          <button 
+            type="button" 
+            onClick={() => setAmount(maxAllowedAmount.toString())}
+            className="text-[9px] font-bold text-teal-600 dark:text-teal-400 hover:underline uppercase tracking-wider cursor-pointer"
+          >
+            Pay Full Amount
+          </button>
+        </div>
         <div className="relative">
           <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
             ₹
@@ -117,7 +128,7 @@ export function PaymentForm({
         {errors.amount && (
           <p className="text-rose-600 text-[11px] mt-1 font-semibold px-1">{errors.amount}</p>
         )}
-        {numericAmount > 0 && numericAmount <= pendingAmount && (
+        {numericAmount > 0 && numericAmount <= maxAllowedAmount && (
           <p className="text-[11px] text-slate-450 mt-1 px-1 font-semibold">
             Remaining after payment:{" "}
             <span className={remainingAfter > 0 ? "text-rose-500" : "text-emerald-600"}>
@@ -238,7 +249,7 @@ export function PaymentForm({
           ) : (
             <span className="material-symbols-outlined text-sm">payments</span>
           )}
-          {numericAmount > 0 && numericAmount <= pendingAmount
+          {numericAmount > 0 && numericAmount <= maxAllowedAmount
             ? `Record Payment • ${formatCurrency(numericAmount)}`
             : "Record Payment"}
         </button>

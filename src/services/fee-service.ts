@@ -588,6 +588,16 @@ export class FeeService {
       let primaryPayment: any = null;
 
       const unifiedTransactionId = input.transactionId || `TXN-FEE-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+      const unifiedReceiptNo = await generateUniqueReceiptNo(tx as any, ctx.organizationId);
+
+      // Smart Date Resolver: If the date picked is today, use the exact server time. If it's a backdated payment, use the picked date (midnight).
+      const inputDate = new Date(input.paidAt);
+      const serverNow = new Date();
+      const isToday = 
+        inputDate.getUTCFullYear() === serverNow.getUTCFullYear() &&
+        inputDate.getUTCMonth() === serverNow.getUTCMonth() &&
+        inputDate.getUTCDate() === serverNow.getUTCDate();
+      const finalPaidAt = isToday ? serverNow : inputDate;
 
       for (const freshInv of freshInvoices) {
         if (remainingPayment.lte(0)) break;
@@ -602,7 +612,7 @@ export class FeeService {
         const newPaidAmount = invPaid.plus(paymentToApply);
         const newStatus = newPaidAmount.gte(invTotal) ? "PAID" : "PARTIAL";
 
-        const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
+        const receiptNo = unifiedReceiptNo;
 
         const payment = await tx.feePayment.create({
           data: {
@@ -613,7 +623,7 @@ export class FeeService {
             method: input.method as PaymentMethod,
             transactionId: unifiedTransactionId,
             receiptNo,
-            paidAt: new Date(input.paidAt),
+            paidAt: finalPaidAt,
             remarks: input.remarks || null,
           },
           select: {
@@ -670,6 +680,7 @@ export class FeeService {
             }
           : null,
         paymentsCount: createdPayments.length,
+        totalProcessedAmount: Number(paymentAmountDecimal),
       };
     }, { timeout: 15000 });
 

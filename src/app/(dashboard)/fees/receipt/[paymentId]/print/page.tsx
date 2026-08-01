@@ -14,14 +14,15 @@ interface ReceiptData {
   transactionId: string | null;
   paidAt: string;
   remarks: string | null;
-  invoice: {
+  invoices: Array<{
     id: string;
     number: string;
+    amountPaidInThisReceipt: number;
     totalAmount: number;
-    paidAmount: number;
-    pendingAmount: number;
+    paidAmount: number; // Historical paid amount (up to this payment)
+    pendingAmount: number; // Historical pending amount (after this payment)
     dueDate: string;
-  };
+  }>;
   student: {
     id: string;
     firstName: string;
@@ -76,6 +77,7 @@ function getNumberInWords(num: number): string {
 }
 
 export default function FeeReceiptPrintPage() {
+  // folder is [paymentId], but it actually represents receiptNo now
   const params = useParams<{ paymentId: string }>();
   const router = useRouter();
   const snackbar = useSnackbar();
@@ -171,7 +173,9 @@ export default function FeeReceiptPrintPage() {
           <div className="flex justify-between items-start text-xs font-mono text-slate-700 font-bold border-b border-dashed border-slate-200 pb-4">
             <div className="space-y-1">
               <div>Receipt No: <span className="text-slate-900">{receipt.receiptNo ?? "—"}</span></div>
-              <div>Invoice No: <span className="text-slate-900">{receipt.invoice.number}</span></div>
+              {receipt.invoices.length === 1 && (
+                <div>Invoice No: <span className="text-slate-900">{receipt.invoices[0].number}</span></div>
+              )}
             </div>
             <div className="text-right space-y-1">
               <div>Date: <span className="text-slate-900">{new Date(receipt.paidAt).toLocaleDateString("en-IN")}</span></div>
@@ -199,40 +203,37 @@ export default function FeeReceiptPrintPage() {
             </div>
           </div>
 
-          {/* Fee Itemization Table */}
           <div className="border border-slate-200 rounded-lg overflow-hidden mt-6">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                  <th className="py-2.5 px-4">Description</th>
-                  <th className="py-2.5 px-4 text-right">Amount (INR)</th>
+                  <th className="py-2.5 px-4">Invoice Description</th>
+                  <th className="py-2.5 px-4 text-right">Invoice Total</th>
+                  <th className="py-2.5 px-4 text-right">Paid Now (INR)</th>
+                  <th className="py-2.5 px-4 text-right">Pending Bal.</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-slate-100 text-slate-700 font-semibold">
-                  <td className="py-3 px-4">Invoice Total ({receipt.invoice.number})</td>
-                  <td className="py-3 px-4 text-right">₹{receipt.invoice.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                </tr>
-                {receipt.invoice.paidAmount - receipt.amount > 0 && (
-                  <tr className="border-b border-slate-100 text-slate-500 font-semibold">
-                    <td className="py-2.5 px-4">Previously Paid</td>
-                    <td className="py-2.5 px-4 text-right">₹{(receipt.invoice.paidAmount - receipt.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                {receipt.invoices.map((inv, idx) => (
+                  <tr key={inv.id} className={`${idx !== receipt.invoices.length - 1 ? 'border-b border-slate-100' : ''} text-slate-700 font-semibold`}>
+                    <td className="py-3 px-4">Invoice {inv.number}</td>
+                    <td className="py-3 px-4 text-right text-slate-500 font-medium">₹{inv.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                    <td className="py-3 px-4 text-right">₹{inv.amountPaidInThisReceipt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                    <td className="py-3 px-4 text-right text-slate-600">₹{inv.pendingAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                   </tr>
-                )}
-                <tr className="border-b border-slate-100 text-slate-700 font-semibold">
-                  <td className="py-3 px-4">Amount Paid Now</td>
-                  <td className="py-3 px-4 text-right">₹{receipt.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                </tr>
+                ))}
+                
                 {receipt.remarks && (
-                  <tr className="text-slate-400 italic">
-                    <td colSpan={2} className="py-2 px-4 text-[11px]">
+                  <tr className="border-t border-slate-100 text-slate-400 italic">
+                    <td colSpan={4} className="py-2 px-4 text-[11px]">
                       Remarks: {receipt.remarks}
                     </td>
                   </tr>
                 )}
                 <tr className="bg-slate-50/50 border-t border-slate-200 font-bold text-slate-800">
-                  <td className="py-2.5 px-4 text-right uppercase tracking-wide text-[10px] text-slate-500">Outstanding Balance</td>
-                  <td className="py-2.5 px-4 text-right text-sm">₹{receipt.invoice.pendingAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                  <td colSpan={2} className="py-2.5 px-4 text-right uppercase tracking-wide text-[10px] text-slate-500">Total Paid Amount</td>
+                  <td className="py-2.5 px-4 text-right text-sm">₹{receipt.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                  <td className="py-2.5 px-4 bg-slate-50/50"></td>
                 </tr>
               </tbody>
             </table>
@@ -240,7 +241,7 @@ export default function FeeReceiptPrintPage() {
 
           {/* Amount in Words */}
           <div className="bg-slate-50/60 rounded-lg p-3 text-xs border border-slate-100">
-            <span className="block font-bold uppercase tracking-wider text-[9px] text-slate-400 mb-0.5">Amount in Words</span>
+            <span className="block font-bold uppercase tracking-wider text-[9px] text-slate-400 mb-0.5">Total Amount in Words</span>
             <span className="font-semibold text-slate-800 italic">{getNumberInWords(receipt.amount)}</span>
           </div>
 
@@ -248,7 +249,7 @@ export default function FeeReceiptPrintPage() {
           <div className="grid grid-cols-2 gap-4 text-xs border-t border-dashed border-slate-200 pt-4 font-semibold text-slate-600">
             <div>
               <span>Payment Method:</span>{" "}
-              <strong className="text-slate-800">{PAYMENT_METHOD_LABELS[receipt.method] ?? receipt.method}</strong>
+              <strong className="text-slate-800">{PAYMENT_METHOD_LABELS[receipt.method as any] ?? receipt.method}</strong>
             </div>
             {receipt.transactionId && (
               <div>

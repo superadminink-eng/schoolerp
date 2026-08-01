@@ -80,11 +80,11 @@ export async function generateUniqueReceiptNo(prisma: PrismaTx, organizationId: 
   let val = await getNextSequenceValue(prisma, organizationId, "RECEIPT", year);
   let no = `RCP-${year}-${String(val).padStart(5, "0")}`;
 
-  let exists = await prisma.feePayment.findUnique({ where: { receiptNo: no } });
+  let exists = await prisma.feePayment.findFirst({ where: { receiptNo: no } });
   while (exists) {
     val = await getNextSequenceValue(prisma, organizationId, "RECEIPT", year);
     no = `RCP-${year}-${String(val).padStart(5, "0")}`;
-    exists = await prisma.feePayment.findUnique({ where: { receiptNo: no } });
+    exists = await prisma.feePayment.findFirst({ where: { receiptNo: no } });
   }
   return no;
 }
