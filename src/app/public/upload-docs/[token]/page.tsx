@@ -352,7 +352,7 @@ export default function PublicParentUploadPage({
                       </button>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Upload Action / Locked State */}
                 {item.status !== "REJECTED" && (
