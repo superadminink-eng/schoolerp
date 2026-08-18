@@ -65,7 +65,9 @@ import {
   Copy,
   Info,
   ArrowRight,
-  Wallet
+  Wallet,
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -155,6 +157,8 @@ const iconMap: Record<string, LucideIcon> = {
   info: Info,
   arrow_forward: ArrowRight,
   account_balance_wallet: Wallet,
+  sync: RefreshCw,
+  autorenew: Loader2,
 };
 
 export function Icon({

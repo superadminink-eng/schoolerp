@@ -7,7 +7,7 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import crypto from "crypto";
-import { generateUniqueAdmissionNo, generateUniqueInvoiceNo, generateUniqueReceiptNo } from "@/lib/unique-id";
+import { generateUniqueAdmissionNo, generateUniqueInvoiceNo, generateUniqueReceiptNo, generateUniqueInvoiceNos, generateUniqueReceiptNos } from "@/lib/unique-id";
 import { logAction } from "@/lib/audit";
 
 type RouteContext = any;
@@ -342,9 +342,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       }
 
       const createdInvoices = [];
+      const invoiceNumbers = await generateUniqueInvoiceNos(tx, ctx.organizationId, targetInstallments.length);
 
-      for (const inst of targetInstallments) {
-        const invoiceNo = await generateUniqueInvoiceNo(tx, ctx.organizationId);
+      for (let index = 0; index < targetInstallments.length; index++) {
+        const inst = targetInstallments[index];
+        const invoiceNo = invoiceNumbers[index];
         const installmentDiscountedTotal = inst.amount;
 
         // Make sure due dates in the past are bumped to today/admission date if desired
@@ -411,6 +413,19 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         // Sort created invoices by dueDate ascending
         createdInvoices.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
+        // Calculate exactly how many payments will be created
+        let tempRemaining = new Prisma.Decimal(amountPaid ?? 0);
+        let paymentsCount = 0;
+        for (const inv of createdInvoices) {
+          if (tempRemaining.lte(0)) break;
+          paymentsCount++;
+          const paymentToApply = tempRemaining.lt(inv.totalAmount) ? tempRemaining : new Prisma.Decimal(inv.totalAmount);
+          tempRemaining = tempRemaining.minus(paymentToApply);
+        }
+
+        const receiptNumbers = await generateUniqueReceiptNos(tx, ctx.organizationId, paymentsCount);
+        let receiptIndex = 0;
+
         const unifiedTransactionId = transactionId || `TXN-ADM-${Date.now()}-${crypto.randomBytes ? crypto.randomBytes(4).toString("hex") : Math.random().toString(36).substring(7)}`;
 
         for (const inv of createdInvoices) {
@@ -421,7 +436,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           const newPaidAmount = paymentToApply;
           const newStatus = newPaidAmount.gte(invTotal) ? "PAID" : "PARTIAL";
 
-          const receiptNo = await generateUniqueReceiptNo(tx, ctx.organizationId);
+          const receiptNo = receiptNumbers[receiptIndex++];
 
           const payment = await tx.feePayment.create({
             data: {

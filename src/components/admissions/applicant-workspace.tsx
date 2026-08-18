@@ -248,6 +248,13 @@ export default function ApplicantWorkspace({
   const [updatingDocRemarks, setUpdatingDocRemarks] = useState<string | null>(null);
   const [rejectPopoverIndex, setRejectPopoverIndex] = useState<number | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>("");
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [deleteConfirmDoc, setDeleteConfirmDoc] = useState<any>(null);
+
+  // Global Processing Lock
+  const isProcessingRef = useRef(false);
+  const isAnyDocProcessing = !!updatingDocId || !!deletingDocId || uploadingDoc || markingHardcopy || !!scanningDocType || !!isReplacingDocType;
+
   const [isOtherReason, setIsOtherReason] = useState(false);
 
   const REJECTION_REASONS = [
@@ -439,9 +446,15 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
   // Doc verification change handlers (Instant Save)
   const handleDocStatusChange = async (index: number, requestedStatus: "PENDING" | "VERIFIED" | "REJECTED" | "HARDCOPY_SUBMITTED", overrideRemarks?: string) => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    
     clearError();
     const doc = verifyForm.documents[index];
-    if (!doc || !doc.id) return; // Cannot verify a document that hasn't been saved yet
+    if (!doc || !doc.id) {
+      isProcessingRef.current = false;
+      return; // Cannot verify a document that hasn't been saved yet
+    }
     
     let finalStatus = requestedStatus;
     // If the UI requests PENDING (un-checking), but there is no digital file, it must be a physical hardcopy
@@ -471,22 +484,26 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
         throw new Error(data.error?.message || "Failed to update document status");
       }
 
-      // Optimistic UI Update
-      const nextDocs = [...verifyForm.documents];
-      nextDocs[index] = { ...doc, status: finalStatus, remarks: finalRemarks };
-      const allVerified = nextDocs.every((d) => d.status === "VERIFIED");
-      const anyRejected = nextDocs.some((d) => d.status === "REJECTED");
-      let recommendedNextStatus: typeof verifyForm.nextStatus = "DOCUMENT_VERIFICATION";
+      // Safe State Update using functional pattern
+      setVerifyForm((prev: any) => {
+        const nextDocs = [...prev.documents];
+        nextDocs[index] = { ...doc, status: finalStatus, remarks: finalRemarks };
+        
+        const allVerified = nextDocs.every((d: any) => d.status === "VERIFIED");
+        let recommendedNextStatus = prev.nextStatus;
 
-      if (allVerified) {
-        recommendedNextStatus = hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED";
-      }
+        if (allVerified && recommendedNextStatus === "DOCUMENT_VERIFICATION") {
+          recommendedNextStatus = hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED";
+        } else if (!allVerified && (recommendedNextStatus === "TEST_SCHEDULED" || recommendedNextStatus === "SHORTLISTED")) {
+          recommendedNextStatus = "DOCUMENT_VERIFICATION";
+        }
 
-      setVerifyForm((prev: any) => ({
-        ...prev,
-        documents: nextDocs,
-        nextStatus: recommendedNextStatus,
-      }));
+        return {
+          ...prev,
+          documents: nextDocs,
+          nextStatus: recommendedNextStatus,
+        };
+      });
 
     } catch (err: any) {
       setFormError?.(err.message || "Failed to update document status");
@@ -497,6 +514,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
       if (requestedStatus === "REJECTED") {
         setRejectPopoverIndex(null);
       }
+      isProcessingRef.current = false;
     }
   };
 
@@ -506,8 +524,6 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
     nextDocs[index] = { ...nextDocs[index], remarks };
     setVerifyForm((prev: any) => ({ ...prev, documents: nextDocs }));
   };
-  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
-  const [deleteConfirmDoc, setDeleteConfirmDoc] = useState<any>(null);
 
   const [generatingLink, setGeneratingLink] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -1206,7 +1222,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
         </div>
       ) : (
       <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar bg-slate-50/30 dark:bg-zinc-950 p-3 md:p-4 lg:p-4">
-        <div className="max-w-5xl mx-auto w-full">
+        <div className="max-w-7xl mx-auto w-full">
         {workspaceMode === "student_profile" ? (
           <div className="space-y-6 animate-in fade-in duration-300">
             {isEditing ? (
@@ -1537,6 +1553,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       {verifyForm.documents.map((doc, index) => {
                         const meta = DOCUMENT_META[doc.documentType] || { label: doc.documentType, badgeText: "Document" };
                         const isPdf = doc.filePath?.toLowerCase().endsWith(".pdf");
+                        const isThisDocProcessing = updatingDocId === doc.id || deletingDocId === doc.id || scanningDocType === doc.documentType || isReplacingDocType === doc.documentType;
+                        const shouldDim = isAnyDocProcessing && !isThisDocProcessing;
 
                         return (
                           <div 
@@ -1563,7 +1581,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
                             {/* Display Mode */}
                             <div className="col-span-12">
-                              <div className={`flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border ${dragOverDocId === doc.id ? 'border-transparent' : 'border-slate-200 dark:border-zinc-800'} rounded-xl shadow-sm hover:shadow-md transition-shadow relative`}>
+                              <div className={`flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border ${dragOverDocId === doc.id ? 'border-transparent' : 'border-slate-200 dark:border-zinc-800'} rounded-xl shadow-sm hover:shadow-md transition-all duration-300 relative ${shouldDim ? 'opacity-50 grayscale-[0.5] pointer-events-none' : ''}`}>
                                 <div className="flex items-center gap-4">
                                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
                                     doc.status === "HARDCOPY_SUBMITTED"
@@ -1607,7 +1625,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                         setUploadScanDocType(doc.documentType);
                                         setTimeout(() => scanInputRef.current?.click(), 50);
                                       }}
-                                      disabled={scanningDocType === doc.documentType}
+                                      disabled={isAnyDocProcessing}
                                       className="h-7 px-2 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 flex items-center justify-center transition-colors cursor-pointer text-[10px] font-bold gap-1 shadow-sm disabled:opacity-50"
                                       title="Upload scanned file"
                                     >
@@ -1619,7 +1637,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                     <button
                                       type="button"
                                       onClick={() => setPreviewDoc(doc)}
-                                      className="w-7 h-7 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors cursor-pointer"
+                                      disabled={isAnyDocProcessing}
+                                      className="w-7 h-7 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
                                       title="Preview"
                                     >
                                       <Icon name="visibility" size={15} />
@@ -1633,7 +1652,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                       setReplaceDocType(doc.documentType);
                                       setTimeout(() => replaceInputRef.current?.click(), 50);
                                     }}
-                                    disabled={isReplacingDocType === doc.documentType}
+                                    disabled={isAnyDocProcessing}
                                     className="w-7 h-7 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
                                     title="Replace document"
                                   >
@@ -1643,7 +1662,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                   <button
                                     type="button"
                                     onClick={() => setDeleteConfirmDoc(doc)}
-                                    disabled={deletingDocId === doc.id}
+                                    disabled={isAnyDocProcessing}
                                     className="w-7 h-7 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
                                     title="Delete document"
                                   >
@@ -1657,16 +1676,18 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                     <button
                                       type="button"
                                       onClick={() => handleDocStatusChange(index, doc.status === "VERIFIED" ? "PENDING" : "VERIFIED")}
-                                      disabled={updatingDocId === doc.id}
-                                      className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 ${
-                                        doc.status === "VERIFIED"
+                                      disabled={isAnyDocProcessing}
+                                      className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                                        updatingDocId === doc.id && (updatingDocAction === "VERIFIED" || (doc.status === "VERIFIED" && updatingDocAction === "PENDING"))
+                                          ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
+                                          : doc.status === "VERIFIED"
                                           ? "bg-emerald-500 text-white shadow-sm"
                                           : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                                       }`}
                                       title="Approve"
                                     >
                                       {updatingDocId === doc.id && (updatingDocAction === "VERIFIED" || (doc.status === "VERIFIED" && updatingDocAction === "PENDING")) ? (
-                                        <Icon name="sync" size={16} className="animate-spin" />
+                                        <Icon name="autorenew" size={18} className="animate-spin" />
                                       ) : (
                                         <Icon name="check" size={16} className={doc.status === "VERIFIED" ? "stroke-[3px]" : ""} />
                                       )}
@@ -1682,16 +1703,18 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                           setIsOtherReason(false);
                                         }
                                       }}
-                                      disabled={updatingDocId === doc.id}
-                                      className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 ${
-                                        doc.status === "REJECTED" || rejectPopoverIndex === index
+                                      disabled={isAnyDocProcessing}
+                                      className={`w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                                        updatingDocId === doc.id && (updatingDocAction === "REJECTED" || (doc.status === "REJECTED" && updatingDocAction === "PENDING"))
+                                          ? "bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400"
+                                          : doc.status === "REJECTED" || rejectPopoverIndex === index
                                           ? "bg-rose-500 text-white shadow-sm"
                                           : "text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                                       }`}
                                       title="Reject"
                                     >
                                       {updatingDocId === doc.id && (updatingDocAction === "REJECTED" || (doc.status === "REJECTED" && updatingDocAction === "PENDING")) ? (
-                                        <Icon name="sync" size={16} className="animate-spin" />
+                                        <Icon name="autorenew" size={18} className="animate-spin" />
                                       ) : (
                                         <Icon name="close" size={16} className={doc.status === "REJECTED" ? "stroke-[3px]" : ""} />
                                       )}
@@ -1727,7 +1750,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                               key={rIndex}
                                               type="button"
                                               onClick={() => { handleDocStatusChange(index, "REJECTED", reason.label); }}
-                                              disabled={updatingDocId === doc.id}
+                                              disabled={isAnyDocProcessing}
                                               className={`group flex flex-col items-center justify-start p-3 rounded-xl border transition-all ${
                                                 doc.remarks === reason.label
                                                   ? "bg-rose-50 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/30 ring-2 ring-rose-500/20"
@@ -1904,7 +1927,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       <button
                         type="button"
                         onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "DOCUMENT_VERIFICATION" }))}
-                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                        disabled={isAnyDocProcessing}
+                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed ${
                           verifyForm.nextStatus === "DOCUMENT_VERIFICATION"
                             ? "bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-zinc-950 shadow-md ring-2 ring-slate-900/20 dark:ring-white/20"
                             : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
@@ -1923,7 +1947,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         <button
                           type="button"
                           onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "TEST_SCHEDULED" }))}
-                          className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                          disabled={isAnyDocProcessing}
+                          className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed ${
                             verifyForm.nextStatus === "TEST_SCHEDULED"
                               ? "bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-500/20 ring-2 ring-purple-500/20"
                               : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
@@ -1942,7 +1967,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       <button
                         type="button"
                         onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "SHORTLISTED" }))}
-                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                        disabled={isAnyDocProcessing}
+                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed ${
                           verifyForm.nextStatus === "SHORTLISTED"
                             ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-500/20 ring-2 ring-emerald-500/20"
                             : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
@@ -1960,7 +1986,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                       <button
                         type="button"
                         onClick={() => setVerifyForm((prev: any) => ({ ...prev, nextStatus: "REJECTED" }))}
-                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
+                        disabled={isAnyDocProcessing}
+                        className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between group disabled:opacity-50 disabled:cursor-not-allowed ${
                           verifyForm.nextStatus === "REJECTED"
                             ? "bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-500/20 ring-2 ring-rose-500/20"
                             : "bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900/50"
@@ -2080,29 +2107,35 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                     </div>
                   </div>
 
-                  <div className="pt-2 mt-auto">
-                    {formError && (
-                      <div className="mb-3 p-3 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/80 dark:bg-red-950/20 text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
-                        <Icon name="warning" size={16} className="text-red-500 shrink-0" />
-                        <span>{formError}</span>
-                      </div>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={actionLoading || ((verifyForm.nextStatus === "SHORTLISTED" || verifyForm.nextStatus === "TEST_SCHEDULED") && !hasAllMandatoryDocs && !verifyForm.isProvisional)}
-                      className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl h-11 font-bold shadow-md shadow-slate-900/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {actionLoading ? <Icon name="sync" size={16} className="animate-spin" /> : <Icon name="check_circle" size={16} />}
-                      {actionLoading ? "Saving..." : "Confirm Decision"}
-                    </button>
+                    <div className="pt-2 mt-auto">
+                      {formError && (
+                        <div className="mb-3 p-3 rounded-xl border border-red-100 dark:border-red-950/40 bg-red-50/80 dark:bg-red-950/20 text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
+                          <Icon name="warning" size={16} className="text-red-500 shrink-0" />
+                          <span>{formError}</span>
+                        </div>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={
+                          actionLoading || 
+                          isAnyDocProcessing || 
+                          ((verifyForm.nextStatus === "SHORTLISTED" || verifyForm.nextStatus === "TEST_SCHEDULED") && !hasAllMandatoryDocs && !verifyForm.isProvisional) ||
+                          (verifyForm.isProvisional && (!verifyForm.provisionalReason?.trim() || !verifyForm.provisionalDeadline)) ||
+                          (verifyForm.nextStatus === "REJECTED" && !verifyForm.archiveReason?.trim())
+                        }
+                        className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl h-11 font-bold shadow-md shadow-slate-900/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {actionLoading ? <Icon name="sync" size={16} className="animate-spin" /> : <Icon name="check_circle" size={16} />}
+                        {actionLoading ? "Saving..." : "Confirm Decision"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </form>
-            )}
+                </form>
+              )}
 
-            {/* WIZARD: ENTRANCE TEST */}
-            {selectedApp.status === "TEST_SCHEDULED" && (
-              <form onSubmit={onSaveExam} className="space-y-6">
+              {/* WIZARD: ENTRANCE TEST */}
+              {selectedApp.status === "TEST_SCHEDULED" && (
+                <form onSubmit={onSaveExam} className="space-y-6">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5 border-b pb-2 border-slate-100 dark:border-zinc-800">
                   <Icon name="event" size={16} className="text-purple-500" />
                   Entrance Exam Scoring Card
@@ -2281,139 +2314,38 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                     </div>
 
                     <div className="p-3 space-y-4">
-                      {/* Segmented Mode Toggle */}
-                      <div className="flex p-0.5 bg-slate-100 dark:bg-zinc-900 rounded-lg border border-slate-200/60 dark:border-zinc-800">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (billingMode !== "STANDARD") {
-                              setCachedCustomInstallments([...(customInstallments || [])]);
-                              setBillingMode?.("STANDARD");
-                              if (setCustomInstallments && installmentTemplates) {
-                                setCustomInstallments(
-                                  installmentTemplates.map((t: any) => ({
-                                    id: `template-${t.id}`,
-                                    templateId: t.id,
-                                    name: t.name,
-                                    dueDate: t.dueDate,
-                                    amount: Number(t.amount) || 0,
-                                    checked: true,
-                                    isCustom: false,
-                                  }))
-                                );
-                              }
-                            }
-                          }}
-                          className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-md transition-all ${
-                            billingMode === "STANDARD" ? "bg-white dark:bg-zinc-950 text-slate-800 shadow-xs" : "text-slate-500"
-                          }`}
-                        >
-                          STANDARD
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (billingMode !== "CUSTOM") {
-                              setBillingMode?.("CUSTOM");
-                              if (setCustomInstallments && cachedCustomInstallments.length > 0) {
-                                setCustomInstallments(cachedCustomInstallments);
-                              }
-                            }
-                          }}
-                          className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-md transition-all ${
-                            billingMode === "CUSTOM" ? "bg-white dark:bg-zinc-950 text-slate-800 shadow-xs" : "text-slate-500"
-                          }`}
-                        >
-                          CUSTOM
-                        </button>
-                      </div>
-
-                      {billingMode === "CUSTOM" && (
-                        <div className="p-2.5 rounded-lg border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-500/5 space-y-2.5 animate-in slide-in-from-top-2 fade-in duration-200">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">Installments</span>
-                              <input
-                                type="number"
-                                min={1} max={24}
-                                value={customConfigRows}
-                                onChange={(e) => setCustomConfigRows?.(Number(e.target.value) || 1)}
-                                className="h-7 px-2 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 outline-none focus:border-indigo-400"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">Start Date</span>
-                              <input
-                                type="date"
-                                value={customConfigStartDate}
-                                onChange={(e) => setCustomConfigStartDate?.(e.target.value)}
-                                className="h-7 px-2 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-800 dark:text-zinc-100 outline-none focus:border-indigo-400"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 items-end">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">Interval</span>
-                              <Select
-                                value={customConfigInterval}
-                                onValueChange={(val: any) => setCustomConfigInterval?.(val)}
-                              >
-                                <SelectTrigger className="h-7 px-2 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-[11px] font-bold shadow-none">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="MONTHLY" className="text-[11px] font-semibold">Monthly</SelectItem>
-                                  <SelectItem value="BIMONTHLY" className="text-[11px] font-semibold">Bi-Monthly</SelectItem>
-                                  <SelectItem value="QUARTERLY" className="text-[11px] font-semibold">Quarterly</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={generateCustomInstallments}
-                              className="h-7 w-full bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-md text-[10px] font-black tracking-wider uppercase transition-colors flex items-center justify-center gap-1"
-                            >
-                              <Icon name="bolt" size={12} />
-                              Generate
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-1.5 pt-1">
-                            <input
-                              type="checkbox"
-                              checked={customConfigLateFee}
-                              onChange={(e) => setCustomConfigLateFee?.(e.target.checked)}
-                              className="rounded-sm w-3 h-3 text-indigo-500 border-slate-300 dark:border-zinc-700 focus:ring-indigo-500/20"
-                            />
-                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Apply Standard Late Fees</span>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Mandatory Fees */}
                       <div className="space-y-1.5">
-                        <div className="flex justify-between text-[10px] font-extrabold uppercase text-slate-400">
-                          <span>Mandatory Fees</span>
-                          <span>₹{formatIndianNumber(mandatoryTotal)}</span>
+                        <div className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">
+                          Mandatory Fees
                         </div>
                         <div className="space-y-1 pl-1">
                           {classFees.length > 0 ? classFees.filter(f => f.applicability === "MANDATORY").map((fee) => (
                             <div key={fee.id} className="flex justify-between text-[11px] text-slate-600 dark:text-zinc-400">
                               <span>{fee.name}</span>
-                              <span className="font-semibold text-slate-700">₹{formatIndianNumber(Number(fee.amount))}</span>
+                              <span className="font-semibold text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(Number(fee.amount))}</span>
                             </div>
                           )) : <div className="text-[11px] text-slate-400 italic">No mandatory fees.</div>}
+                        </div>
+                        {/* Subtotal Mandatory */}
+                        <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-zinc-500 pl-1">Subtotal (Mandatory)</span>
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(mandatoryTotal)}</span>
                         </div>
                       </div>
 
                       {/* Optional Add-ons */}
-                      <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-zinc-800">
-                        <div className="text-[10px] font-extrabold uppercase text-slate-400">Optional Add-ons</div>
-                        <div className="space-y-1">
+                      <div className="space-y-1.5 pt-3 border-t-2 border-slate-100 dark:border-zinc-800">
+                        <div className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">
+                          Optional Add-ons
+                        </div>
+                        <div className="space-y-1 pl-1">
                           {classFees.filter(f => f.applicability === "OPTIONAL").map((fee) => {
                             const selectedFee = selectedOptionalFees.find(opt => opt.id === fee.id);
                             return (
-                              <div key={fee.id} className="flex items-center justify-between text-[11px] p-1.5 rounded-md hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
-                                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                              <div key={fee.id} className="flex items-center justify-between text-[11px] py-1 rounded-md transition-colors">
+                                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-zinc-300">
                                   <input type="checkbox" checked={!!selectedFee} onChange={(e) => handleOptionalFeeToggle(fee, e.target.checked)} className="rounded text-primary w-3.5 h-3.5" />
                                   <span>{fee.name}</span>
                                 </label>
@@ -2423,40 +2355,45 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                     <input type="number" min={0} value={selectedFee.amount || ""} onChange={(e) => handleOptionalFeeAmountChange(fee.id, Number(e.target.value))} className="w-full h-6 px-1.5 rounded border border-amber-200 text-xs font-bold text-right outline-none focus:border-amber-400" />
                                   </div>
                                 ) : (
-                                  <span className="text-[10px] text-slate-400">₹{formatIndianNumber(fee.amount)}</span>
+                                  <span className="text-[10px] text-slate-400 dark:text-zinc-600 line-through">₹{formatIndianNumber(fee.amount)}</span>
                                 )}
                               </div>
                             );
                           })}
                         </div>
+                        {/* Subtotal Optional */}
+                        <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-zinc-500 pl-1">Subtotal (Optional)</span>
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(optionalTotal)}</span>
+                        </div>
                       </div>
 
-                      {/* Discount & Totals */}
-                      <div className="pt-3 border-t border-slate-100 dark:border-zinc-800 space-y-2.5">
+                      {/* Gross Total & Discount */}
+                      <div className="pt-3 border-t-4 border-double border-slate-200 dark:border-zinc-800 space-y-2.5">
                         {/* Gross Total */}
-                        <div className="flex items-center justify-between px-3">
-                          <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-zinc-400 tracking-wider">Gross Total</span>
-                          <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">₹{formatIndianNumber(mandatoryTotal + optionalTotal)}</span>
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[11px] font-black uppercase text-slate-800 dark:text-zinc-200 tracking-wider">Gross Total</span>
+                          <span className="text-[13px] font-black text-slate-800 dark:text-zinc-200">₹{formatIndianNumber(mandatoryTotal + optionalTotal)}</span>
                         </div>
 
                         {/* Flat Discount */}
-                        <div className="flex items-center justify-between px-3">
+                        <div className="flex items-center justify-between px-1">
                           <label className="text-[10px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">
                             Discount
                           </label>
-                          <div className="relative w-24">
-                            <span className="absolute left-2 top-1.5 text-[10px] font-bold text-slate-400">- ₹</span>
+                          <div className="relative w-28">
+                            <span className="absolute left-2 top-1.5 text-[10px] font-bold text-emerald-500/80 dark:text-emerald-400/80">- ₹</span>
                             <input 
                               type="number" 
                               value={String(promoteForm.discountAmount)} 
                               onChange={(e) => handlePromoteChange("discountAmount", e.target.value)} 
-                              className="w-full h-7 pl-7 pr-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold text-right text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 transition-all shadow-sm" 
+                              className="w-full h-7 pl-7 pr-2 rounded-md border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-[11px] font-bold text-right text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 transition-all shadow-sm" 
                             />
                           </div>
                         </div>
                       </div>
 
-                      <div className="pt-2 mt-2 border-t-2 border-dashed border-emerald-200 dark:border-emerald-900/50 flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2.5 rounded-lg shadow-inner mx-1">
+                      <div className="pt-2 mt-2 border-t border-slate-200 dark:border-zinc-800 flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2.5 rounded-lg shadow-inner mx-0.5">
                         <div className="flex flex-col">
                           <span className="text-xs font-black tracking-wider text-emerald-800 dark:text-emerald-400 uppercase">NET FEE</span>
                           <span className="text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/70 uppercase">Applicable Amount</span>
@@ -2468,15 +2405,122 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
 
                   {/* RIGHT CARD: INSTALLMENTS (Silicon Valley Data-Table Style) */}
                   <div className="lg:col-span-7 rounded-2xl bg-white dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 shadow-sm flex flex-col h-full">
-                    <div className="bg-slate-50/50 dark:bg-zinc-900/50 px-4 py-2.5 border-b border-slate-200/60 dark:border-zinc-800 flex items-center justify-between">
+                    <div className="bg-slate-50/50 dark:bg-zinc-900/50 px-4 py-2 border-b border-slate-200/60 dark:border-zinc-800 flex items-center justify-between">
                       <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
                         <Icon name="calendar_month" size={14} className="text-indigo-500" />
                         INSTALLMENT SCHEDULE
                       </h4>
-                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                        {customInstallments.filter(i => i.checked).length} Active
-                      </span>
+                      <div className="flex items-center gap-3">
+                        {/* Compact Toggle */}
+                        <div className="flex p-0.5 bg-slate-200/50 dark:bg-zinc-800/50 rounded-md border border-slate-200/60 dark:border-zinc-700 h-6">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (billingMode !== "STANDARD") {
+                                setCachedCustomInstallments([...(customInstallments || [])]);
+                                setBillingMode?.("STANDARD");
+                                if (setCustomInstallments && installmentTemplates) {
+                                  setCustomInstallments(
+                                    installmentTemplates.map((t: any) => ({
+                                      id: `template-${t.id}`,
+                                      templateId: t.id,
+                                      name: t.name,
+                                      dueDate: t.dueDate,
+                                      amount: Number(t.amount) || 0,
+                                      checked: true,
+                                      isCustom: false,
+                                    }))
+                                  );
+                                }
+                              }
+                            }}
+                            className={`px-3 flex items-center justify-center text-[9px] font-extrabold rounded-sm transition-all ${
+                              billingMode === "STANDARD" ? "bg-white dark:bg-zinc-900 text-slate-800 shadow-sm" : "text-slate-500"
+                            }`}
+                          >
+                            STANDARD
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (billingMode !== "CUSTOM") {
+                                setBillingMode?.("CUSTOM");
+                                if (setCustomInstallments && cachedCustomInstallments.length > 0) {
+                                  setCustomInstallments(cachedCustomInstallments);
+                                }
+                              }
+                            }}
+                            className={`px-3 flex items-center justify-center text-[9px] font-extrabold rounded-sm transition-all ${
+                              billingMode === "CUSTOM" ? "bg-white dark:bg-zinc-900 text-slate-800 shadow-sm" : "text-slate-500"
+                            }`}
+                          >
+                            CUSTOM
+                          </button>
+                        </div>
+                        <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                          {customInstallments.filter(i => i.checked).length} Active
+                        </span>
+                      </div>
                     </div>
+
+                    {billingMode === "CUSTOM" && (
+                      <div className="shrink-0 border-b border-slate-200/60 dark:border-zinc-800 p-2 bg-slate-50/80 dark:bg-zinc-900/40 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+                        <div className="flex items-center gap-5 shrink-0 pl-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 shrink-0">Rows</span>
+                            <input
+                              type="number"
+                              min={1} max={24}
+                              value={customConfigRows}
+                              onChange={(e) => setCustomConfigRows?.(Number(e.target.value) || 1)}
+                              className="h-8 w-14 px-2 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-bold outline-none focus:border-indigo-400 text-center shadow-sm"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 shrink-0">Start</span>
+                            <input
+                              type="date"
+                              value={customConfigStartDate}
+                              onChange={(e) => setCustomConfigStartDate?.(e.target.value)}
+                              className="h-8 w-[115px] px-2 rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-bold outline-none focus:border-indigo-400 shadow-sm"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 shrink-0">Interval</span>
+                            <div className="w-[115px]">
+                              <Select value={customConfigInterval} onValueChange={(val: any) => setCustomConfigInterval?.(val)}>
+                                <SelectTrigger className="h-8 px-2.5 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-[10px] font-bold shadow-sm focus:ring-1 focus:ring-indigo-400">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="MONTHLY" className="text-[10px] font-semibold">Monthly</SelectItem>
+                                  <SelectItem value="BIMONTHLY" className="text-[10px] font-semibold">Bi-Monthly</SelectItem>
+                                  <SelectItem value="QUARTERLY" className="text-[10px] font-semibold">Quarterly</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 px-2">
+                            <input
+                              id="inline-late-fee"
+                              type="checkbox"
+                              checked={customConfigLateFee}
+                              onChange={(e) => setCustomConfigLateFee?.(e.target.checked)}
+                              className="rounded-sm w-4 h-4 text-indigo-500 border-slate-300 dark:border-zinc-700 focus:ring-indigo-500/20 cursor-pointer shadow-sm"
+                            />
+                            <label htmlFor="inline-late-fee" className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 cursor-pointer select-none">Late Fee</label>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={generateCustomInstallments}
+                          className="shrink-0 h-8 px-4 bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-md text-[10px] font-black tracking-wider uppercase transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-slate-900/10"
+                        >
+                          <Icon name="bolt" size={12} />
+                          Generate
+                        </button>
+                      </div>
+                    )}
 
                     <div className="p-2 flex-1 space-y-1 overflow-y-auto max-h-[350px]">
                       {customInstallments.length === 0 ? (
@@ -2485,10 +2529,16 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                         customInstallments.map((inst, index) => {
                           const template = installmentTemplates.find(t => t.id === inst.templateId);
                           return (
-                            <div key={inst.templateId || index} className={`flex items-center gap-3 p-2 rounded-lg transition-all ${inst.checked ? "hover:bg-slate-50 dark:hover:bg-zinc-900/50 border border-transparent" : "opacity-50 grayscale"}`}>
-                              <input type="checkbox" checked={inst.checked} onChange={(e) => handleInstallmentCheckChange(inst.templateId || inst.id || String(index), e.target.checked)} className="rounded text-primary w-4 h-4 cursor-pointer" />
-                              <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                                <span className="text-xs font-bold text-slate-700 min-w-[120px] truncate">{template?.name || inst.name || `Inst. ${index + 1}`}</span>
+                            <div key={inst.templateId || index} className="flex items-center gap-3 p-2 rounded-xl transition-all border bg-white dark:bg-zinc-950 border-slate-100 dark:border-zinc-800 shadow-sm">
+                              
+                              <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-zinc-900 flex items-center justify-center shrink-0 ml-1">
+                                <span className="text-[10px] font-black text-slate-500 dark:text-zinc-400">{index + 1}</span>
+                              </div>
+
+                              <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 ml-1">
+                                <span className="text-xs font-bold truncate min-w-[120px] text-slate-800 dark:text-zinc-200">
+                                  {template?.name || inst.name || `Inst. ${index + 1}`}
+                                </span>
                                 {inst.isCustom ? (
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-slate-400 font-medium">Due: </span>
@@ -2497,7 +2547,7 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                       min={new Date().toISOString().split("T")[0]}
                                       value={inst.dueDate ? inst.dueDate.split("T")[0] : ""}
                                       onChange={(e) => handleInstallmentDateChange(inst.id, e.target.value)}
-                                      className="h-6 px-1.5 rounded-md border border-slate-200/80 dark:border-zinc-700/80 bg-white dark:bg-zinc-800 text-[10px] font-bold text-primary outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 cursor-pointer transition-all"
+                                      className="h-6 px-1.5 rounded-md border border-slate-200/80 dark:border-zinc-700/80 bg-white dark:bg-zinc-800 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 outline-none focus:border-indigo-400/50 focus:ring-2 focus:ring-indigo-400/20 cursor-pointer transition-all"
                                       title="Edit Due Date"
                                     />
                                   </div>
@@ -2505,13 +2555,17 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                                   <span className="text-[10px] text-slate-400 font-medium">Due: {inst.dueDate ? new Date(inst.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "TBD"}</span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex items-center gap-1.5 shrink-0 mr-1">
                                 <span className="text-xs text-slate-400 font-bold">₹</span>
                                 <BaseCurrencyInput
-                                  disabled={!inst.checked}
+                                  disabled={!inst.checked || billingMode === "STANDARD"}
                                   value={String(inst.amount)}
                                   onChange={(e) => handleInstallmentAmountChange(inst.templateId || inst.id || String(index), Number(e.target.value) || 0)}
-                                  className="w-24 h-8 text-xs font-bold rounded-lg border border-slate-200 px-2 text-right outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                  className={`w-24 h-8 text-xs font-bold rounded-lg border px-2 text-right outline-none transition-all ${
+                                    billingMode === "STANDARD" 
+                                      ? "bg-slate-50 dark:bg-zinc-900 border-slate-100 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 cursor-not-allowed" 
+                                      : "bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 text-slate-800 dark:text-zinc-100"
+                                  }`}
                                 />
                               </div>
                             </div>
@@ -2581,6 +2635,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                 )}
               </form>
             )}
+
+
 
 
             {/* STATUS: REJECTED */}
