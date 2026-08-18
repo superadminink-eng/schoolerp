@@ -2532,8 +2532,8 @@ const DOC_TYPES = ["BIRTH_CERTIFICATE", "AADHAAR_CARD", "STUDENT_PHOTO", "PREVIO
                           return (
                             <div key={inst.templateId || index} className="flex items-center gap-3 p-2 rounded-xl transition-all border bg-white dark:bg-zinc-950 border-slate-100 dark:border-zinc-800 shadow-sm">
                               
-                              <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-zinc-900 flex items-center justify-center shrink-0 ml-1">
-                                <span className="text-[10px] font-black text-slate-500 dark:text-zinc-400">{index + 1}</span>
+                              <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-1">
+                                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-zinc-700 ring-4 ring-slate-50 dark:ring-zinc-900/50" />
                               </div>
 
                               <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 ml-1">
