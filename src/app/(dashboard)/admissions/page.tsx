@@ -223,6 +223,7 @@ export default function AdmissionsPage() {
     archiveReason: string;
     isProvisional: boolean;
     provisionalDeadline: string;
+    provisionalReason: string;
     overrideReason: string;
   }>({
     documents: [],
@@ -231,6 +232,7 @@ export default function AdmissionsPage() {
     archiveReason: "",
     isProvisional: false,
     provisionalDeadline: "",
+    provisionalReason: "",
     overrideReason: "",
   });
 

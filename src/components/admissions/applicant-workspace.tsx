@@ -128,6 +128,7 @@ interface WorkspaceProps {
     archiveReason: string;
     isProvisional: boolean;
     provisionalDeadline: string;
+    provisionalReason: string;
     overrideReason: string;
   };
   setVerifyForm: (val: any) => void;
