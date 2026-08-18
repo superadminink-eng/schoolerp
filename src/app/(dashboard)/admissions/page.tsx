@@ -901,6 +901,7 @@ export default function AdmissionsPage() {
       archiveReason: app.archiveReason || "",
       isProvisional: app.isProvisional || false,
       provisionalDeadline: app.provisionalDeadline ? new Date(app.provisionalDeadline).toISOString().split("T")[0] : "",
+      provisionalReason: app.provisionalReason || "",
       overrideReason: app.overrideReason || "",
     });
 
